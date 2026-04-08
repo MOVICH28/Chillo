@@ -20,12 +20,12 @@ export async function GET() {
       orderBy: { createdAt: "asc" },
     });
 
-    const enriched = rounds.map((r) => ({
+    const enriched = rounds.map((r: any) => ({
       ...r,
       ...computeOdds(r.yesPool, r.noPool, r.totalPool),
       endsAt: r.endsAt.toISOString(),
       createdAt: r.createdAt.toISOString(),
-      bets: r.bets.map((b) => ({
+      bets: r.bets.map((b: any) => ({
         ...b,
         createdAt: b.createdAt.toISOString(),
       })),
