@@ -8,12 +8,14 @@ import RoundCard from "@/components/RoundCard";
 import RightPanel from "@/components/RightPanel";
 import BetModal from "@/components/BetModal";
 import { Round } from "@/lib/types";
+import { useLiveData } from "@/lib/useLiveData";
 
 export default function Home() {
   const [rounds, setRounds] = useState<Round[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("all");
   const [betTarget, setBetTarget] = useState<{ round: Round; side: "yes" | "no" } | null>(null);
+  const { data: liveData } = useLiveData();
 
   const fetchRounds = useCallback(async () => {
     try {
@@ -49,7 +51,7 @@ export default function Home() {
 
       {/* Ticker just below navbar */}
       <div className="mt-14">
-        <LiveTicker />
+        <LiveTicker liveData={liveData} />
       </div>
 
       {/* Main layout */}
@@ -106,6 +108,7 @@ export default function Home() {
                   key={round.id}
                   round={round}
                   onBet={(r, side) => setBetTarget({ round: r, side })}
+                  liveData={liveData}
                 />
               ))}
             </div>
