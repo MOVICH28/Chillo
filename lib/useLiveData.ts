@@ -76,6 +76,66 @@ function tickPumpFun(prev: PumpFunData): PumpFunData {
   };
 }
 
+async function fetchPricesFromCoinGecko(): Promise<{ btc: CryptoData; sol: CryptoData } | null> {
+  const res = await fetch(
+    "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,solana&vs_currencies=usd&include_24hr_change=true",
+    { cache: "no-store" }
+  );
+  if (!res.ok) return null;
+  const json = await res.json();
+  if (!json.bitcoin?.usd || !json.solana?.usd) return null;
+  return {
+    btc: {
+      price: json.bitcoin.usd,
+      change24h: json.bitcoin.usd_24h_change ?? 0,
+      sparkline: makeSparkline(json.bitcoin.usd, json.bitcoin.usd_24h_change ?? 0),
+    },
+    sol: {
+      price: json.solana.usd,
+      change24h: json.solana.usd_24h_change ?? 0,
+      sparkline: makeSparkline(json.solana.usd, json.solana.usd_24h_change ?? 0),
+    },
+  };
+}
+
+async function fetchPricesFromCoinPaprika(): Promise<{ btc: CryptoData; sol: CryptoData } | null> {
+  const [btcRes, solRes] = await Promise.all([
+    fetch("https://api.coinpaprika.com/v1/tickers/btc-bitcoin", { cache: "no-store" }),
+    fetch("https://api.coinpaprika.com/v1/tickers/sol-solana", { cache: "no-store" }),
+  ]);
+  if (!btcRes.ok || !solRes.ok) return null;
+  const [btcJson, solJson] = await Promise.all([btcRes.json(), solRes.json()]);
+  const btcPrice = btcJson.quotes?.USD?.price;
+  const solPrice = solJson.quotes?.USD?.price;
+  if (!btcPrice || !solPrice) return null;
+  return {
+    btc: {
+      price: btcPrice,
+      change24h: btcJson.quotes?.USD?.percent_change_24h ?? 0,
+      sparkline: makeSparkline(btcPrice, btcJson.quotes?.USD?.percent_change_24h ?? 0),
+    },
+    sol: {
+      price: solPrice,
+      change24h: solJson.quotes?.USD?.percent_change_24h ?? 0,
+      sparkline: makeSparkline(solPrice, solJson.quotes?.USD?.percent_change_24h ?? 0),
+    },
+  };
+}
+
+async function fetchPrices(): Promise<{ btc: CryptoData; sol: CryptoData } | null> {
+  try {
+    const result = await fetchPricesFromCoinGecko();
+    if (result) return result;
+  } catch {
+    // CoinGecko failed, try fallback
+  }
+  try {
+    return await fetchPricesFromCoinPaprika();
+  } catch {
+    return null;
+  }
+}
+
 export function useLiveData(): { data: LiveData; loading: boolean } {
   const pumpRef = useRef<PumpFunData>(initPumpFun());
   const [data, setData] = useState<LiveData>({
@@ -86,48 +146,27 @@ export function useLiveData(): { data: LiveData; loading: boolean } {
   });
   const [loading, setLoading] = useState(true);
 
-  async function refresh() {
-    // Advance pump.fun simulation
-    pumpRef.current = tickPumpFun(pumpRef.current);
+  useEffect(() => {
+    // Guard: only run in browser
+    if (typeof window === "undefined") return;
 
-    let btc: CryptoData | null = null;
-    let sol: CryptoData | null = null;
-    try {
-      const res = await fetch(
-        "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,solana&vs_currencies=usd&include_24hr_change=true",
-        { cache: "no-store" }
-      );
-      if (res.ok) {
-        const json = await res.json();
-        btc = {
-          price: json.bitcoin?.usd ?? 0,
-          change24h: json.bitcoin?.usd_24h_change ?? 0,
-          sparkline: makeSparkline(json.bitcoin?.usd ?? 0, json.bitcoin?.usd_24h_change ?? 0),
-        };
-        sol = {
-          price: json.solana?.usd ?? 0,
-          change24h: json.solana?.usd_24h_change ?? 0,
-          sparkline: makeSparkline(json.solana?.usd ?? 0, json.solana?.usd_24h_change ?? 0),
-        };
-      }
-    } catch {
-      // Network error – keep previous crypto values if any
+    async function refresh() {
+      pumpRef.current = tickPumpFun(pumpRef.current);
+
+      const prices = await fetchPrices();
+
+      setData((prev) => ({
+        btc: prices?.btc ?? prev.btc,
+        sol: prices?.sol ?? prev.sol,
+        pumpfun: pumpRef.current,
+        lastUpdated: Date.now(),
+      }));
+      setLoading(false);
     }
 
-    setData((prev) => ({
-      btc: btc ?? prev.btc,
-      sol: sol ?? prev.sol,
-      pumpfun: pumpRef.current,
-      lastUpdated: Date.now(),
-    }));
-    setLoading(false);
-  }
-
-  useEffect(() => {
     refresh();
     const id = setInterval(refresh, 30_000);
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return { data, loading };
