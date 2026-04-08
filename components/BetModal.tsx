@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { useWallet } from "@/components/WalletProvider";
 import { Round } from "@/lib/types";
 
 interface BetModalProps {
@@ -16,8 +15,7 @@ const PRESETS = ["0.05", "0.1", "0.5", "1"];
 
 
 export default function BetModal({ round, side, onClose, onSuccess }: BetModalProps) {
-  const { publicKey, connected } = useWallet();
-  const { setVisible } = useWalletModal();
+  const { publicKey, connected, connect } = useWallet();
   const [amount, setAmount] = useState("0.1");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -29,7 +27,7 @@ export default function BetModal({ round, side, onClose, onSuccess }: BetModalPr
 
   async function handleBet() {
     if (!connected || !publicKey) {
-      setVisible(true);
+      await connect();
       return;
     }
     if (numAmount <= 0) return setError("Enter a valid amount");
@@ -43,7 +41,7 @@ export default function BetModal({ round, side, onClose, onSuccess }: BetModalPr
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          walletAddress: publicKey.toBase58(),
+          walletAddress: publicKey,
           roundId: round.id,
           side,
           amount: numAmount,
@@ -160,7 +158,7 @@ export default function BetModal({ round, side, onClose, onSuccess }: BetModalPr
           {/* CTA */}
           {!connected ? (
             <button
-              onClick={() => setVisible(true)}
+              onClick={connect}
               className="w-full py-3 rounded-xl font-bold text-black bg-brand hover:bg-brand-dim transition-colors flex items-center justify-center gap-2"
             >
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

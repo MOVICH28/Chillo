@@ -1,7 +1,6 @@
 "use client";
 
-import { useWallet } from "@solana/wallet-adapter-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { useWallet } from "@/components/WalletProvider";
 import { Round } from "@/lib/types";
 
 interface NavbarProps {
@@ -9,12 +8,11 @@ interface NavbarProps {
 }
 
 export default function Navbar({ rounds }: NavbarProps) {
-  const { publicKey, disconnect, connected } = useWallet();
-  const { setVisible } = useWalletModal();
+  const { publicKey, disconnect, connected, connect } = useWallet();
 
   const totalPool = rounds.reduce((sum, r) => sum + r.totalPool, 0);
   const shortKey = publicKey
-    ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
+    ? `${publicKey.slice(0, 4)}...${publicKey.slice(-4)}`
     : null;
 
   return (
@@ -63,7 +61,7 @@ export default function Navbar({ rounds }: NavbarProps) {
         </div>
       ) : (
         <button
-          onClick={() => setVisible(true)}
+          onClick={connect}
           className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-brand hover:bg-brand-dim text-black transition-colors"
         >
           Connect Wallet
