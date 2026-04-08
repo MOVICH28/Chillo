@@ -20,11 +20,13 @@ export async function GET() {
       orderBy: { createdAt: "asc" },
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const enriched = rounds.map((r: any) => ({
       ...r,
       ...computeOdds(r.yesPool, r.noPool, r.totalPool),
       endsAt: r.endsAt.toISOString(),
       createdAt: r.createdAt.toISOString(),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       bets: r.bets.map((b: any) => ({
         ...b,
         createdAt: b.createdAt.toISOString(),
