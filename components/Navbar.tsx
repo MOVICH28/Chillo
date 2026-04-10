@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useWallet } from "@/components/WalletProvider";
+import { useSolBalance } from "@/lib/useSolBalance";
 import { Round } from "@/lib/types";
 
 interface NavbarProps {
@@ -9,6 +11,7 @@ interface NavbarProps {
 
 export default function Navbar({ rounds }: NavbarProps) {
   const { publicKey, disconnect, connected, connect } = useWallet();
+  const balance = useSolBalance(connected ? publicKey : null);
 
   const totalPool = rounds.reduce((sum, r) => sum + r.totalPool, 0);
   const shortKey = publicKey
@@ -51,7 +54,21 @@ export default function Navbar({ rounds }: NavbarProps) {
       {/* Wallet button */}
       {connected && publicKey ? (
         <div className="flex items-center gap-2">
-          <span className="hidden sm:inline text-xs text-muted font-mono">{shortKey}</span>
+          <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted font-mono">
+            <span>{shortKey}</span>
+            {balance !== null && (
+              <>
+                <span className="text-surface-3">|</span>
+                <span className="text-white">{balance.toFixed(2)} SOL</span>
+              </>
+            )}
+          </div>
+          <Link
+            href="/profile"
+            className="px-3 py-1.5 rounded-lg text-xs bg-surface-3 text-muted hover:text-white hover:bg-surface-2 border border-surface-3 transition-colors"
+          >
+            Profile
+          </Link>
           <button
             onClick={() => disconnect()}
             className="px-3 py-1.5 rounded-lg text-xs bg-surface-3 text-muted hover:text-white hover:bg-surface-2 border border-surface-3 transition-colors"

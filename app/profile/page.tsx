@@ -1,0 +1,200 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useWallet } from "@/components/WalletProvider";
+import { useSolBalance } from "@/lib/useSolBalance";
+import { useLiveData } from "@/lib/useLiveData";
+
+interface BetWithRound {
+  id: string;
+  roundId: string;
+  walletAddress: string;
+  side: string;
+  amount: number;
+  odds: number;
+  txHash: string;
+  createdAt: string;
+  round: { question: string; status: string };
+}
+
+function resultLabel(bet: BetWithRound): { label: string; color: string } {
+  if (bet.round.status === "open") return { label: "Pending", color: "text-yellow-400" };
+  if (bet.round.status === "closed") return { label: "Pending", color: "text-yellow-400" };
+  return { label: "Resolved", color: "text-muted" };
+}
+
+export default function ProfilePage() {
+  const { publicKey, connected, connect } = useWallet();
+  const balance = useSolBalance(connected ? publicKey : null);
+  const { data: liveData } = useLiveData();
+  const solPrice = liveData.sol?.price ?? null;
+
+  const [bets, setBets] = useState<BetWithRound[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!publicKey) return;
+    setLoading(true);
+    fetch(`/api/bets?wallet=${publicKey}`)
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setBets(data); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [publicKey]);
+
+  const totalWagered = bets.reduce((s, b) => s + b.amount, 0);
+  const pendingBets = bets.filter((b) => b.round.status === "open" || b.round.status === "closed");
+  const winRate = bets.length > 0 ? ((bets.length - pendingBets.length) / bets.length * 100).toFixed(0) : "0";
+
+  const usd = (sol: number) => solPrice ? `$${(sol * solPrice).toFixed(2)}` : "—";
+
+  if (!connected || !publicKey) {
+    return (
+      <div className="min-h-screen bg-base flex flex-col items-center justify-center gap-4">
+        <p className="text-white text-lg font-semibold">Connect your wallet to view your profile</p>
+        <button
+          onClick={connect}
+          className="px-6 py-2.5 rounded-xl font-bold text-black bg-brand hover:bg-brand-dim transition-colors"
+        >
+          Connect Wallet
+        </button>
+        <Link href="/" className="text-muted text-sm hover:text-white transition-colors">← Back to markets</Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-base pt-14">
+      <div className="max-w-4xl mx-auto px-4 py-8">
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-white font-bold text-2xl">Profile</h1>
+            <p className="text-muted text-sm mt-0.5 font-mono">{publicKey}</p>
+          </div>
+          <Link href="/" className="text-muted text-sm hover:text-white transition-colors">← Markets</Link>
+        </div>
+
+        {/* Wallet card */}
+        <div className="bg-surface border border-surface-3 rounded-xl p-4 mb-6 flex flex-wrap items-center gap-6">
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-muted mb-1">Wallet</p>
+            <p className="text-white font-mono text-sm">
+              {publicKey.slice(0, 8)}...{publicKey.slice(-8)}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-muted mb-1">Balance</p>
+            <p className="text-brand font-mono font-semibold">
+              {balance !== null ? `${balance.toFixed(4)} SOL` : "—"}
+              {balance !== null && solPrice && (
+                <span className="text-muted font-normal ml-2 text-xs">{usd(balance)}</span>
+              )}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-muted mb-1">Network</p>
+            <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">devnet</span>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          {[
+            { label: "Total Bets", value: bets.length.toString() },
+            { label: "Total Wagered", value: `${totalWagered.toFixed(3)} SOL` },
+            { label: "Pending", value: pendingBets.length.toString() },
+            { label: "Win Rate", value: `${winRate}%` },
+          ].map(({ label, value }) => (
+            <div key={label} className="bg-surface border border-surface-3 rounded-xl p-3">
+              <p className="text-[10px] uppercase tracking-widest text-muted mb-1">{label}</p>
+              <p className="text-white font-semibold font-mono">{value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Bet history */}
+        <div className="bg-surface border border-surface-3 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-surface-3">
+            <h2 className="text-white font-semibold">Bet History</h2>
+          </div>
+
+          {loading ? (
+            <div className="p-8 text-center text-muted text-sm">Loading…</div>
+          ) : bets.length === 0 ? (
+            <div className="p-12 flex flex-col items-center gap-2">
+              <p className="text-3xl">🎯</p>
+              <p className="text-white font-semibold mt-1">No bets yet</p>
+              <p className="text-muted text-sm">Head back to markets and place your first bet.</p>
+              <Link
+                href="/"
+                className="mt-3 px-4 py-2 rounded-lg text-sm font-semibold bg-brand hover:bg-brand-dim text-black transition-colors"
+              >
+                Browse Markets
+              </Link>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[10px] uppercase tracking-widest text-muted border-b border-surface-3">
+                    <th className="text-left px-4 py-2.5">Market</th>
+                    <th className="text-center px-3 py-2.5">Side</th>
+                    <th className="text-right px-3 py-2.5">Amount</th>
+                    <th className="text-right px-3 py-2.5">Odds</th>
+                    <th className="text-right px-3 py-2.5">Est. Payout</th>
+                    <th className="text-center px-3 py-2.5">Status</th>
+                    <th className="text-right px-4 py-2.5">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bets.map((bet) => {
+                    const { label, color } = resultLabel(bet);
+                    const payout = bet.amount * bet.odds;
+                    return (
+                      <tr key={bet.id} className="border-b border-surface-3/50 hover:bg-surface-2/50 transition-colors">
+                        <td className="px-4 py-3 text-muted text-xs max-w-[240px] truncate">
+                          {bet.round.question}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                            bet.side === "yes" ? "bg-yes/10 text-yes" : "bg-no/10 text-no"
+                          }`}>
+                            {bet.side.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-white text-xs">
+                          {bet.amount.toFixed(3)} SOL
+                          {solPrice && (
+                            <div className="text-muted text-[10px]">{usd(bet.amount)}</div>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-muted text-xs">
+                          {bet.odds.toFixed(2)}x
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-xs text-white">
+                          {payout.toFixed(3)} SOL
+                          {solPrice && (
+                            <div className="text-muted text-[10px]">{usd(payout)}</div>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <span className={`text-xs font-medium ${color}`}>{label}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right text-muted text-xs">
+                          {new Date(bet.createdAt).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

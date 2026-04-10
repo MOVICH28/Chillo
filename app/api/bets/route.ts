@@ -1,6 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export async function GET(req: NextRequest) {
+  const wallet = req.nextUrl.searchParams.get("wallet");
+  if (!wallet) return NextResponse.json({ error: "wallet param required" }, { status: 400 });
+  try {
+    const bets = await prisma.bet.findMany({
+      where: { walletAddress: wallet },
+      include: { round: { select: { question: true, status: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    return NextResponse.json(
+      bets.map((b) => ({
+        ...b,
+        createdAt: b.createdAt.toISOString(),
+      }))
+    );
+  } catch (error) {
+    console.error("[GET /api/bets]", error);
+    return NextResponse.json({ error: "Failed to fetch bets" }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
