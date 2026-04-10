@@ -3,12 +3,12 @@ import { ROUNDS_DATA } from "@/lib/rounds-data";
 import { prisma } from "@/lib/prisma";
 
 function computeOdds(yesPool: number, noPool: number, totalPool: number) {
-  if (totalPool === 0 || yesPool === 0 || noPool === 0) {
+  if (totalPool === 0) {
     return { yesOdds: 2.0, noOdds: 2.0, yesPct: 50, noPct: 50 };
   }
   return {
-    yesOdds: parseFloat((totalPool / yesPool).toFixed(2)),
-    noOdds: parseFloat((totalPool / noPool).toFixed(2)),
+    yesOdds: parseFloat((totalPool / Math.max(yesPool, 0.001)).toFixed(2)),
+    noOdds: parseFloat((totalPool / Math.max(noPool, 0.001)).toFixed(2)),
     yesPct: parseFloat(((yesPool / totalPool) * 100).toFixed(1)),
     noPct: parseFloat(((noPool / totalPool) * 100).toFixed(1)),
   };
