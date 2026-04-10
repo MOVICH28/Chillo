@@ -47,7 +47,7 @@ export default function Home() {
 
   const fetchRounds = useCallback(async () => {
     try {
-      const res = await fetch("/api/rounds");
+      const res = await fetch("/api/rounds", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed");
       const data: Round[] = await res.json();
       setRounds(data);

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { ROUNDS_DATA } from "@/lib/rounds-data";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 function computeOdds(yesPool: number, noPool: number, totalPool: number) {
   if (totalPool === 0) {
     return { yesOdds: 2.0, noOdds: 2.0, yesPct: 50, noPct: 50 };
