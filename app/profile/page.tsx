@@ -38,10 +38,13 @@ export default function ProfilePage() {
   const { data: liveData } = useLiveData();
   const solPrice = liveData.sol?.price ?? null;
 
+  const [mounted, setMounted] = useState(false);
   const [bets, setBets] = useState<BetWithRound[]>([]);
   const [betsLoading, setBetsLoading] = useState(false);
   const [refStats, setRefStats] = useState<ReferralStats | null>(null);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!publicKey) return;
@@ -77,7 +80,7 @@ export default function ProfilePage() {
     });
   }
 
-  if (!connected || !publicKey) {
+  if (!mounted || !connected || !publicKey) {
     return (
       <div className="min-h-screen bg-base flex flex-col items-center justify-center gap-4">
         <p className="text-white text-lg font-semibold">Connect your wallet to view your profile</p>

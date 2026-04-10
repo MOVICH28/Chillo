@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import LiveTicker from "@/components/LiveTicker";
@@ -12,6 +12,16 @@ import { Round } from "@/lib/types";
 import { useLiveData } from "@/lib/useLiveData";
 import { useWallet } from "@/components/WalletProvider";
 
+// Isolated component so useSearchParams has its own Suspense boundary
+function RefCapture() {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const ref = searchParams.get("ref");
+    if (ref) localStorage.setItem("chillo_ref", ref);
+  }, [searchParams]);
+  return null;
+}
+
 export default function Home() {
   const [rounds, setRounds] = useState<Round[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,15 +29,6 @@ export default function Home() {
   const [betTarget, setBetTarget] = useState<{ round: Round; side: "yes" | "no" } | null>(null);
   const { data: liveData } = useLiveData();
   const { publicKey, connected } = useWallet();
-  const searchParams = useSearchParams();
-
-  // Save ref code to localStorage when visiting via referral link
-  useEffect(() => {
-    const ref = searchParams.get("ref");
-    if (ref) {
-      localStorage.setItem("chillo_ref", ref);
-    }
-  }, [searchParams]);
 
   // Register referral once wallet connects, if we have a stored ref code
   useEffect(() => {
@@ -35,8 +36,6 @@ export default function Home() {
     const ref = localStorage.getItem("chillo_ref");
     if (!ref || ref === publicKey) return;
 
-    // Fire-and-forget — expand ref short code back to full address if needed
-    // ref may be a short wallet prefix; if it matches nothing the API rejects gracefully
     fetch("/api/referral", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -76,6 +75,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-base flex flex-col">
+      <Suspense fallback={null}><RefCapture /></Suspense>
       <Navbar rounds={rounds} />
 
       {/* Ticker just below navbar */}
