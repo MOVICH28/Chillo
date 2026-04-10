@@ -251,7 +251,7 @@ export default function ProfilePage() {
                     const payout = bet.amount * bet.odds;
                     return (
                       <tr key={bet.id} className="border-b border-surface-3/50 hover:bg-surface-2/50 transition-colors">
-                        <td className="px-4 py-3 text-muted text-xs max-w-[240px] truncate">
+                        <td className="px-4 py-3 text-muted text-xs">
                           {bet.round.question}
                         </td>
                         <td className="px-3 py-3 text-center">
@@ -280,7 +280,7 @@ export default function ProfilePage() {
                           <span className={`text-xs font-medium ${color}`}>{label}</span>
                         </td>
                         <td className="px-4 py-3 text-right text-muted text-xs">
-                          {new Date(bet.createdAt).toLocaleDateString()}
+                          {new Date(bet.createdAt).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit'})}
                         </td>
                       </tr>
                     );
