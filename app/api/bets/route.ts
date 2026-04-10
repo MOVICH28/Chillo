@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { prisma } from "@/lib/prisma";
+import { ROUNDS_DATA } from "@/lib/rounds-data";
 
 const PLATFORM_WALLET = "GsvhgEARAKjYX2oFRzgKpWU7XufuGPtVeN58M983prtb";
 const RPC = "https://api.devnet.solana.com";
@@ -11,11 +12,17 @@ export async function GET(req: NextRequest) {
   try {
     const bets = await prisma.bet.findMany({
       where: { walletAddress: wallet },
-      include: { round: { select: { question: true, status: true } } },
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(
-      bets.map((b) => ({ ...b, createdAt: b.createdAt.toISOString() }))
+      bets.map((b) => {
+        const round = ROUNDS_DATA.find((r) => r.id === b.roundId);
+        return {
+          ...b,
+          createdAt: b.createdAt.toISOString(),
+          round: round ? { question: round.question, status: round.status } : null,
+        };
+      })
     );
   } catch (error) {
     console.error("[GET /api/bets]", error);
@@ -78,24 +85,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "amount must be a positive number" }, { status: 400 });
     }
 
-    // Verify transaction on-chain before trusting anything
-    const valid = await verifyTransaction(txHash, amount);
-    if (!valid) {
-      return NextResponse.json(
-        { error: "Transaction verification failed. Please ensure it confirmed on devnet." },
-        { status: 400 }
-      );
+    // Find round from static data BEFORE any on-chain work
+    const round = ROUNDS_DATA.find((r) => r.id === roundId);
+    if (!round) {
+      return NextResponse.json({ error: "Round not found" }, { status: 404 });
     }
-
-    const round = await prisma.round.findUnique({ where: { id: roundId } });
-    if (!round) return NextResponse.json({ error: "Round not found" }, { status: 404 });
     if (round.status !== "open") {
       return NextResponse.json({ error: "Round is not open for betting" }, { status: 400 });
     }
-    if (new Date() > round.endsAt) {
+    if (new Date() > new Date(round.endsAt)) {
       return NextResponse.json({ error: "Round has ended" }, { status: 400 });
     }
 
+    // Calculate odds from static pool data
     const newYesPool = side === "yes" ? round.yesPool + amount : round.yesPool;
     const newNoPool  = side === "no"  ? round.noPool  + amount : round.noPool;
     const newTotal   = round.totalPool + amount;
@@ -104,15 +106,25 @@ export async function POST(req: NextRequest) {
         ? newTotal / Math.max(newYesPool, 0.001)
         : newTotal / Math.max(newNoPool, 0.001);
 
-    const [bet] = await prisma.$transaction([
-      prisma.bet.create({
-        data: { walletAddress, roundId, side, amount, odds: parseFloat(odds.toFixed(2)), txHash },
-      }),
-      prisma.round.update({
-        where: { id: roundId },
-        data: { yesPool: newYesPool, noPool: newNoPool, totalPool: newTotal },
-      }),
-    ]);
+    // Verify transaction on-chain — save as "unverified" if it fails so we don't lose the record
+    const valid = await verifyTransaction(txHash, amount);
+    const status = valid ? "verified" : "unverified";
+
+    if (!valid) {
+      console.warn(`[POST /api/bets] tx ${txHash} failed verification — saving as unverified`);
+    }
+
+    const bet = await prisma.bet.create({
+      data: {
+        walletAddress,
+        roundId,
+        side,
+        amount,
+        odds: parseFloat(odds.toFixed(2)),
+        txHash,
+        status,
+      },
+    });
 
     return NextResponse.json({ ...bet, createdAt: bet.createdAt.toISOString() }, { status: 201 });
   } catch (error: unknown) {

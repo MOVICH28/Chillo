@@ -16,8 +16,6 @@ model Round {
   status    String   @default("open") // open | closed | resolved
   endsAt    DateTime
   createdAt DateTime @default(now())
-
-  bets Bet[]
 }
 
 model Bet {
@@ -28,9 +26,8 @@ model Bet {
   amount        Float
   odds          Float
   txHash        String   @unique
+  status        String   @default("verified") // verified | unverified
   createdAt     DateTime @default(now())
-
-  round Round @relation(fields: [roundId], references: [id])
 }
 
 model Referral {
