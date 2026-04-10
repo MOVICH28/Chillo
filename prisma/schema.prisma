@@ -27,6 +27,9 @@ model Bet {
   odds          Float
   txHash        String   @unique
   status        String   @default("verified") // verified | unverified
+  result        String?  // yes | no — set when round is resolved
+  payout        Float?   // SOL amount sent to winner
+  paid          Boolean  @default(false)
   createdAt     DateTime @default(now())
 }
 
