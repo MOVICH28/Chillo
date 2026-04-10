@@ -37,7 +37,7 @@ export default function Navbar({ rounds }: NavbarProps) {
       <div className="hidden sm:flex items-center gap-1.5 text-sm text-muted">
         <span>Total Pool:</span>
         <span className="text-brand font-mono font-semibold">
-          ◎{totalPool.toFixed(1)} SOL
+          {totalPool.toFixed(1)} SOL
         </span>
       </div>
 

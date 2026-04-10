@@ -281,7 +281,7 @@ export default function RoundCard({ round, onBet, liveData }: RoundCardProps) {
       <div className="px-4 pb-4">
         <div className="flex items-center justify-between text-xs text-muted mb-3">
           <span>
-            Pool: <span className="text-white font-mono">◎{round.totalPool.toFixed(1)}</span>
+            Pool: <span className="text-white font-mono">{round.totalPool.toFixed(1)} SOL</span>
           </span>
           <span>{round.bets?.length ?? 0} bets</span>
         </div>

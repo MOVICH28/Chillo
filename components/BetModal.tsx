@@ -9,12 +9,13 @@ interface BetModalProps {
   side: "yes" | "no";
   onClose: () => void;
   onSuccess: () => void;
+  solPrice?: number;
 }
 
 const PRESETS = ["0.05", "0.1", "0.5", "1"];
 
 
-export default function BetModal({ round, side, onClose, onSuccess }: BetModalProps) {
+export default function BetModal({ round, side, onClose, onSuccess, solPrice }: BetModalProps) {
   const { publicKey, connected, connect } = useWallet();
   const [amount, setAmount] = useState("0.1");
   const [loading, setLoading] = useState(false);
@@ -24,6 +25,8 @@ export default function BetModal({ round, side, onClose, onSuccess }: BetModalPr
   const numAmount = parseFloat(amount) || 0;
   const payout = numAmount * odds;
   const profit = payout - numAmount;
+  const usd = (sol: number) =>
+    solPrice ? ` (~$${(sol * solPrice).toFixed(2)})` : "";
 
   async function handleBet() {
     if (!connected || !publicKey) {
@@ -98,7 +101,6 @@ export default function BetModal({ round, side, onClose, onSuccess }: BetModalPr
           <div className="mb-3">
             <label className="text-xs text-muted mb-1.5 block">Amount (SOL)</label>
             <div className="flex items-center gap-2 bg-surface-3 rounded-xl px-4 py-3 border border-surface-3 focus-within:border-brand/40">
-              <span className="text-muted font-mono">◎</span>
               <input
                 type="number"
                 min="0.01"
@@ -135,7 +137,10 @@ export default function BetModal({ round, side, onClose, onSuccess }: BetModalPr
             </p>
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted">Stake</span>
-              <span className="text-white font-mono">◎{numAmount.toFixed(3)}</span>
+              <span className="text-white font-mono">
+                {numAmount.toFixed(3)} SOL
+                <span className="text-muted ml-1">{usd(numAmount)}</span>
+              </span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted">Current odds</span>
@@ -143,12 +148,16 @@ export default function BetModal({ round, side, onClose, onSuccess }: BetModalPr
             </div>
             <div className="border-t border-surface-3 pt-2 flex items-center justify-between text-sm">
               <span className="text-muted font-medium">Est. payout</span>
-              <span className="text-white font-mono font-bold">◎{payout.toFixed(3)}</span>
+              <span className="text-white font-mono font-bold">
+                {payout.toFixed(3)} SOL
+                <span className="text-muted font-normal ml-1">{usd(payout)}</span>
+              </span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted">Profit if win</span>
               <span className={`font-mono font-semibold ${profit >= 0 ? "text-yes" : "text-no"}`}>
-                {profit >= 0 ? "+" : ""}◎{profit.toFixed(3)}
+                {profit >= 0 ? "+" : ""}{profit.toFixed(3)} SOL
+                <span className="text-muted font-normal ml-1">{usd(profit)}</span>
               </span>
             </div>
           </div>
@@ -176,7 +185,7 @@ export default function BetModal({ round, side, onClose, onSuccess }: BetModalPr
                   ? "bg-yes hover:bg-yes/80 text-black"
                   : "bg-no hover:bg-no/80 text-white"}`}
             >
-              {loading ? "Submitting…" : `Bet ${isYes ? "YES" : "NO"} · ◎${numAmount.toFixed(2)}`}
+              {loading ? "Submitting…" : `Bet ${isYes ? "YES" : "NO"} · ${numAmount.toFixed(2)} SOL`}
             </button>
           )}
 

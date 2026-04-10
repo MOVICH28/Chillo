@@ -128,6 +128,7 @@ export default function Home() {
           side={betTarget.side}
           onClose={() => setBetTarget(null)}
           onSuccess={fetchRounds}
+          solPrice={liveData.sol?.price}
         />
       )}
 
