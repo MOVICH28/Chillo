@@ -158,7 +158,6 @@ export default function ProfilePage() {
             <div className="flex flex-col sm:flex-row gap-3 text-xs text-muted">
               {[
                 { icon: "🔗", text: "Share your unique link" },
-                { icon: "👛", text: "Friend connects their wallet" },
                 { icon: "💸", text: "Earn 1% of every bet they place" },
               ].map(({ icon, text }) => (
                 <div key={text} className="flex items-center gap-2 bg-surface-2 rounded-lg px-3 py-2 flex-1">
