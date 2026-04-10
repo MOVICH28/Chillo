@@ -287,29 +287,13 @@ export default function RoundCard({ round, onBet, liveData }: RoundCardProps) {
         </div>
 
         <div className="flex gap-2">
-          <button
-            onClick={() => onBet(round, "yes")}
-            disabled={isEnded}
-            className="flex-1 py-2 px-4 rounded-full flex flex-row items-center justify-center gap-1.5
-              bg-yes/10 text-yes border border-yes/30
-              hover:bg-yes hover:text-black transition-all duration-150
-              disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <span className="text-[12px] font-semibold opacity-70 leading-none">YES</span>
-            <span className="w-1 h-1 rounded-full bg-current opacity-40" />
-            <span className="text-[15px] font-bold font-mono leading-none">{yesOdds}x</span>
+          <button onClick={() => onBet(round, "yes")} disabled={isEnded} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-yes/20 hover:bg-yes/30 border border-yes/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            <span className="text-xs font-semibold text-yes opacity-80">YES</span>
+            <span className="text-sm font-bold font-mono text-yes">{yesOdds.toFixed(2)}x</span>
           </button>
-          <button
-            onClick={() => onBet(round, "no")}
-            disabled={isEnded}
-            className="flex-1 py-2 px-4 rounded-full flex flex-row items-center justify-center gap-1.5
-              bg-no/10 text-no border border-no/30
-              hover:bg-no hover:text-white transition-all duration-150
-              disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <span className="text-[12px] font-semibold opacity-70 leading-none">NO</span>
-            <span className="w-1 h-1 rounded-full bg-current opacity-40" />
-            <span className="text-[15px] font-bold font-mono leading-none">{noOdds}x</span>
+          <button onClick={() => onBet(round, "no")} disabled={isEnded} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-no/20 hover:bg-no/30 border border-no/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            <span className="text-xs font-semibold text-no opacity-80">NO</span>
+            <span className="text-sm font-bold font-mono text-no">{noOdds.toFixed(2)}x</span>
           </button>
         </div>
       </div>
