@@ -31,10 +31,14 @@ const SolanaWalletProvider: FC<Props> = ({ children }) => {
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const solana = (window as any).solana;
-    if (solana?.isPhantom && solana.isConnected && solana.publicKey) {
-      setPublicKey(solana.publicKey.toString());
+    if (!solana?.isPhantom) return;
+    // Silently reconnect if user already approved this site — no popup
+    solana.connect({ onlyIfTrusted: true }).then((resp: { publicKey: { toString(): string } }) => {
+      setPublicKey(resp.publicKey.toString());
       setConnected(true);
-    }
+    }).catch(() => {
+      // Not previously trusted — do nothing, wait for manual connect
+    });
   }, []);
 
   const connect = useCallback(async () => {

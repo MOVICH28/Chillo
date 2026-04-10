@@ -8,11 +8,11 @@ const RPC = "https://api.devnet.solana.com";
 
 export async function GET(req: NextRequest) {
   const wallet = req.nextUrl.searchParams.get("wallet");
-  if (!wallet) return NextResponse.json({ error: "wallet param required" }, { status: 400 });
   try {
     const bets = await prisma.bet.findMany({
-      where: { walletAddress: wallet },
+      where: wallet ? { walletAddress: wallet } : undefined,
       orderBy: { createdAt: "desc" },
+      take: wallet ? undefined : 10, // live feed: last 10 across all wallets
     });
     return NextResponse.json(
       bets.map((b) => {

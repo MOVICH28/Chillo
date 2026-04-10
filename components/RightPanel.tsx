@@ -1,10 +1,20 @@
 "use client";
 
-import { Round, Bet } from "@/lib/types";
-import { useMemo } from "react";
+import { Round } from "@/lib/types";
+import { useEffect, useState } from "react";
 
 interface RightPanelProps {
   rounds: Round[];
+}
+
+interface LiveBet {
+  id: string;
+  walletAddress: string;
+  roundId: string;
+  side: string;
+  amount: number;
+  createdAt: string;
+  round: { question: string; status: string } | null;
 }
 
 function timeAgo(dateStr: string): string {
@@ -17,18 +27,27 @@ function timeAgo(dateStr: string): string {
 
 export default function RightPanel({ rounds }: RightPanelProps) {
   const totalPool = rounds.reduce((s, r) => s + r.totalPool, 0);
-  const totalBets = rounds.reduce((s, r) => s + (r.bets?.length ?? 0), 0);
   const openRounds = rounds.filter((r) => r.status === "open").length;
 
-  const liveBets = useMemo(() => {
-    const all: (Bet & { question: string })[] = [];
-    for (const r of rounds) {
-      for (const b of r.bets ?? []) {
-        all.push({ ...b, question: r.question });
-      }
+  const [liveBets, setLiveBets] = useState<LiveBet[]>([]);
+  const [totalBets, setTotalBets] = useState(0);
+
+  useEffect(() => {
+    function fetchBets() {
+      fetch("/api/bets")
+        .then((r) => r.json())
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setLiveBets(data);
+            setTotalBets(data.length);
+          }
+        })
+        .catch(() => {});
     }
-    return all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 10);
-  }, [rounds]);
+    fetchBets();
+    const id = setInterval(fetchBets, 30000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <aside className="w-64 shrink-0 flex flex-col gap-4 pt-2">
@@ -74,7 +93,7 @@ export default function RightPanel({ rounds }: RightPanelProps) {
                   </span>
                   <span className="text-xs font-mono text-white">{bet.amount} SOL</span>
                 </div>
-                <p className="text-[10px] text-muted truncate">{bet.question}</p>
+                <p className="text-[10px] text-muted truncate">{bet.round?.question ?? bet.roundId}</p>
               </div>
             ))}
           </div>
