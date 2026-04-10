@@ -290,26 +290,26 @@ export default function RoundCard({ round, onBet, liveData }: RoundCardProps) {
           <button
             onClick={() => onBet(round, "yes")}
             disabled={isEnded}
-            className="flex-1 py-3 rounded-[8px] flex items-center justify-center gap-1.5
+            className="flex-1 py-2 px-4 rounded-full flex flex-row items-center justify-center gap-1.5
               bg-yes/10 text-yes border border-yes/30
               hover:bg-yes hover:text-black transition-all duration-150
               disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <span className="text-[11px] font-semibold opacity-80 leading-none">YES</span>
+            <span className="text-[12px] font-semibold opacity-70 leading-none">YES</span>
             <span className="w-1 h-1 rounded-full bg-current opacity-40" />
-            <span className="text-[16px] font-bold font-mono leading-none">{yesOdds}x</span>
+            <span className="text-[15px] font-bold font-mono leading-none">{yesOdds}x</span>
           </button>
           <button
             onClick={() => onBet(round, "no")}
             disabled={isEnded}
-            className="flex-1 py-3 rounded-[8px] flex items-center justify-center gap-1.5
+            className="flex-1 py-2 px-4 rounded-full flex flex-row items-center justify-center gap-1.5
               bg-no/10 text-no border border-no/30
               hover:bg-no hover:text-white transition-all duration-150
               disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <span className="text-[11px] font-semibold opacity-80 leading-none">NO</span>
+            <span className="text-[12px] font-semibold opacity-70 leading-none">NO</span>
             <span className="w-1 h-1 rounded-full bg-current opacity-40" />
-            <span className="text-[16px] font-bold font-mono leading-none">{noOdds}x</span>
+            <span className="text-[15px] font-bold font-mono leading-none">{noOdds}x</span>
           </button>
         </div>
       </div>

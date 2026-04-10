@@ -11,8 +11,6 @@ function computeOdds(yesPool: number, noPool: number, totalPool: number) {
   return { yesOdds, noOdds, yesPct, noPct };
 }
 
-const now = new Date("2026-04-08T12:00:00Z");
-
 const rawRounds = [
   {
     id: "round-1",
@@ -22,8 +20,8 @@ const rawRounds = [
     yesPool: 137.9,
     noPool: 91.9,
     totalPool: 229.8,
-    endsAt: new Date(now.getTime() + 4 * 60 * 60 * 1000).toISOString(),
-    createdAt: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+    endsAt: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
     bets: [],
   },
   {
@@ -34,8 +32,8 @@ const rawRounds = [
     yesPool: 320.0,
     noPool: 180.0,
     totalPool: 500.0,
-    endsAt: new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString(),
-    createdAt: new Date(now.getTime() - 1 * 60 * 60 * 1000).toISOString(),
+    endsAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
     bets: [],
   },
   {
@@ -46,8 +44,8 @@ const rawRounds = [
     yesPool: 95.0,
     noPool: 80.0,
     totalPool: 175.0,
-    endsAt: new Date(now.getTime() + 12 * 60 * 60 * 1000).toISOString(),
-    createdAt: new Date(now.getTime() - 30 * 60 * 1000).toISOString(),
+    endsAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
     bets: [],
   },
   {
@@ -58,8 +56,8 @@ const rawRounds = [
     yesPool: 180.0,
     noPool: 120.0,
     totalPool: 300.0,
-    endsAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
-    createdAt: new Date(now.getTime() - 15 * 60 * 1000).toISOString(),
+    endsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
     bets: [],
   },
 ];
