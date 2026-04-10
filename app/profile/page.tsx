@@ -18,11 +18,19 @@ interface BetWithRound {
   round: { question: string; status: string };
 }
 
+interface ReferralStats {
+  referralCount: number;
+  totalEarned: number;
+  referrals: { referredAddress: string; createdAt: string }[];
+}
+
 function resultLabel(bet: BetWithRound): { label: string; color: string } {
-  if (bet.round.status === "open") return { label: "Pending", color: "text-yellow-400" };
-  if (bet.round.status === "closed") return { label: "Pending", color: "text-yellow-400" };
+  if (bet.round.status === "open" || bet.round.status === "closed")
+    return { label: "Pending", color: "text-yellow-400" };
   return { label: "Resolved", color: "text-muted" };
 }
+
+const BASE_URL = "https://chillo-f11o.vercel.app";
 
 export default function ProfilePage() {
   const { publicKey, connected, connect } = useWallet();
@@ -31,23 +39,43 @@ export default function ProfilePage() {
   const solPrice = liveData.sol?.price ?? null;
 
   const [bets, setBets] = useState<BetWithRound[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [betsLoading, setBetsLoading] = useState(false);
+  const [refStats, setRefStats] = useState<ReferralStats | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!publicKey) return;
-    setLoading(true);
+    setBetsLoading(true);
     fetch(`/api/bets?wallet=${publicKey}`)
       .then((r) => r.json())
       .then((data) => { if (Array.isArray(data)) setBets(data); })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => setBetsLoading(false));
+
+    fetch(`/api/referral?wallet=${publicKey}`)
+      .then((r) => r.json())
+      .then((data) => { if (data && typeof data.referralCount === "number") setRefStats(data); })
+      .catch(() => {});
   }, [publicKey]);
 
   const totalWagered = bets.reduce((s, b) => s + b.amount, 0);
   const pendingBets = bets.filter((b) => b.round.status === "open" || b.round.status === "closed");
-  const winRate = bets.length > 0 ? ((bets.length - pendingBets.length) / bets.length * 100).toFixed(0) : "0";
+  const winRate = bets.length > 0
+    ? (((bets.length - pendingBets.length) / bets.length) * 100).toFixed(0)
+    : "0";
 
   const usd = (sol: number) => solPrice ? `$${(sol * solPrice).toFixed(2)}` : "—";
+
+  // Referral link uses short wallet prefix as code
+  const refCode = publicKey ?? "";
+  const refLink = `${BASE_URL}/?ref=${refCode}`;
+
+  function copyRefLink() {
+    navigator.clipboard.writeText(refLink).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
 
   if (!connected || !publicKey) {
     return (
@@ -115,13 +143,79 @@ export default function ProfilePage() {
           ))}
         </div>
 
+        {/* Referral section */}
+        <div id="referral" className="bg-surface border border-surface-3 rounded-xl overflow-hidden mb-6">
+          <div className="px-4 py-3 border-b border-surface-3 flex items-center gap-2">
+            <span className="text-brand text-sm">🔗</span>
+            <h2 className="text-white font-semibold">Referral Program</h2>
+          </div>
+          <div className="p-4 space-y-4">
+
+            {/* How it works */}
+            <div className="flex flex-col sm:flex-row gap-3 text-xs text-muted">
+              {[
+                { icon: "🔗", text: "Share your unique link" },
+                { icon: "👛", text: "Friend connects their wallet" },
+                { icon: "💸", text: "Earn 1% of every bet they place" },
+              ].map(({ icon, text }) => (
+                <div key={text} className="flex items-center gap-2 bg-surface-2 rounded-lg px-3 py-2 flex-1">
+                  <span>{icon}</span>
+                  <span>{text}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Referral link */}
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-muted mb-1.5">Your referral link</p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 font-mono text-xs text-muted truncate">
+                  {refLink}
+                </div>
+                <button
+                  onClick={copyRefLink}
+                  className={`shrink-0 px-3 py-2 rounded-lg text-xs font-semibold transition-colors
+                    ${copied
+                      ? "bg-yes/20 text-yes border border-yes/30"
+                      : "bg-brand hover:bg-brand-dim text-black"}`}
+                >
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+            </div>
+
+            {/* Referral stats */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-surface-2 border border-surface-3 rounded-xl p-3">
+                <p className="text-[10px] uppercase tracking-widest text-muted mb-1">People Invited</p>
+                <p className="text-white font-bold font-mono text-lg">
+                  {refStats?.referralCount ?? 0}
+                </p>
+              </div>
+              <div className="bg-surface-2 border border-surface-3 rounded-xl p-3">
+                <p className="text-[10px] uppercase tracking-widest text-muted mb-1">Total Earned</p>
+                <p className="text-brand font-bold font-mono text-lg">
+                  {(refStats?.totalEarned ?? 0).toFixed(4)} SOL
+                </p>
+                {solPrice && refStats && refStats.totalEarned > 0 && (
+                  <p className="text-muted text-[10px] mt-0.5">{usd(refStats.totalEarned)}</p>
+                )}
+              </div>
+            </div>
+
+            <p className="text-[10px] text-muted">
+              Earn <span className="text-brand">1% of every bet</span> placed by wallets you refer. Paid automatically in SOL.
+            </p>
+          </div>
+        </div>
+
         {/* Bet history */}
         <div className="bg-surface border border-surface-3 rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-surface-3">
             <h2 className="text-white font-semibold">Bet History</h2>
           </div>
 
-          {loading ? (
+          {betsLoading ? (
             <div className="p-8 text-center text-muted text-sm">Loading…</div>
           ) : bets.length === 0 ? (
             <div className="p-12 flex flex-col items-center gap-2">
@@ -194,6 +288,7 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
+
       </div>
     </div>
   );

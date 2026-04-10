@@ -32,3 +32,10 @@ model Bet {
 
   round Round @relation(fields: [roundId], references: [id])
 }
+
+model Referral {
+  id              String   @id @default(cuid())
+  referrerAddress String
+  referredAddress String   @unique
+  createdAt       DateTime @default(now())
+}

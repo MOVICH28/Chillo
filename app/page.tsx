@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import LiveTicker from "@/components/LiveTicker";
 import Sidebar from "@/components/Sidebar";
@@ -9,6 +10,7 @@ import RightPanel from "@/components/RightPanel";
 import BetModal from "@/components/BetModal";
 import { Round } from "@/lib/types";
 import { useLiveData } from "@/lib/useLiveData";
+import { useWallet } from "@/components/WalletProvider";
 
 export default function Home() {
   const [rounds, setRounds] = useState<Round[]>([]);
@@ -16,6 +18,33 @@ export default function Home() {
   const [category, setCategory] = useState("all");
   const [betTarget, setBetTarget] = useState<{ round: Round; side: "yes" | "no" } | null>(null);
   const { data: liveData } = useLiveData();
+  const { publicKey, connected } = useWallet();
+  const searchParams = useSearchParams();
+
+  // Save ref code to localStorage when visiting via referral link
+  useEffect(() => {
+    const ref = searchParams.get("ref");
+    if (ref) {
+      localStorage.setItem("chillo_ref", ref);
+    }
+  }, [searchParams]);
+
+  // Register referral once wallet connects, if we have a stored ref code
+  useEffect(() => {
+    if (!connected || !publicKey) return;
+    const ref = localStorage.getItem("chillo_ref");
+    if (!ref || ref === publicKey) return;
+
+    // Fire-and-forget — expand ref short code back to full address if needed
+    // ref may be a short wallet prefix; if it matches nothing the API rejects gracefully
+    fetch("/api/referral", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ referrerAddress: ref, referredAddress: publicKey }),
+    }).then(() => {
+      localStorage.removeItem("chillo_ref");
+    }).catch(() => {});
+  }, [connected, publicKey]);
 
   const fetchRounds = useCallback(async () => {
     try {
@@ -32,7 +61,7 @@ export default function Home() {
 
   useEffect(() => {
     fetchRounds();
-    const id = setInterval(fetchRounds, 15000); // refresh every 15s
+    const id = setInterval(fetchRounds, 15000);
     return () => clearInterval(id);
   }, [fetchRounds]);
 
@@ -113,6 +142,22 @@ export default function Home() {
               ))}
             </div>
           )}
+
+          {/* Referral banner */}
+          <div className="mt-8 rounded-xl border border-brand/20 bg-brand/5 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <p className="text-white font-semibold text-sm">Earn with referrals</p>
+              <p className="text-muted text-xs mt-1 max-w-md">
+                Share your link. Earn <span className="text-brand font-semibold">1% of every bet</span> your referrals place — paid automatically in SOL.
+              </p>
+            </div>
+            <a
+              href="/profile#referral"
+              className="shrink-0 px-4 py-2 rounded-lg text-sm font-semibold bg-brand hover:bg-brand-dim text-black transition-colors"
+            >
+              Get your link →
+            </a>
+          </div>
         </main>
 
         {/* Right panel */}
