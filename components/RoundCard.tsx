@@ -287,13 +287,13 @@ export default function RoundCard({ round, onBet, liveData }: RoundCardProps) {
         </div>
 
         <div className="flex gap-2">
-          <button onClick={() => onBet(round, "yes")} disabled={isEnded} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-yes/20 hover:bg-yes/30 border border-yes/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-            <span className="text-xs font-semibold text-yes opacity-80">YES</span>
-            <span className="text-sm font-bold font-mono text-yes">{yesOdds.toFixed(2)}x</span>
+          <button onClick={() => onBet(round, "yes")} disabled={isEnded} className="flex-1 flex flex-col items-center justify-center py-3 rounded-lg bg-yes/20 hover:bg-yes/30 border border-yes/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            <span className="text-[15px] font-bold text-yes leading-none">YES</span>
+            <span className="text-[12px] font-mono text-yes opacity-75 mt-0.5">{yesOdds.toFixed(2)}x</span>
           </button>
-          <button onClick={() => onBet(round, "no")} disabled={isEnded} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-no/20 hover:bg-no/30 border border-no/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-            <span className="text-xs font-semibold text-no opacity-80">NO</span>
-            <span className="text-sm font-bold font-mono text-no">{noOdds.toFixed(2)}x</span>
+          <button onClick={() => onBet(round, "no")} disabled={isEnded} className="flex-1 flex flex-col items-center justify-center py-3 rounded-lg bg-no/20 hover:bg-no/30 border border-no/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            <span className="text-[15px] font-bold text-no leading-none">NO</span>
+            <span className="text-[12px] font-mono text-no opacity-75 mt-0.5">{noOdds.toFixed(2)}x</span>
           </button>
         </div>
       </div>
