@@ -107,7 +107,12 @@ export async function POST(req: NextRequest) {
         : newTotal / Math.max(newNoPool, 0.001);
 
     // Verify transaction on-chain — save as "unverified" if it fails so we don't lose the record
-    const valid = await verifyTransaction(txHash, amount);
+    let valid = false;
+    try {
+      valid = await verifyTransaction(txHash, amount);
+    } catch (err) {
+      console.warn(`[POST /api/bets] tx ${txHash} verification threw — saving as unverified:`, err);
+    }
     const status = valid ? "verified" : "unverified";
 
     if (!valid) {
