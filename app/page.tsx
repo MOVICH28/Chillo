@@ -60,7 +60,7 @@ export default function Home() {
 
   useEffect(() => {
     fetchRounds();
-    const id = setInterval(fetchRounds, 15000);
+    const id = setInterval(fetchRounds, 10000);
     return () => clearInterval(id);
   }, [fetchRounds]);
 

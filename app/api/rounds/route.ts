@@ -1,6 +1,36 @@
 import { NextResponse } from "next/server";
 import { ROUNDS_DATA } from "@/lib/rounds-data";
+import { prisma } from "@/lib/prisma";
+
+function computeOdds(yesPool: number, noPool: number, totalPool: number) {
+  if (totalPool === 0 || yesPool === 0 || noPool === 0) {
+    return { yesOdds: 2.0, noOdds: 2.0, yesPct: 50, noPct: 50 };
+  }
+  return {
+    yesOdds: parseFloat((totalPool / yesPool).toFixed(2)),
+    noOdds: parseFloat((totalPool / noPool).toFixed(2)),
+    yesPct: parseFloat(((yesPool / totalPool) * 100).toFixed(1)),
+    noPct: parseFloat(((noPool / totalPool) * 100).toFixed(1)),
+  };
+}
 
 export async function GET() {
-  return NextResponse.json(ROUNDS_DATA);
+  const pools = await prisma.roundPool.findMany();
+  const poolMap = new Map(pools.map((p) => [p.roundId, p]));
+
+  const rounds = ROUNDS_DATA.map((round) => {
+    const db = poolMap.get(round.id);
+    if (db) {
+      return {
+        ...round,
+        yesPool: db.yesPool,
+        noPool: db.noPool,
+        totalPool: db.totalPool,
+        ...computeOdds(db.yesPool, db.noPool, db.totalPool),
+      };
+    }
+    return round;
+  });
+
+  return NextResponse.json(rounds);
 }

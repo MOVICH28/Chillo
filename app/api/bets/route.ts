@@ -97,15 +97,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Round has ended" }, { status: 400 });
     }
 
-    // Calculate odds from static pool data
-    const newYesPool = side === "yes" ? round.yesPool + amount : round.yesPool;
-    const newNoPool  = side === "no"  ? round.noPool  + amount : round.noPool;
-    const newTotal   = round.totalPool + amount;
-    const odds =
-      side === "yes"
-        ? newTotal / Math.max(newYesPool, 0.001)
-        : newTotal / Math.max(newNoPool, 0.001);
-
     // Verify transaction on-chain — save as "unverified" if it fails so we don't lose the record
     let valid = false;
     try {
@@ -118,6 +109,26 @@ export async function POST(req: NextRequest) {
     if (!valid) {
       console.warn(`[POST /api/bets] tx ${txHash} failed verification — saving as unverified`);
     }
+
+    // Upsert RoundPool atomically, then compute odds from live totals
+    const pool = await prisma.roundPool.upsert({
+      where: { roundId },
+      create: {
+        roundId,
+        yesPool: side === "yes" ? amount : 0,
+        noPool: side === "no" ? amount : 0,
+        totalPool: amount,
+      },
+      update:
+        side === "yes"
+          ? { yesPool: { increment: amount }, totalPool: { increment: amount } }
+          : { noPool: { increment: amount }, totalPool: { increment: amount } },
+    });
+
+    const odds =
+      side === "yes"
+        ? pool.totalPool / Math.max(pool.yesPool, 0.001)
+        : pool.totalPool / Math.max(pool.noPool, 0.001);
 
     const bet = await prisma.bet.create({
       data: {
