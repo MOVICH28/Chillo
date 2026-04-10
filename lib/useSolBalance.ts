@@ -29,7 +29,11 @@ export function useSolBalance(publicKey: string | null): number | null {
 
     fetch();
     const id = setInterval(fetch, 30_000);
-    return () => clearInterval(id);
+    window.addEventListener("betPlaced", fetch);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("betPlaced", fetch);
+    };
   }, [publicKey]);
 
   return balance;

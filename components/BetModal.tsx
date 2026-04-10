@@ -111,6 +111,7 @@ export default function BetModal({ round, side, onClose, onSuccess, solPrice }: 
       if (!res.ok) throw new Error(data.error ?? "Failed to register bet");
 
       setTxStatus("success");
+      window.dispatchEvent(new CustomEvent("betPlaced"));
       onSuccess();
       setTimeout(onClose, 1800);
     } catch (e: unknown) {

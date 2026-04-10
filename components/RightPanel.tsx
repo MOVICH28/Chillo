@@ -46,7 +46,11 @@ export default function RightPanel({ rounds }: RightPanelProps) {
     }
     fetchBets();
     const id = setInterval(fetchBets, 30000);
-    return () => clearInterval(id);
+    window.addEventListener("betPlaced", fetchBets);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("betPlaced", fetchBets);
+    };
   }, []);
 
   return (
