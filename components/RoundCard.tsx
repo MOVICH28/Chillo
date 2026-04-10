@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Round } from "@/lib/types";
 import { LiveData } from "@/lib/useLiveData";
 import Sparkline from "@/components/Sparkline";
@@ -192,6 +192,29 @@ export default function RoundCard({ round, onBet, liveData }: RoundCardProps) {
   const yesOdds = round.yesOdds ?? 2.0;
   const noOdds  = round.noOdds  ?? 2.0;
 
+  const prevYesOdds = useRef<number>(yesOdds);
+  const prevNoOdds  = useRef<number>(noOdds);
+  const [yesFlash, setYesFlash] = useState("");
+  const [noFlash,  setNoFlash]  = useState("");
+
+  useEffect(() => {
+    if (yesOdds !== prevYesOdds.current) {
+      setYesFlash(yesOdds > prevYesOdds.current ? "odds-flash-up" : "odds-flash-down");
+      prevYesOdds.current = yesOdds;
+      const t = setTimeout(() => setYesFlash(""), 1000);
+      return () => clearTimeout(t);
+    }
+  }, [yesOdds]);
+
+  useEffect(() => {
+    if (noOdds !== prevNoOdds.current) {
+      setNoFlash(noOdds > prevNoOdds.current ? "odds-flash-up" : "odds-flash-down");
+      prevNoOdds.current = noOdds;
+      const t = setTimeout(() => setNoFlash(""), 1000);
+      return () => clearTimeout(t);
+    }
+  }, [noOdds]);
+
   const q = round.question.toLowerCase();
 
   // Detect round type to pick the right context widget
@@ -289,11 +312,11 @@ export default function RoundCard({ round, onBet, liveData }: RoundCardProps) {
         <div className="flex gap-2">
           <button onClick={() => onBet(round, "yes")} disabled={isEnded} className="flex-1 flex flex-col items-center justify-center py-3 rounded-lg bg-yes/20 hover:bg-yes/30 border border-yes/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
             <span className="text-[15px] font-bold text-yes leading-none">YES</span>
-            <span className="text-[12px] font-mono text-yes opacity-75 mt-0.5">{yesOdds.toFixed(2)}x</span>
+            <span className={`text-[12px] font-mono text-yes opacity-75 mt-0.5 ${yesFlash}`}>{yesOdds.toFixed(2)}x</span>
           </button>
           <button onClick={() => onBet(round, "no")} disabled={isEnded} className="flex-1 flex flex-col items-center justify-center py-3 rounded-lg bg-no/20 hover:bg-no/30 border border-no/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
             <span className="text-[15px] font-bold text-no leading-none">NO</span>
-            <span className="text-[12px] font-mono text-no opacity-75 mt-0.5">{noOdds.toFixed(2)}x</span>
+            <span className={`text-[12px] font-mono text-no opacity-75 mt-0.5 ${noFlash}`}>{noOdds.toFixed(2)}x</span>
           </button>
         </div>
       </div>
