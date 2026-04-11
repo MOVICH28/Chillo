@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useWallet } from "@/components/WalletProvider";
 import { useSolBalance } from "@/lib/useSolBalance";
 import { Round } from "@/lib/types";
+import WinToastBanner from "@/components/WinToastBanner";
 
 interface NavbarProps {
   rounds: Round[];
@@ -19,6 +20,8 @@ export default function Navbar({ rounds }: NavbarProps) {
     : null;
 
   return (
+    <>
+    <WinToastBanner />
     <nav className="fixed top-0 left-0 right-0 z-50 h-14 bg-surface border-b border-surface-3 flex items-center px-4 gap-4">
       {/* Logo */}
       <div className="flex items-center gap-2 mr-4">
@@ -85,5 +88,6 @@ export default function Navbar({ rounds }: NavbarProps) {
         </button>
       )}
     </nav>
+    </>
   );
 }
