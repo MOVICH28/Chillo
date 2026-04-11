@@ -39,240 +39,69 @@ function resultLabel(bet: BetWithRound): { label: string; color: string } {
 
 const BASE_URL = "https://chillo-f11o.vercel.app";
 
-// ── Shared tooltip types ──────────────────────────────────────────────────────
+import {
+  PieChart, Pie, Cell,
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  BarChart, Bar,
+  Tooltip, Legend, ResponsiveContainer,
+} from "recharts";
 
-type ShowTooltip = (e: React.MouseEvent, content: string) => void;
-type HideTooltip = () => void;
+// ── Recharts tooltip style ────────────────────────────────────────────────────
+
+const tooltipStyle = {
+  background: "#1a1a2e",
+  border: "1px solid #444",
+  borderRadius: 8,
+  color: "#fff",
+  fontSize: 12,
+};
 
 // ── Chart components ──────────────────────────────────────────────────────────
 
-function DonutChart({
-  wins, losses, pending, bets, solPrice, showTooltip, hideTooltip,
-}: {
-  wins: number; losses: number; pending: number;
-  bets: BetWithRound[]; solPrice: number | null;
-  showTooltip: ShowTooltip; hideTooltip: HideTooltip;
-}) {
-  const total = wins + losses + pending;
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-
-  if (total === 0) return <p className="text-xs text-muted text-center py-4">No bets yet</p>;
-
-  const cx = 60, cy = 60, r = 42, sw = 16;
-  const circ = 2 * Math.PI * r;
-
-  const winSOL  = bets.filter(b => b.result === b.side && b.result !== null).reduce((s, b) => s + ((b.payout ?? 0) - b.amount), 0);
-  const lossSOL = bets.filter(b => b.result !== null && b.result !== b.side).reduce((s, b) => s + b.amount, 0);
-
-  const segments = [
-    {
-      count: wins,    color: "#22c55e",
-      tip: `Wins: ${wins} bets\n+${winSOL.toFixed(3)} SOL${solPrice ? `  ($${(winSOL * solPrice).toFixed(2)})` : ""}`,
-    },
-    {
-      count: losses,  color: "#ef4444",
-      tip: `Losses: ${losses} bets\n-${lossSOL.toFixed(3)} SOL${solPrice ? `  (-$${(lossSOL * solPrice).toFixed(2)})` : ""}`,
-    },
-    {
-      count: pending, color: "#6b7280",
-      tip: `Pending: ${pending} bets\nAwaiting resolution`,
-    },
-  ].filter(s => s.count > 0);
-
-  let startAngle = -90;
-  const winPct = Math.round((wins / total) * 100);
-
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ChartTooltip({ active, payload, label, solPrice }: any) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0];
+  const val: number = p.value;
   return (
-    <div className="flex flex-col items-center gap-2">
-      <svg viewBox="0 0 120 120" className="w-28 h-28 shrink-0" style={{ overflow: "visible" }}>
-        {segments.map((seg, i) => {
-          const pct = seg.count / total;
-          const angle = startAngle;
-          startAngle += pct * 360;
-          const dash = pct * circ;
-          const isHovered = hoveredIdx === i;
-          return (
-            <circle
-              key={i}
-              cx={cx} cy={cy}
-              r={isHovered ? r + 3 : r}
-              fill="none"
-              stroke={seg.color}
-              strokeWidth={isHovered ? sw + 4 : sw}
-              strokeDasharray={`${dash} ${circ}`}
-              transform={`rotate(${angle}, ${cx}, ${cy})`}
-              style={{ cursor: "pointer", transition: "r 0.15s, stroke-width 0.15s" }}
-              onMouseEnter={e => { setHoveredIdx(i); showTooltip(e, seg.tip); }}
-              onMouseMove={e => showTooltip(e, seg.tip)}
-              onMouseLeave={() => { setHoveredIdx(null); hideTooltip(); }}
-            />
-          );
-        })}
-        <text x={cx} y={cy - 4}  textAnchor="middle" fill="white"  fontSize="15" fontWeight="bold">{winPct}%</text>
-        <text x={cx} y={cy + 11} textAnchor="middle" fill="#6b7280" fontSize="8">win rate</text>
-      </svg>
-      <div className="flex gap-3 text-[10px] text-muted">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: "#22c55e" }} />{wins}W</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: "#ef4444" }} />{losses}L</span>
-        {pending > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: "#6b7280" }} />{pending}P</span>}
-      </div>
-    </div>
-  );
-}
-
-function BetBars({
-  bets, solPrice, showTooltip, hideTooltip,
-}: {
-  bets: BetWithRound[]; solPrice: number | null;
-  showTooltip: ShowTooltip; hideTooltip: HideTooltip;
-}) {
-  if (bets.length === 0) return <p className="text-xs text-muted text-center py-4">No data</p>;
-
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-
-  const bars = bets.map(b => {
-    if (b.result === null)       return { value: 0,                        color: "#374151", bet: b };
-    if (b.result === b.side)     return { value: (b.payout ?? 0) - b.amount, color: "#22c55e", bet: b };
-    return                              { value: -b.amount,                color: "#ef4444", bet: b };
-  });
-
-  const maxAbs = Math.max(...bars.map(d => Math.abs(d.value)), 0.01);
-  const W = 300, H = 90, pad = 8;
-  const halfH = (H - pad * 2) / 2;
-  const zeroY = pad + halfH;
-  const slotW = (W - pad * 2) / bars.length;
-  const barW  = Math.max(2, slotW - 2);
-
-  function tipFor(i: number): string {
-    const b    = bars[i].bet;
-    const isWin  = b.result !== null && b.result === b.side;
-    const isLoss = b.result !== null && b.result !== b.side;
-    const profit = isWin ? (b.payout ?? 0) - b.amount : isLoss ? -b.amount : 0;
-    const q = (b.round?.question ?? b.roundId);
-    const shortQ = q.length > 44 ? q.slice(0, 44) + "…" : q;
-    const lines = [
-      shortQ,
-      `Side: ${b.side.toUpperCase()}   Amount: ${b.amount.toFixed(3)} SOL${solPrice ? ` ($${(b.amount * solPrice).toFixed(2)})` : ""}`,
-    ];
-    if (isWin)  lines.push(`WIN  Profit: +${profit.toFixed(3)} SOL${solPrice ? ` (+$${(profit * solPrice).toFixed(2)})` : ""}`);
-    if (isLoss) lines.push(`LOSS  -${Math.abs(profit).toFixed(3)} SOL${solPrice ? ` (-$${Math.abs(profit * (solPrice ?? 0)).toFixed(2)})` : ""}`);
-    if (!isWin && !isLoss) lines.push("Pending resolution");
-    return lines.join("\n");
-  }
-
-  return (
-    <div>
-      <p className="text-[10px] text-muted mb-1">Profit / Loss per bet</p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
-        <line x1={pad} y1={zeroY} x2={W - pad} y2={zeroY} stroke="#374151" strokeWidth={1} />
-        {bars.map((b, i) => {
-          const bh = (Math.abs(b.value) / maxAbs) * halfH;
-          const x  = pad + i * slotW + (slotW - barW) / 2;
-          const y  = b.value >= 0 ? zeroY - bh : zeroY;
-          return (
-            <rect
-              key={i} x={x} y={y} width={barW} height={Math.max(bh, 2)}
-              fill={b.color} opacity={hoveredIdx === i ? 1 : 0.75} rx={1}
-              style={{ cursor: "pointer" }}
-              onMouseEnter={e => { setHoveredIdx(i); showTooltip(e, tipFor(i)); }}
-              onMouseMove={e  => showTooltip(e, tipFor(i))}
-              onMouseLeave={() => { setHoveredIdx(null); hideTooltip(); }}
-            />
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
-
-function PnLLine({
-  bets, solPrice, showTooltip, hideTooltip,
-}: {
-  bets: BetWithRound[]; solPrice: number | null;
-  showTooltip: ShowTooltip; hideTooltip: HideTooltip;
-}) {
-  if (bets.length === 0) return null;
-
-  const [hovered, setHovered] = useState<number | null>(null);
-
-  let cum = 0;
-  const points = [0, ...bets.map(b => {
-    if (b.result !== null)
-      cum += b.result === b.side ? (b.payout ?? 0) - b.amount : -b.amount;
-    return cum;
-  })];
-
-  const W = 300, H = 80, pad = 10;
-  const minV  = Math.min(...points);
-  const maxV  = Math.max(...points);
-  const range = Math.max(maxV - minV, 0.001);
-  const toX   = (i: number) => pad + (i / (points.length - 1)) * (W - pad * 2);
-  const toY   = (v: number) => pad + ((maxV - v) / range) * (H - pad * 2);
-
-  const pathD    = points.map((p, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)},${toY(p).toFixed(1)}`).join(" ");
-  const finalPnL = points[points.length - 1];
-  const color    = finalPnL >= 0 ? "#22c55e" : "#ef4444";
-  const zeroY    = toY(0);
-  const fillD    = `${pathD} L${toX(points.length - 1).toFixed(1)},${zeroY.toFixed(1)} L${toX(0).toFixed(1)},${zeroY.toFixed(1)} Z`;
-  const hitW     = (W - pad * 2) / Math.max(points.length - 1, 1);
-
-  function tipFor(idx: number): string {
-    const pnl  = points[idx];
-    const bet  = idx > 0 ? bets[idx - 1] : null;
-    const date = bet
-      ? new Date(bet.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
-      : "Start";
-    const lines = [date];
-    if (bet) {
-      const result = bet.result === bet.side && bet.result !== null ? "WIN"
-        : bet.result !== null ? "LOSS" : "Pending";
-      lines.push(`${result}  ${bet.side.toUpperCase()}  ${bet.amount.toFixed(3)} SOL`);
-    }
-    lines.push(`Total: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(3)} SOL${solPrice ? `  (${pnl >= 0 ? "+" : ""}$${(pnl * solPrice).toFixed(2)})` : ""}`);
-    return lines.join("\n");
-  }
-
-  return (
-    <div>
-      <p className="text-[10px] text-muted mb-1">Cumulative P&amp;L</p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ overflow: "visible" }}>
-        {zeroY >= pad && zeroY <= H - pad && (
-          <line x1={pad} y1={zeroY} x2={W - pad} y2={zeroY} stroke="#374151" strokeWidth={1} strokeDasharray="3 3" />
-        )}
-        <path d={fillD} fill={color} opacity={0.12} />
-        <path d={pathD} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-
-        {hovered !== null && (
-          <>
-            <line x1={toX(hovered)} y1={pad} x2={toX(hovered)} y2={H - pad}
-              stroke="rgba(255,255,255,0.2)" strokeWidth={1} strokeDasharray="3 3" />
-            <circle cx={toX(hovered)} cy={toY(points[hovered])} r={5}
-              fill={color} stroke="#0f0f1a" strokeWidth={2} />
-          </>
-        )}
-        {hovered === null && (
-          <circle cx={toX(points.length - 1)} cy={toY(finalPnL)} r={3} fill={color} />
-        )}
-
-        {points.map((_, idx) => (
-          <rect
-            key={idx}
-            x={toX(idx) - hitW / 2} y={pad}
-            width={hitW} height={H - pad * 2}
-            fill="transparent"
-            style={{ cursor: "crosshair" }}
-            onMouseEnter={e => { setHovered(idx); showTooltip(e, tipFor(idx)); }}
-            onMouseMove={e  => showTooltip(e, tipFor(idx))}
-            onMouseLeave={() => { setHovered(null); hideTooltip(); }}
-          />
-        ))}
-      </svg>
-      <p className="text-[10px] text-right mt-0.5">
-        <span className={finalPnL >= 0 ? "text-yes font-mono" : "text-no font-mono"}>
-          {finalPnL >= 0 ? "+" : ""}{finalPnL.toFixed(3)} SOL
-          {solPrice ? ` ($${(finalPnL * solPrice).toFixed(2)})` : ""}
+    <div style={tooltipStyle} className="px-3 py-2 text-xs leading-5">
+      {label && <p className="text-gray-400 mb-1">{label}</p>}
+      <p style={{ color: p.color ?? "#fff" }}>
+        {p.name}:{" "}
+        <span className="font-mono font-semibold">
+          {val >= 0 ? "+" : ""}{val.toFixed(4)} SOL
         </span>
+        {solPrice && (
+          <span className="text-gray-400 ml-1">
+            ({val >= 0 ? "+" : ""}${(val * solPrice).toFixed(2)})
+          </span>
+        )}
       </p>
+    </div>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function PieTooltip({ active, payload, bets, solPrice }: any) {
+  if (!active || !payload?.length) return null;
+  const entry = payload[0];
+  const name: string  = entry.name;
+  const count: number = entry.value;
+  const winSOL  = bets.filter((b: BetWithRound) => b.result === b.side && b.result !== null)
+    .reduce((s: number, b: BetWithRound) => s + ((b.payout ?? 0) - b.amount), 0);
+  const lossSOL = bets.filter((b: BetWithRound) => b.result !== null && b.result !== b.side)
+    .reduce((s: number, b: BetWithRound) => s + b.amount, 0);
+  const sol = name === "Wins" ? winSOL : name === "Losses" ? -lossSOL : null;
+  return (
+    <div style={tooltipStyle} className="px-3 py-2 text-xs leading-5">
+      <p style={{ color: entry.payload.color, fontWeight: 700 }}>{name}: {count} bets</p>
+      {sol !== null && (
+        <p className="font-mono">
+          {sol >= 0 ? "+" : ""}{sol.toFixed(3)} SOL
+          {solPrice && <span className="text-gray-400 ml-1">(${Math.abs(sol * solPrice).toFixed(2)})</span>}
+        </p>
+      )}
+      {name === "Pending" && <p className="text-gray-400">Awaiting resolution</p>}
     </div>
   );
 }
@@ -288,12 +117,6 @@ export default function ProfilePage() {
   const [betsLoading, setBetsLoading] = useState(false);
   const [refStats, setRefStats] = useState<ReferralStats | null>(null);
   const [copied, setCopied] = useState(false);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string } | null>(null);
-
-  const showTooltip = (e: React.MouseEvent, content: string) => {
-    setTooltip({ x: e.clientX + 12, y: e.clientY - 10, content });
-  };
-  const hideTooltip = () => setTooltip(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -410,25 +233,97 @@ export default function ProfilePage() {
           ))}
         </div>
 
-        {/* Charts */}
-        {bets.length > 0 && (
-          <div className="bg-surface border border-surface-3 rounded-xl p-4 mb-6">
-            <h2 className="text-white font-semibold text-sm mb-4">Performance</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <DonutChart
-                wins={wins.length}
-                losses={resolvedBets.length - wins.length}
-                pending={bets.length - resolvedBets.length}
-                bets={bets}
-                solPrice={solPrice}
-                showTooltip={showTooltip}
-                hideTooltip={hideTooltip}
-              />
-              <BetBars bets={bets} solPrice={solPrice} showTooltip={showTooltip} hideTooltip={hideTooltip} />
-              <PnLLine bets={bets} solPrice={solPrice} showTooltip={showTooltip} hideTooltip={hideTooltip} />
+        {/* Performance charts */}
+        {bets.length > 0 && (() => {
+          const lossCount = resolvedBets.length - wins.length;
+          const pendingCount = bets.length - resolvedBets.length;
+
+          const winData = [
+            { name: "Wins",    value: wins.length,  color: "#22c55e" },
+            { name: "Losses",  value: lossCount,    color: "#ef4444" },
+            { name: "Pending", value: pendingCount, color: "#6b7280" },
+          ].filter(d => d.value > 0);
+
+          let cum = 0;
+          const pnlData = bets.map(b => {
+            if (b.result !== null)
+              cum += b.result === b.side ? (b.payout ?? 0) - b.amount : -b.amount;
+            return {
+              date: new Date(b.createdAt).toLocaleDateString("ru-RU"),
+              pnl: parseFloat(cum.toFixed(4)),
+              name: "P&L",
+            };
+          });
+
+          const barData = bets.slice(-10).map(b => ({
+            date: new Date(b.createdAt).toLocaleDateString("ru-RU"),
+            amount: parseFloat(b.amount.toFixed(4)),
+            color: b.result === b.side && b.result !== null ? "#22c55e"
+                 : b.result !== null ? "#ef4444" : "#6b7280",
+            name: "Amount",
+          }));
+
+          const lineColor = cum >= 0 ? "#22c55e" : "#ef4444";
+
+          return (
+            <div className="bg-surface border border-surface-3 rounded-xl p-4 mb-6">
+              <h2 className="text-white font-semibold text-sm mb-6">Performance</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+
+                {/* Win rate donut */}
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted mb-3">Win Rate</p>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie data={winData} dataKey="value" nameKey="name"
+                        cx="50%" cy="50%" outerRadius={75} innerRadius={45}>
+                        {winData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                      </Pie>
+                      <Tooltip content={<PieTooltip bets={bets} solPrice={solPrice} />} />
+                      <Legend
+                        formatter={(value) => <span style={{ color: "#9ca3af", fontSize: 11 }}>{value}</span>}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Cumulative P&L line */}
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted mb-3">Cumulative P&amp;L</p>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart data={pnlData} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis dataKey="date" stroke="#4b5563" tick={{ fontSize: 10, fill: "#6b7280" }} />
+                      <YAxis stroke="#4b5563" tick={{ fontSize: 10, fill: "#6b7280" }} width={45}
+                        tickFormatter={(v) => `${v > 0 ? "+" : ""}${v.toFixed(2)}`} />
+                      <Tooltip content={<ChartTooltip solPrice={solPrice} />} />
+                      <Line type="monotone" dataKey="pnl" name="P&L" stroke={lineColor}
+                        strokeWidth={2} dot={{ r: 3, fill: lineColor }} activeDot={{ r: 5 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Bet amounts bar */}
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted mb-3">Recent Bets (last 10)</p>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={barData} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis dataKey="date" stroke="#4b5563" tick={{ fontSize: 10, fill: "#6b7280" }} />
+                      <YAxis stroke="#4b5563" tick={{ fontSize: 10, fill: "#6b7280" }} width={45}
+                        tickFormatter={(v) => `${v.toFixed(2)}`} />
+                      <Tooltip content={<ChartTooltip solPrice={solPrice} />} />
+                      <Bar dataKey="amount" name="Amount" radius={[3, 3, 0, 0]}>
+                        {barData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Referral section */}
         <div id="referral" className="bg-surface border border-surface-3 rounded-xl overflow-hidden mb-6">
@@ -588,26 +483,6 @@ export default function ProfilePage() {
 
       </div>
 
-      {tooltip && (
-        <div style={{
-          position: "fixed",
-          left: tooltip.x,
-          top: tooltip.y,
-          background: "#1a1a2e",
-          border: "1px solid #444",
-          borderRadius: 8,
-          padding: "8px 12px",
-          color: "#fff",
-          fontSize: 13,
-          zIndex: 9999,
-          pointerEvents: "none",
-          whiteSpace: "pre-line",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
-          maxWidth: 260,
-        }}>
-          {tooltip.content}
-        </div>
-      )}
     </div>
   );
 }
