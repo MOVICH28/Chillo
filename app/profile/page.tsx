@@ -275,14 +275,19 @@ export default function ProfilePage() {
                           return [
                             <span key="val" style={{ color }}>
                               {`${d.result} | ${d.side?.toUpperCase()} | ${d.profit > 0 ? "+" : ""}${d.profit} SOL`}
-                            </span>,
-                            "Cumulative P&L",
+                            </span>
                           ];
                         }}
-                        labelFormatter={(label) => `Bet ${label}`}
+                        labelFormatter={() => ""}
                       />
                       <Line type="monotone" dataKey="pnl" name="P&L" stroke={lineColor}
-                        strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 8, strokeWidth: 2 }} />
+                        strokeWidth={2} dot={{ r: 4 }}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        activeDot={(props: any) => {
+                          const color = props.payload?.result === "WIN" ? "#22c55e"
+                            : props.payload?.result === "LOSS" ? "#ef4444" : "#6b7280";
+                          return <circle cx={props.cx} cy={props.cy} r={7} fill={color} stroke="#fff" strokeWidth={2} />;
+                        }} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
