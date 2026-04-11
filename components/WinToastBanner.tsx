@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useWallet } from "@/components/WalletProvider";
 import { useWinNotifications, WinToast } from "@/lib/useWinNotifications";
 
