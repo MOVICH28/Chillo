@@ -228,7 +228,6 @@ export default function ProfilePage() {
           });
 
 
-          const lineColor = cumulative >= 0 ? "#22c55e" : "#ef4444";
 
           return (
             <div className="bg-surface border border-surface-3 rounded-xl p-4 mb-6">
@@ -280,7 +279,7 @@ export default function ProfilePage() {
                         }}
                         labelFormatter={() => ""}
                       />
-                      <Line type="monotone" dataKey="pnl" name="P&L" stroke={lineColor}
+                      <Line type="monotone" dataKey="pnl" name="P&L" stroke="#6366f1"
                         strokeWidth={2} dot={{ r: 4 }}
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         activeDot={(props: any) => {
