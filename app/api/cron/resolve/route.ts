@@ -135,22 +135,23 @@ async function runCron(): Promise<NextResponse> {
   });
 }
 
-// QStash-verified handler — verifySignatureAppRouter checks upstash-signature
-// and returns 401 automatically if it is missing or invalid.
-const qstashHandler = verifySignatureAppRouter(
-  () => runCron(),
-  {
-    currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
-    nextSigningKey:    process.env.QSTASH_NEXT_SIGNING_KEY,
-  },
-);
-
 // Exported GET — Bearer token short-circuits for manual testing;
 // all other requests go through QStash signature verification.
+// qstashHandler is created lazily (inside GET) so the Receiver constructor
+// never runs at build time when env vars are absent.
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret && req.headers.get("authorization") === `Bearer ${cronSecret}`) {
     return runCron();
   }
+
+  // Lazy-init: only built when a non-Bearer request actually arrives.
+  const qstashHandler = verifySignatureAppRouter(
+    () => runCron(),
+    {
+      currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
+      nextSigningKey:    process.env.QSTASH_NEXT_SIGNING_KEY,
+    },
+  );
   return qstashHandler(req);
 }
