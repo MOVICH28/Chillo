@@ -298,15 +298,17 @@ export default function ProfilePage() {
                 {/* Cumulative P&L line */}
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-muted mb-3">Cumulative P&amp;L</p>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={pnlData} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
+                  <ResponsiveContainer width="100%" height={220} debounce={50}>
+                    <LineChart data={pnlData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                      <XAxis dataKey="date" stroke="#4b5563" tick={{ fontSize: 10, fill: "#6b7280" }} />
+                      <XAxis dataKey="date" stroke="#4b5563"
+                        tick={{ fontSize: 10, fill: "#6b7280" }}
+                        interval="preserveStartEnd" />
                       <YAxis stroke="#4b5563" tick={{ fontSize: 10, fill: "#6b7280" }} width={45}
                         tickFormatter={(v) => `${v > 0 ? "+" : ""}${v.toFixed(2)}`} />
-                      <Tooltip content={<ChartTooltip solPrice={solPrice} />} />
+                      <Tooltip content={<ChartTooltip solPrice={solPrice} />} isAnimationActive={false} />
                       <Line type="monotone" dataKey="pnl" name="P&L" stroke={lineColor}
-                        strokeWidth={2} dot={{ r: 3, fill: lineColor }} activeDot={{ r: 5 }} />
+                        strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6, strokeWidth: 2 }} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
