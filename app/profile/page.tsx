@@ -273,7 +273,7 @@ export default function ProfilePage() {
                           const isPending = d.result === "Pending";
                           const color = isWin ? "#22c55e" : isPending ? "#6b7280" : "#ef4444";
                           return [
-                            <span style={{ color }}>
+                            <span key="val" style={{ color }}>
                               {`${d.result} | ${d.side?.toUpperCase()} | ${d.profit > 0 ? "+" : ""}${d.profit} SOL`}
                             </span>,
                             "Cumulative P&L",
