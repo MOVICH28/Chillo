@@ -49,7 +49,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "When do rounds end?",
         answer:
-          "Each round has an end time shown on the market card. After the end time passes, no new bets are accepted. The cron job then fetches the real-world result and resolves the round automatically, triggering payouts.",
+          "Each round has an end time shown on the market card. After the end time passes, no new bets are accepted. Chillo then checks the real-world result and resolves the round automatically, sending payouts to winners.",
       },
     ],
   },
@@ -72,7 +72,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "When do I receive my payout?",
         answer:
-          "Payouts are sent automatically when the round resolves. The cron job runs once a day, fetches the current price/result, and immediately triggers on-chain SOL transfers to all winning wallets. You should see the SOL in your wallet within seconds of resolution.",
+          "Payouts are sent automatically when a round ends. Our system checks results once daily at midnight UTC and immediately sends SOL to all winning wallets. You will see the SOL in your Phantom wallet within seconds after resolution. You can also track your bet status in your Profile page.",
       },
       {
         question: "What is the platform fee?",
@@ -95,7 +95,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "What if a round cannot be resolved?",
         answer:
-          "If the cron job cannot fetch the required data (e.g. an API is down), the round is skipped in that cycle and retried next run. Rounds are never force-resolved without real data. In the unlikely event of a permanent data failure, bets will be refunded manually.",
+          "If Chillo cannot confirm the result (for example, a data source is temporarily unavailable), the round is held open and retried the following day. Rounds are never resolved without confirmed real-world data. In the rare event of a permanent data failure, all bets will be fully refunded.",
       },
     ],
   },
@@ -138,7 +138,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "How are transactions verified?",
         answer:
-          "When you place a bet, the backend fetches your transaction from the Solana RPC and checks: (1) the transaction was not an error, (2) it is less than 5 minutes old, (3) the sender matches your wallet address, and (4) the amount received by the platform wallet matches your bet amount within 1% tolerance. Only then is your bet registered.",
+          "After you send SOL, Chillo automatically looks up your transaction on the Solana blockchain and confirms: the payment went through without errors, it was sent recently (within 5 minutes), it came from your wallet, and the amount matches your bet. Your bet is only registered after all checks pass — this protects everyone from fake or duplicate bets.",
       },
     ],
   },
