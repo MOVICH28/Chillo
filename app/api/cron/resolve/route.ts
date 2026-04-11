@@ -60,7 +60,7 @@ async function determineWinner(round: {
         ? prices.bitcoin?.usd
         : prices.solana?.usd;
     if (!current) return null;
-    console.log(`[cron] ${round.targetToken}: $${current} vs target $${round.targetPrice}`);
+    console.log(`[cron] ${round.id}: resolving crypto round`);
     return current >= round.targetPrice ? "yes" : "no";
   }
 
@@ -71,7 +71,7 @@ async function determineWinner(round: {
       console.warn(`[cron] ${round.id}: pump.fun mcap data unavailable`);
       return null;
     }
-    console.log(`[cron] pump.fun top mcap: $${topMcap.toLocaleString()}`);
+    console.log(`[cron] pump.fun mcap data fetched`);
     return topMcap >= 1_000_000 ? "yes" : "no";
   }
 
@@ -83,11 +83,12 @@ async function determineWinner(round: {
 
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const auth = req.headers.get("authorization");
-    if (auth !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (!cronSecret) {
+    return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
+  }
+  const auth = req.headers.get("authorization");
+  if (auth !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const now = new Date();
