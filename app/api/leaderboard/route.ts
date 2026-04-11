@@ -1,0 +1,71 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  try {
+    const bets = await prisma.bet.findMany({
+      select: {
+        walletAddress: true,
+        side: true,
+        amount: true,
+        payout: true,
+        result: true,
+      },
+    });
+
+    // Group by wallet
+    const map = new Map<string, {
+      totalWins: number;
+      totalLosses: number;
+      totalBets: number;
+      totalWagered: number;
+      totalPayout: number;
+    }>();
+
+    for (const bet of bets) {
+      const entry = map.get(bet.walletAddress) ?? {
+        totalWins: 0, totalLosses: 0, totalBets: 0,
+        totalWagered: 0, totalPayout: 0,
+      };
+
+      entry.totalBets += 1;
+      entry.totalWagered += bet.amount;
+
+      if (bet.result !== null) {
+        if (bet.result === bet.side) {
+          entry.totalWins += 1;
+          entry.totalPayout += bet.payout ?? 0;
+        } else {
+          entry.totalLosses += 1;
+        }
+      }
+
+      map.set(bet.walletAddress, entry);
+    }
+
+    const rows = Array.from(map.entries()).map(([walletAddress, s]) => {
+      const resolved = s.totalWins + s.totalLosses;
+      const winRate = resolved > 0 ? (s.totalWins / resolved) * 100 : 0;
+      const profit = s.totalPayout - s.totalWagered;
+      return {
+        walletAddress,
+        totalWins: s.totalWins,
+        totalLosses: s.totalLosses,
+        totalBets: s.totalBets,
+        totalWagered: parseFloat(s.totalWagered.toFixed(4)),
+        totalPayout: parseFloat(s.totalPayout.toFixed(4)),
+        profit: parseFloat(profit.toFixed(4)),
+        winRate: parseFloat(winRate.toFixed(1)),
+      };
+    });
+
+    rows.sort((a, b) => b.profit - a.profit);
+
+    return NextResponse.json(rows.slice(0, 50));
+  } catch (err) {
+    console.error("[GET /api/leaderboard]", err);
+    return NextResponse.json({ error: "Failed to fetch leaderboard" }, { status: 500 });
+  }
+}
