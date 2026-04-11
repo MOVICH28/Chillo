@@ -244,26 +244,34 @@ export default function ProfilePage() {
             { name: "Pending", value: pendingCount, color: "#6b7280" },
           ].filter(d => d.value > 0);
 
-          let cum = 0;
+          let cumulative = 0;
           const pnlData = bets.map(b => {
-            if (b.result !== null)
-              cum += b.result === b.side ? (b.payout ?? 0) - b.amount : -b.amount;
+            const isWin  = b.result !== null && b.result === b.side;
+            const isLoss = b.result !== null && b.result !== b.side;
+            const profit = isWin ? (b.payout ?? 0) - b.amount : isLoss ? -b.amount : 0;
+            cumulative += profit;
             return {
               date: new Date(b.createdAt).toLocaleDateString("ru-RU"),
-              pnl: parseFloat(cum.toFixed(4)),
+              pnl: parseFloat(cumulative.toFixed(4)),
+              profit: parseFloat(profit.toFixed(4)),
+              question: b.round?.question?.slice(0, 30) ?? b.roundId,
+              result: isWin ? "WIN" : isLoss ? "LOSS" : "Pending",
               name: "P&L",
             };
           });
 
-          const barData = bets.slice(-10).map(b => ({
-            date: new Date(b.createdAt).toLocaleDateString("ru-RU"),
-            amount: parseFloat(b.amount.toFixed(4)),
-            color: b.result === b.side && b.result !== null ? "#22c55e"
-                 : b.result !== null ? "#ef4444" : "#6b7280",
-            name: "Amount",
-          }));
+          const barData = bets.slice(-10).map(b => {
+            const isWin  = b.result !== null && b.result === b.side;
+            const isLoss = b.result !== null && b.result !== b.side;
+            return {
+              date: new Date(b.createdAt).toLocaleDateString("ru-RU"),
+              amount: parseFloat(b.amount.toFixed(4)),
+              color: isWin ? "#22c55e" : isLoss ? "#ef4444" : "#6b7280",
+              name: "Amount",
+            };
+          });
 
-          const lineColor = cum >= 0 ? "#22c55e" : "#ef4444";
+          const lineColor = cumulative >= 0 ? "#22c55e" : "#ef4444";
 
           return (
             <div className="bg-surface border border-surface-3 rounded-xl p-4 mb-6">
