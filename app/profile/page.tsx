@@ -244,18 +244,19 @@ export default function ProfilePage() {
           ].filter(d => d.value > 0);
 
           let cumulative = 0;
-          const pnlData = bets.map(b => {
+          const sortedBets = [...bets].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+          const pnlData = sortedBets.map((b, i) => {
             const isWin  = b.result !== null && b.result === b.side;
             const isLoss = b.result !== null && b.result !== b.side;
             const profit = isWin ? (b.payout ?? 0) - b.amount : isLoss ? -b.amount : 0;
             cumulative += profit;
             return {
-              date: new Date(b.createdAt).toLocaleDateString("ru-RU"),
+              name: `#${i + 1}`,
               pnl: parseFloat(cumulative.toFixed(4)),
               profit: parseFloat(profit.toFixed(4)),
               question: b.round?.question?.slice(0, 30) ?? b.roundId,
               result: isWin ? "WIN" : isLoss ? "LOSS" : "Pending",
-              name: "P&L",
+              side: b.side,
             };
           });
 
@@ -287,15 +288,24 @@ export default function ProfilePage() {
                 {/* Cumulative P&L line — spans remaining 2 columns */}
                 <div className="md:col-span-2">
                   <p className="text-[10px] uppercase tracking-widest text-muted mb-3">Cumulative P&amp;L</p>
-                  <ResponsiveContainer width="100%" height={350} debounce={50}>
+                  <ResponsiveContainer width="100%" height={180} debounce={50}>
                     <LineChart data={pnlData} margin={{ top: 10, right: 40, left: 20, bottom: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                      <XAxis dataKey="date" stroke="#4b5563"
+                      <XAxis dataKey="name" stroke="#4b5563"
                         tick={{ fontSize: 12, fill: "#6b7280" }}
                         interval="preserveStartEnd" />
                       <YAxis stroke="#4b5563" tick={{ fontSize: 12, fill: "#6b7280" }} width={50}
                         tickFormatter={(v) => `${v > 0 ? "+" : ""}${v.toFixed(2)}`} />
-                      <Tooltip content={<ChartTooltip solPrice={solPrice} />} isAnimationActive={false} />
+                      <Tooltip
+                        isAnimationActive={false}
+                        contentStyle={{ background: "#1a1a2e", border: "1px solid #444", borderRadius: "8px", color: "#fff", fontSize: "12px" }}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        formatter={(value: any, _name: any, props: any) => {
+                          const d = props.payload;
+                          return [`${d.result} | ${d.side?.toUpperCase()} | ${d.profit > 0 ? "+" : ""}${d.profit} SOL`, "Cumulative P&L"];
+                        }}
+                        labelFormatter={(label) => `Bet ${label}`}
+                      />
                       <Line type="monotone" dataKey="pnl" name="P&L" stroke={lineColor}
                         strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 8, strokeWidth: 2 }} />
                     </LineChart>
