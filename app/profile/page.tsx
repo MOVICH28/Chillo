@@ -269,7 +269,15 @@ export default function ProfilePage() {
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         formatter={(value: any, _name: any, props: any) => {
                           const d = props.payload;
-                          return [`${d.result} | ${d.side?.toUpperCase()} | ${d.profit > 0 ? "+" : ""}${d.profit} SOL`, "Cumulative P&L"];
+                          const isWin = d.result === "WIN";
+                          const isPending = d.result === "Pending";
+                          const color = isWin ? "#22c55e" : isPending ? "#6b7280" : "#ef4444";
+                          return [
+                            <span style={{ color }}>
+                              {`${d.result} | ${d.side?.toUpperCase()} | ${d.profit > 0 ? "+" : ""}${d.profit} SOL`}
+                            </span>,
+                            "Cumulative P&L",
+                          ];
                         }}
                         labelFormatter={(label) => `Bet ${label}`}
                       />
