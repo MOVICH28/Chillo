@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useWallet } from "@/components/WalletProvider";
 import { useSolBalance } from "@/lib/useSolBalance";
 import { Round } from "@/lib/types";
@@ -13,6 +14,12 @@ interface NavbarProps {
 export default function Navbar({ rounds }: NavbarProps) {
   const { publicKey, disconnect, connected, connect } = useWallet();
   const balance = useSolBalance(connected ? publicKey : null);
+  const [avatar, setAvatar] = useState("");
+
+  useEffect(() => {
+    if (!publicKey) { setAvatar(""); return; }
+    setAvatar(localStorage.getItem(`avatar_${publicKey}`) ?? "");
+  }, [publicKey]);
 
   const totalPool = rounds.reduce((sum, r) => sum + r.totalPool, 0);
   const shortKey = publicKey
@@ -57,6 +64,16 @@ export default function Navbar({ rounds }: NavbarProps) {
       {/* Wallet button */}
       {connected && publicKey ? (
         <div className="flex items-center gap-2">
+          {/* Avatar */}
+          <div className="w-8 h-8 rounded-full overflow-hidden border border-surface-3 shrink-0">
+            {avatar ? (
+              <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-brand/20 flex items-center justify-center text-brand font-bold text-[10px] select-none">
+                {publicKey?.slice(0, 2).toUpperCase()}
+              </div>
+            )}
+          </div>
           <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted font-mono">
             <span>{shortKey}</span>
             {balance !== null && (

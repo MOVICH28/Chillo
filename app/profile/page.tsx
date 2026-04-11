@@ -83,8 +83,38 @@ export default function ProfilePage() {
   const [betsLoading, setBetsLoading] = useState(false);
   const [refStats, setRefStats] = useState<ReferralStats | null>(null);
   const [copied, setCopied] = useState(false);
+  const [avatar, setAvatar] = useState("");
 
   useEffect(() => { setMounted(true); }, []);
+
+  // Load avatar from localStorage once wallet is known
+  useEffect(() => {
+    if (!publicKey) return;
+    setAvatar(localStorage.getItem(`avatar_${publicKey}`) ?? "");
+  }, [publicKey]);
+
+  function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !publicKey) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 200;
+        canvas.height = 200;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, 200, 200);
+        const base64 = canvas.toDataURL("image/jpeg", 0.8);
+        localStorage.setItem(`avatar_${publicKey}`, base64);
+        setAvatar(base64);
+      };
+      img.src = ev.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+    // reset so the same file can be re-uploaded
+    e.target.value = "";
+  }
 
   const fetchBets = useCallback(() => {
     if (!publicKey) return;
@@ -163,6 +193,24 @@ export default function ProfilePage() {
 
         {/* Wallet card */}
         <div className="bg-surface border border-surface-3 rounded-xl p-4 mb-6 flex flex-wrap items-center gap-6">
+
+          {/* Avatar */}
+          <label className="relative cursor-pointer shrink-0 group">
+            <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+            <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-surface-3 group-hover:border-brand transition-colors">
+              {avatar ? (
+                <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-brand/20 flex items-center justify-center text-brand font-bold text-xl select-none">
+                  {publicKey.slice(0, 2).toUpperCase()}
+                </div>
+              )}
+            </div>
+            <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="text-white text-[10px] font-semibold">Edit</span>
+            </div>
+          </label>
+
           <div>
             <p className="text-[10px] uppercase tracking-widest text-muted mb-1">Wallet</p>
             <p className="text-white font-mono text-sm">
