@@ -42,7 +42,7 @@ const BASE_URL = "https://chillo-f11o.vercel.app";
 // ── Chart helpers ─────────────────────────────────────────────────────────────
 
 const TOOLTIP_STYLE: React.CSSProperties = {
-  position: "absolute",
+  position: "fixed",
   background: "#0f0f1a",
   border: "1px solid rgba(255,255,255,0.1)",
   borderRadius: 8,
@@ -51,8 +51,9 @@ const TOOLTIP_STYLE: React.CSSProperties = {
   color: "#e5e7eb",
   pointerEvents: "none",
   whiteSpace: "nowrap",
-  zIndex: 50,
+  zIndex: 9999,
   boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+  transform: "translate(12px, -100%)",
 };
 
 
@@ -65,7 +66,6 @@ function DonutChart({
   const total = wins + losses + pending;
   const [tooltip, setTooltip] = useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-  const svgRef = React.useRef<SVGSVGElement>(null);
 
   if (total === 0) return <p className="text-xs text-muted text-center py-4">No bets yet</p>;
 
@@ -117,26 +117,11 @@ function DonutChart({
 
   function handleSegmentEnter(e: React.MouseEvent<SVGCircleElement>, idx: number) {
     setHoveredIdx(idx);
-    const svgEl = svgRef.current;
-    if (!svgEl) return;
-    const rect = svgEl.getBoundingClientRect();
-    // Place tooltip near mouse relative to wrapper div
-    setTooltip({
-      x: e.clientX - rect.left + 12,
-      y: e.clientY - rect.top - 10,
-      content: segments[idx].content,
-    });
+    setTooltip({ x: e.clientX, y: e.clientY, content: segments[idx].content });
   }
 
   function handleMouseMove(e: React.MouseEvent<SVGCircleElement>) {
-    const svgEl = svgRef.current;
-    if (!svgEl) return;
-    const rect = svgEl.getBoundingClientRect();
-    setTooltip(prev => prev ? {
-      ...prev,
-      x: e.clientX - rect.left + 12,
-      y: e.clientY - rect.top - 10,
-    } : null);
+    setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
   }
 
   function handleSegmentLeave() {
@@ -147,7 +132,7 @@ function DonutChart({
   return (
     <div className="flex flex-col items-center gap-2 relative">
       <div className="relative">
-        <svg ref={svgRef} viewBox="0 0 120 120" className="w-28 h-28 shrink-0" style={{ overflow: "visible" }}>
+        <svg viewBox="0 0 120 120" className="w-28 h-28 shrink-0" style={{ overflow: "visible" }}>
           {segments.map((seg, i) => {
             const pct = seg.count / total;
             const angle = startAngle;
@@ -193,7 +178,6 @@ function BetBars({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | 
 
   const [tooltip, setTooltip] = useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-  const wrapRef = React.useRef<HTMLDivElement>(null);
 
   const bars = bets.map(b => {
     if (b.result === null) return { value: 0, color: "#374151", bet: b };
@@ -211,9 +195,6 @@ function BetBars({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | 
 
   function handleBarEnter(e: React.MouseEvent<SVGRectElement>, i: number) {
     setHoveredIdx(i);
-    const wrap = wrapRef.current;
-    if (!wrap) return;
-    const rect = wrap.getBoundingClientRect();
     const b = bars[i].bet;
     const isWin  = b.result !== null && b.result === b.side;
     const isLoss = b.result !== null && b.result !== b.side;
@@ -221,11 +202,11 @@ function BetBars({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | 
     const question = b.round?.question ?? b.roundId;
     const shortQ = question.length > 40 ? question.slice(0, 40) + "…" : question;
     setTooltip({
-      x: e.clientX - rect.left + 10,
-      y: e.clientY - rect.top - 10,
+      x: e.clientX,
+      y: e.clientY,
       content: (
         <div>
-          <div style={{ color: "#9ca3af", marginBottom: 4, maxWidth: 180 }}>{shortQ}</div>
+          <div style={{ color: "#9ca3af", marginBottom: 4, maxWidth: 200 }}>{shortQ}</div>
           <div>
             Side: <span style={{ color: b.side === "yes" ? "#22c55e" : "#ef4444", fontWeight: 700 }}>
               {b.side.toUpperCase()}
@@ -254,10 +235,7 @@ function BetBars({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | 
   }
 
   function handleBarMove(e: React.MouseEvent<SVGRectElement>) {
-    const wrap = wrapRef.current;
-    if (!wrap) return;
-    const rect = wrap.getBoundingClientRect();
-    setTooltip(prev => prev ? { ...prev, x: e.clientX - rect.left + 10, y: e.clientY - rect.top - 10 } : null);
+    setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
   }
 
   function handleBarLeave() {
@@ -266,7 +244,7 @@ function BetBars({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | 
   }
 
   return (
-    <div ref={wrapRef} className="relative">
+    <div className="relative">
       <p className="text-[10px] text-muted mb-1">Profit / Loss per bet</p>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
         <line x1={pad} y1={zeroY} x2={W - pad} y2={zeroY} stroke="#374151" strokeWidth={1} />
@@ -301,7 +279,6 @@ function PnLLine({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | 
 
   const [hovered, setHovered] = useState<number | null>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
-  const wrapRef = React.useRef<HTMLDivElement>(null);
 
   let cum = 0;
   // points[0] = 0 (start), points[i+1] = cumulative after bets[i]
@@ -331,16 +308,13 @@ function PnLLine({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | 
 
   function handlePointEnter(e: React.MouseEvent, idx: number) {
     setHovered(idx);
-    const wrap = wrapRef.current;
-    if (!wrap) return;
-    const rect = wrap.getBoundingClientRect();
     const pnl = points[idx];
     // idx 0 = start (no bet), idx 1..n = after bets[idx-1]
     const bet = idx > 0 ? bets[idx - 1] : null;
     const date = bet ? new Date(bet.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "Start";
     setTooltip({
-      x: e.clientX - rect.left + 12,
-      y: e.clientY - rect.top - 10,
+      x: e.clientX,
+      y: e.clientY,
       content: (
         <div>
           <div style={{ color: "#6b7280", marginBottom: 3 }}>{date}</div>
@@ -368,10 +342,7 @@ function PnLLine({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | 
   }
 
   function handlePointMove(e: React.MouseEvent) {
-    const wrap = wrapRef.current;
-    if (!wrap) return;
-    const rect = wrap.getBoundingClientRect();
-    setTooltip(prev => prev ? { ...prev, x: e.clientX - rect.left + 12, y: e.clientY - rect.top - 10 } : null);
+    setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
   }
 
   function handlePointLeave() {
@@ -380,7 +351,7 @@ function PnLLine({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | 
   }
 
   return (
-    <div ref={wrapRef} className="relative">
+    <div className="relative">
       <p className="text-[10px] text-muted mb-1">Cumulative P&amp;L</p>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ overflow: "visible" }}>
         {zeroY >= pad && zeroY <= H - pad && (
