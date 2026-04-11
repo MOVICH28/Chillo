@@ -42,7 +42,6 @@ const BASE_URL = "https://chillo-f11o.vercel.app";
 import {
   PieChart, Pie, Cell,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  BarChart, Bar,
   Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 
@@ -260,16 +259,6 @@ export default function ProfilePage() {
             };
           });
 
-          const barData = bets.slice(-10).map(b => {
-            const isWin  = b.result !== null && b.result === b.side;
-            const isLoss = b.result !== null && b.result !== b.side;
-            return {
-              date: new Date(b.createdAt).toLocaleDateString("ru-RU"),
-              amount: parseFloat(b.amount.toFixed(4)),
-              color: isWin ? "#22c55e" : isLoss ? "#ef4444" : "#6b7280",
-              name: "Amount",
-            };
-          });
 
           const lineColor = cumulative >= 0 ? "#22c55e" : "#ef4444";
 
@@ -295,38 +284,21 @@ export default function ProfilePage() {
                   </ResponsiveContainer>
                 </div>
 
-                {/* Cumulative P&L line */}
-                <div>
+                {/* Cumulative P&L line — spans remaining 2 columns */}
+                <div className="md:col-span-2">
                   <p className="text-[10px] uppercase tracking-widest text-muted mb-3">Cumulative P&amp;L</p>
-                  <ResponsiveContainer width="100%" height={220} debounce={50}>
-                    <LineChart data={pnlData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <ResponsiveContainer width="100%" height={350} debounce={50}>
+                    <LineChart data={pnlData} margin={{ top: 10, right: 40, left: 20, bottom: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
                       <XAxis dataKey="date" stroke="#4b5563"
-                        tick={{ fontSize: 10, fill: "#6b7280" }}
+                        tick={{ fontSize: 12, fill: "#6b7280" }}
                         interval="preserveStartEnd" />
-                      <YAxis stroke="#4b5563" tick={{ fontSize: 10, fill: "#6b7280" }} width={45}
+                      <YAxis stroke="#4b5563" tick={{ fontSize: 12, fill: "#6b7280" }} width={50}
                         tickFormatter={(v) => `${v > 0 ? "+" : ""}${v.toFixed(2)}`} />
                       <Tooltip content={<ChartTooltip solPrice={solPrice} />} isAnimationActive={false} />
                       <Line type="monotone" dataKey="pnl" name="P&L" stroke={lineColor}
-                        strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6, strokeWidth: 2 }} />
+                        strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 8, strokeWidth: 2 }} />
                     </LineChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Bet amounts bar */}
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-muted mb-3">Recent Bets (last 10)</p>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={barData} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                      <XAxis dataKey="date" stroke="#4b5563" tick={{ fontSize: 10, fill: "#6b7280" }} />
-                      <YAxis stroke="#4b5563" tick={{ fontSize: 10, fill: "#6b7280" }} width={45}
-                        tickFormatter={(v) => `${v.toFixed(2)}`} />
-                      <Tooltip content={<ChartTooltip solPrice={solPrice} />} />
-                      <Bar dataKey="amount" name="Amount" radius={[3, 3, 0, 0]}>
-                        {barData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                      </Bar>
-                    </BarChart>
                   </ResponsiveContainer>
                 </div>
 
