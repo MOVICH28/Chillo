@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Receiver } from "@upstash/qstash";
+import { verifySignatureAppRouter } from "@upstash/qstash/nextjs";
 import { prisma } from "@/lib/prisma";
 import { resolveRound } from "@/lib/resolve";
 import { createDailyRounds } from "@/lib/create-rounds";
@@ -82,46 +82,8 @@ async function determineWinner(round: {
 
 // ─── Cron handler ─────────────────────────────────────────────────────────────
 
-async function isAuthorized(req: NextRequest): Promise<boolean> {
-  // ── Option 1: manual Bearer token (CRON_SECRET) ───────────────────────────
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const auth = req.headers.get("authorization");
-    if (auth === `Bearer ${cronSecret}`) return true;
-  }
-
-  // ── Option 2: QStash signature ────────────────────────────────────────────
-  const currentKey  = process.env.QSTASH_CURRENT_SIGNING_KEY;
-  const nextKey     = process.env.QSTASH_NEXT_SIGNING_KEY;
-  if (currentKey && nextKey) {
-    const receiver = new Receiver({ currentSigningKey: currentKey, nextSigningKey: nextKey });
-    try {
-      const body = await req.text();
-      const signature = req.headers.get("upstash-signature") ?? "";
-      const url = req.url;
-      await receiver.verify({ body, signature, url });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  return false;
-}
-
-export async function GET(req: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-  const qstashKeysSet =
-    !!process.env.QSTASH_CURRENT_SIGNING_KEY && !!process.env.QSTASH_NEXT_SIGNING_KEY;
-
-  if (!cronSecret && !qstashKeysSet) {
-    return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
-  }
-
-  if (!(await isAuthorized(req))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+// Core logic — called after auth is confirmed by either path below.
+async function runCron(): Promise<NextResponse> {
   const now = new Date();
 
   // ── Step 1: create fresh daily rounds ───────────────────────────────────────
@@ -171,4 +133,24 @@ export async function GET(req: NextRequest) {
     rounds_created: createResult,
     rounds_resolved: summary,
   });
+}
+
+// QStash-verified handler — verifySignatureAppRouter checks upstash-signature
+// and returns 401 automatically if it is missing or invalid.
+const qstashHandler = verifySignatureAppRouter(
+  () => runCron(),
+  {
+    currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
+    nextSigningKey:    process.env.QSTASH_NEXT_SIGNING_KEY,
+  },
+);
+
+// Exported GET — Bearer token short-circuits for manual testing;
+// all other requests go through QStash signature verification.
+export async function GET(req: NextRequest) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && req.headers.get("authorization") === `Bearer ${cronSecret}`) {
+    return runCron();
+  }
+  return qstashHandler(req);
 }
