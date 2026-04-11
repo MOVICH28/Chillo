@@ -39,6 +39,130 @@ function resultLabel(bet: BetWithRound): { label: string; color: string } {
 
 const BASE_URL = "https://chillo-f11o.vercel.app";
 
+// ── Chart helpers ─────────────────────────────────────────────────────────────
+
+function DonutChart({ wins, losses, pending }: { wins: number; losses: number; pending: number }) {
+  const total = wins + losses + pending;
+  if (total === 0) return <p className="text-xs text-muted text-center py-4">No bets yet</p>;
+
+  const cx = 60, cy = 60, r = 42, sw = 16;
+  const circ = 2 * Math.PI * r;
+  const segments = [
+    { count: wins,    color: "#22c55e" },
+    { count: losses,  color: "#ef4444" },
+    { count: pending, color: "#374151" },
+  ].filter(s => s.count > 0);
+
+  let startAngle = -90;
+  const winPct = Math.round((wins / total) * 100);
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <svg viewBox="0 0 120 120" className="w-28 h-28 shrink-0">
+        {segments.map((seg, i) => {
+          const pct = seg.count / total;
+          const angle = startAngle;
+          startAngle += pct * 360;
+          return (
+            <circle key={i} cx={cx} cy={cy} r={r} fill="none"
+              stroke={seg.color} strokeWidth={sw}
+              strokeDasharray={`${pct * circ} ${circ}`}
+              transform={`rotate(${angle}, ${cx}, ${cy})`}
+            />
+          );
+        })}
+        <text x={cx} y={cy - 4}  textAnchor="middle" fill="white"   fontSize="15" fontWeight="bold">{winPct}%</text>
+        <text x={cx} y={cy + 11} textAnchor="middle" fill="#6b7280"  fontSize="8">win rate</text>
+      </svg>
+      <div className="flex gap-3 text-[10px] text-muted">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: "#22c55e" }} />{wins}W</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: "#ef4444" }} />{losses}L</span>
+        {pending > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: "#374151" }} />{pending}P</span>}
+      </div>
+    </div>
+  );
+}
+
+function BetBars({ bets }: { bets: BetWithRound[] }) {
+  if (bets.length === 0) return <p className="text-xs text-muted text-center py-4">No data</p>;
+
+  const bars = bets.map(b => {
+    if (b.result === null) return { value: 0, color: "#374151" };
+    if (b.result === b.side)  return { value: (b.payout ?? 0) - b.amount, color: "#22c55e" };
+    return { value: -b.amount, color: "#ef4444" };
+  });
+
+  const maxAbs = Math.max(...bars.map(d => Math.abs(d.value)), 0.01);
+  const W = 300, H = 90, pad = 8;
+  const usableW = W - pad * 2;
+  const halfH = (H - pad * 2) / 2;
+  const zeroY = pad + halfH;
+  const slotW = usableW / bars.length;
+  const barW = Math.max(2, slotW - 2);
+
+  return (
+    <div>
+      <p className="text-[10px] text-muted mb-1">Profit / Loss per bet</p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+        <line x1={pad} y1={zeroY} x2={W - pad} y2={zeroY} stroke="#374151" strokeWidth={1} />
+        {bars.map((b, i) => {
+          const bh = (Math.abs(b.value) / maxAbs) * halfH;
+          const x  = pad + i * slotW + (slotW - barW) / 2;
+          const y  = b.value >= 0 ? zeroY - bh : zeroY;
+          return <rect key={i} x={x} y={y} width={barW} height={Math.max(bh, 1)} fill={b.color} opacity={0.85} rx={1} />;
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function PnLLine({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | null }) {
+  if (bets.length === 0) return null;
+
+  let cum = 0;
+  const points = [0, ...bets.map(b => {
+    if (b.result !== null) {
+      cum += b.result === b.side ? (b.payout ?? 0) - b.amount : -b.amount;
+    }
+    return cum;
+  })];
+
+  const W = 300, H = 80, pad = 10;
+  const minV = Math.min(...points);
+  const maxV = Math.max(...points);
+  const range = Math.max(maxV - minV, 0.001);
+  const toX = (i: number) => pad + (i / (points.length - 1)) * (W - pad * 2);
+  const toY = (v: number) => pad + ((maxV - v) / range) * (H - pad * 2);
+
+  const pathD   = points.map((p, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)},${toY(p).toFixed(1)}`).join(" ");
+  const finalPnL = points[points.length - 1];
+  const color   = finalPnL >= 0 ? "#22c55e" : "#ef4444";
+  const zeroY   = toY(0);
+
+  // Fill area: path closes down to zero-line
+  const fillD = `${pathD} L${toX(points.length - 1).toFixed(1)},${zeroY.toFixed(1)} L${toX(0).toFixed(1)},${zeroY.toFixed(1)} Z`;
+
+  return (
+    <div>
+      <p className="text-[10px] text-muted mb-1">Cumulative P&amp;L</p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+        {zeroY >= pad && zeroY <= H - pad && (
+          <line x1={pad} y1={zeroY} x2={W - pad} y2={zeroY} stroke="#374151" strokeWidth={1} strokeDasharray="3 3" />
+        )}
+        <path d={fillD} fill={color} opacity={0.12} />
+        <path d={pathD} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={toX(points.length - 1)} cy={toY(finalPnL)} r={3} fill={color} />
+      </svg>
+      <p className="text-[10px] text-right mt-0.5">
+        <span className={finalPnL >= 0 ? "text-yes font-mono" : "text-no font-mono"}>
+          {finalPnL >= 0 ? "+" : ""}{finalPnL.toFixed(3)} SOL
+          {solPrice ? ` ($${(finalPnL * solPrice).toFixed(2)})` : ""}
+        </span>
+      </p>
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const { publicKey, connected, connect } = useWallet();
   const balance = useSolBalance(connected ? publicKey : null);
@@ -165,6 +289,22 @@ export default function ProfilePage() {
             </div>
           ))}
         </div>
+
+        {/* Charts */}
+        {bets.length > 0 && (
+          <div className="bg-surface border border-surface-3 rounded-xl p-4 mb-6">
+            <h2 className="text-white font-semibold text-sm mb-4">Performance</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <DonutChart
+                wins={wins.length}
+                losses={resolvedBets.length - wins.length}
+                pending={bets.length - resolvedBets.length}
+              />
+              <BetBars bets={bets} />
+              <PnLLine bets={bets} solPrice={solPrice} />
+            </div>
+          </div>
+        )}
 
         {/* Referral section */}
         <div id="referral" className="bg-surface border border-surface-3 rounded-xl overflow-hidden mb-6">
