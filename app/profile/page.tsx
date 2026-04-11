@@ -45,40 +45,7 @@ import {
   Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 
-// ── Recharts tooltip style ────────────────────────────────────────────────────
-
-const tooltipStyle = {
-  background: "#1a1a2e",
-  border: "1px solid #444",
-  borderRadius: 8,
-  color: "#fff",
-  fontSize: 12,
-};
-
 // ── Chart components ──────────────────────────────────────────────────────────
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function ChartTooltip({ active, payload, label, solPrice }: any) {
-  if (!active || !payload?.length) return null;
-  const p = payload[0];
-  const val: number = p.value;
-  return (
-    <div style={tooltipStyle} className="px-3 py-2 text-xs leading-5">
-      {label && <p className="text-gray-400 mb-1">{label}</p>}
-      <p style={{ color: p.color ?? "#fff" }}>
-        {p.name}:{" "}
-        <span className="font-mono font-semibold">
-          {val >= 0 ? "+" : ""}{val.toFixed(4)} SOL
-        </span>
-        {solPrice && (
-          <span className="text-gray-400 ml-1">
-            ({val >= 0 ? "+" : ""}${(val * solPrice).toFixed(2)})
-          </span>
-        )}
-      </p>
-    </div>
-  );
-}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function PieTooltip({ active, payload, bets, solPrice }: any) {
@@ -92,7 +59,7 @@ function PieTooltip({ active, payload, bets, solPrice }: any) {
     .reduce((s: number, b: BetWithRound) => s + b.amount, 0);
   const sol = name === "Wins" ? winSOL : name === "Losses" ? -lossSOL : null;
   return (
-    <div style={tooltipStyle} className="px-3 py-2 text-xs leading-5">
+    <div style={{ background: "#1a1a2e", border: "1px solid #444", borderRadius: 8, color: "#fff", fontSize: 12 }} className="px-3 py-2 text-xs leading-5">
       <p style={{ color: entry.payload.color, fontWeight: 700 }}>{name}: {count} bets</p>
       {sol !== null && (
         <p className="font-mono">
