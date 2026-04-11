@@ -73,6 +73,10 @@ export default function Navbar({ rounds }: NavbarProps) {
       <Link href="/leaderboard" className="hidden sm:inline-flex items-center gap-1 text-xs text-muted hover:text-white transition-colors">
         🏆 <span>Leaderboard</span>
       </Link>
+      <Link href="/faq" className="hidden sm:inline-flex items-center gap-1 text-xs text-muted hover:text-white transition-colors">
+        <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center font-bold leading-none text-[10px]">?</span>
+        <span>FAQ</span>
+      </Link>
 
       {/* Network badge */}
       <span className="hidden md:inline-flex px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
