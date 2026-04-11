@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-const BASE_POOL = 1; // base SOL per side — small enough that real bets visibly move odds
+const BASE_POOL = 10; // base SOL per side
 const ROUND_DURATION_MS = 24 * 60 * 60 * 1000;
 
 async function fetchCryptoPrices(): Promise<{ btc: number; sol: number } | null> {
