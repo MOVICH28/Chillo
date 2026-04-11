@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useWallet } from "@/components/WalletProvider";
 import { useSolBalance } from "@/lib/useSolBalance";
@@ -41,39 +41,144 @@ const BASE_URL = "https://chillo-f11o.vercel.app";
 
 // ── Chart helpers ─────────────────────────────────────────────────────────────
 
-function DonutChart({ wins, losses, pending }: { wins: number; losses: number; pending: number }) {
+const TOOLTIP_STYLE: React.CSSProperties = {
+  position: "absolute",
+  background: "#0f0f1a",
+  border: "1px solid rgba(255,255,255,0.1)",
+  borderRadius: 8,
+  padding: "8px 10px",
+  fontSize: 11,
+  color: "#e5e7eb",
+  pointerEvents: "none",
+  whiteSpace: "nowrap",
+  zIndex: 50,
+  boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+};
+
+
+function DonutChart({
+  wins, losses, pending, bets, solPrice,
+}: {
+  wins: number; losses: number; pending: number;
+  bets: BetWithRound[]; solPrice: number | null;
+}) {
   const total = wins + losses + pending;
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const svgRef = React.useRef<SVGSVGElement>(null);
+
   if (total === 0) return <p className="text-xs text-muted text-center py-4">No bets yet</p>;
 
   const cx = 60, cy = 60, r = 42, sw = 16;
   const circ = 2 * Math.PI * r;
+
+  const winSOL  = bets.filter(b => b.result === b.side && b.result !== null).reduce((s, b) => s + ((b.payout ?? 0) - b.amount), 0);
+  const lossSOL = bets.filter(b => b.result !== null && b.result !== b.side).reduce((s, b) => s + b.amount, 0);
+
   const segments = [
-    { count: wins,    color: "#22c55e" },
-    { count: losses,  color: "#ef4444" },
-    { count: pending, color: "#374151" },
+    {
+      count: wins, color: "#22c55e", label: "Wins",
+      content: (
+        <div>
+          <div style={{ color: "#22c55e", fontWeight: 700 }}>Wins: {wins} bets</div>
+          <div>+{winSOL.toFixed(3)} SOL</div>
+          {solPrice && <div style={{ color: "#6b7280" }}>${(winSOL * solPrice).toFixed(2)}</div>}
+        </div>
+      ),
+    },
+    {
+      count: losses, color: "#ef4444", label: "Losses",
+      content: (
+        <div>
+          <div style={{ color: "#ef4444", fontWeight: 700 }}>Losses: {losses} bets</div>
+          <div>-{lossSOL.toFixed(3)} SOL</div>
+          {solPrice && <div style={{ color: "#6b7280" }}>-${(lossSOL * solPrice).toFixed(2)}</div>}
+        </div>
+      ),
+    },
+    {
+      count: pending, color: "#374151", label: "Pending",
+      content: (
+        <div>
+          <div style={{ color: "#9ca3af", fontWeight: 700 }}>Pending: {pending} bets</div>
+          <div style={{ color: "#6b7280" }}>Awaiting resolution</div>
+        </div>
+      ),
+    },
   ].filter(s => s.count > 0);
 
   let startAngle = -90;
   const winPct = Math.round((wins / total) * 100);
 
+  function arcPath(startDeg: number, endDeg: number) {
+    const pct = (endDeg - startDeg) / 360;
+    return { dash: pct * circ, gap: circ, rotate: startDeg };
+  }
+
+  function handleSegmentEnter(e: React.MouseEvent<SVGCircleElement>, idx: number) {
+    setHoveredIdx(idx);
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
+    const rect = svgEl.getBoundingClientRect();
+    // Place tooltip near mouse relative to wrapper div
+    setTooltip({
+      x: e.clientX - rect.left + 12,
+      y: e.clientY - rect.top - 10,
+      content: segments[idx].content,
+    });
+  }
+
+  function handleMouseMove(e: React.MouseEvent<SVGCircleElement>) {
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
+    const rect = svgEl.getBoundingClientRect();
+    setTooltip(prev => prev ? {
+      ...prev,
+      x: e.clientX - rect.left + 12,
+      y: e.clientY - rect.top - 10,
+    } : null);
+  }
+
+  function handleSegmentLeave() {
+    setHoveredIdx(null);
+    setTooltip(null);
+  }
+
   return (
-    <div className="flex flex-col items-center gap-2">
-      <svg viewBox="0 0 120 120" className="w-28 h-28 shrink-0">
-        {segments.map((seg, i) => {
-          const pct = seg.count / total;
-          const angle = startAngle;
-          startAngle += pct * 360;
-          return (
-            <circle key={i} cx={cx} cy={cy} r={r} fill="none"
-              stroke={seg.color} strokeWidth={sw}
-              strokeDasharray={`${pct * circ} ${circ}`}
-              transform={`rotate(${angle}, ${cx}, ${cy})`}
-            />
-          );
-        })}
-        <text x={cx} y={cy - 4}  textAnchor="middle" fill="white"   fontSize="15" fontWeight="bold">{winPct}%</text>
-        <text x={cx} y={cy + 11} textAnchor="middle" fill="#6b7280"  fontSize="8">win rate</text>
-      </svg>
+    <div className="flex flex-col items-center gap-2 relative">
+      <div className="relative">
+        <svg ref={svgRef} viewBox="0 0 120 120" className="w-28 h-28 shrink-0" style={{ overflow: "visible" }}>
+          {segments.map((seg, i) => {
+            const pct = seg.count / total;
+            const angle = startAngle;
+            startAngle += pct * 360;
+            const { dash, gap, rotate } = arcPath(angle, angle + pct * 360);
+            const isHovered = hoveredIdx === i;
+            return (
+              <circle
+                key={i}
+                cx={cx} cy={cy} r={isHovered ? r + 3 : r}
+                fill="none"
+                stroke={seg.color}
+                strokeWidth={isHovered ? sw + 4 : sw}
+                strokeDasharray={`${dash} ${gap}`}
+                transform={`rotate(${rotate}, ${cx}, ${cy})`}
+                style={{ cursor: "pointer", transition: "r 0.15s, stroke-width 0.15s" }}
+                onMouseEnter={e => handleSegmentEnter(e, i)}
+                onMouseMove={handleMouseMove}
+                onMouseLeave={handleSegmentLeave}
+              />
+            );
+          })}
+          <text x={cx} y={cy - 4}  textAnchor="middle" fill="white"   fontSize="15" fontWeight="bold">{winPct}%</text>
+          <text x={cx} y={cy + 11} textAnchor="middle" fill="#6b7280"  fontSize="8">win rate</text>
+        </svg>
+        {tooltip && (
+          <div style={{ ...TOOLTIP_STYLE, left: tooltip.x, top: tooltip.y }}>
+            {tooltip.content}
+          </div>
+        )}
+      </div>
       <div className="flex gap-3 text-[10px] text-muted">
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: "#22c55e" }} />{wins}W</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: "#ef4444" }} />{losses}L</span>
@@ -83,13 +188,17 @@ function DonutChart({ wins, losses, pending }: { wins: number; losses: number; p
   );
 }
 
-function BetBars({ bets }: { bets: BetWithRound[] }) {
+function BetBars({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | null }) {
   if (bets.length === 0) return <p className="text-xs text-muted text-center py-4">No data</p>;
 
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const wrapRef = React.useRef<HTMLDivElement>(null);
+
   const bars = bets.map(b => {
-    if (b.result === null) return { value: 0, color: "#374151" };
-    if (b.result === b.side)  return { value: (b.payout ?? 0) - b.amount, color: "#22c55e" };
-    return { value: -b.amount, color: "#ef4444" };
+    if (b.result === null) return { value: 0, color: "#374151", bet: b };
+    if (b.result === b.side)  return { value: (b.payout ?? 0) - b.amount, color: "#22c55e", bet: b };
+    return { value: -b.amount, color: "#ef4444", bet: b };
   });
 
   const maxAbs = Math.max(...bars.map(d => Math.abs(d.value)), 0.01);
@@ -100,8 +209,64 @@ function BetBars({ bets }: { bets: BetWithRound[] }) {
   const slotW = usableW / bars.length;
   const barW = Math.max(2, slotW - 2);
 
+  function handleBarEnter(e: React.MouseEvent<SVGRectElement>, i: number) {
+    setHoveredIdx(i);
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const b = bars[i].bet;
+    const isWin  = b.result !== null && b.result === b.side;
+    const isLoss = b.result !== null && b.result !== b.side;
+    const profit = isWin ? (b.payout ?? 0) - b.amount : isLoss ? -b.amount : 0;
+    const question = b.round?.question ?? b.roundId;
+    const shortQ = question.length > 40 ? question.slice(0, 40) + "…" : question;
+    setTooltip({
+      x: e.clientX - rect.left + 10,
+      y: e.clientY - rect.top - 10,
+      content: (
+        <div>
+          <div style={{ color: "#9ca3af", marginBottom: 4, maxWidth: 180 }}>{shortQ}</div>
+          <div>
+            Side: <span style={{ color: b.side === "yes" ? "#22c55e" : "#ef4444", fontWeight: 700 }}>
+              {b.side.toUpperCase()}
+            </span>
+          </div>
+          <div>Amount: {b.amount.toFixed(3)} SOL{solPrice ? ` ($${(b.amount * solPrice).toFixed(2)})` : ""}</div>
+          {isWin && b.payout != null && (
+            <div style={{ color: "#22c55e" }}>Payout: +{b.payout.toFixed(3)} SOL</div>
+          )}
+          {isWin && (
+            <div style={{ color: "#22c55e", fontWeight: 700 }}>
+              Profit: +{profit.toFixed(3)} SOL{solPrice ? ` (+$${(profit * solPrice).toFixed(2)})` : ""}
+            </div>
+          )}
+          {isLoss && (
+            <div style={{ color: "#ef4444", fontWeight: 700 }}>
+              Loss: {profit.toFixed(3)} SOL{solPrice ? ` (-$${Math.abs(profit * (solPrice ?? 0)).toFixed(2)})` : ""}
+            </div>
+          )}
+          {!isWin && !isLoss && (
+            <div style={{ color: "#9ca3af" }}>Pending resolution</div>
+          )}
+        </div>
+      ),
+    });
+  }
+
+  function handleBarMove(e: React.MouseEvent<SVGRectElement>) {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    setTooltip(prev => prev ? { ...prev, x: e.clientX - rect.left + 10, y: e.clientY - rect.top - 10 } : null);
+  }
+
+  function handleBarLeave() {
+    setHoveredIdx(null);
+    setTooltip(null);
+  }
+
   return (
-    <div>
+    <div ref={wrapRef} className="relative">
       <p className="text-[10px] text-muted mb-1">Profit / Loss per bet</p>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
         <line x1={pad} y1={zeroY} x2={W - pad} y2={zeroY} stroke="#374151" strokeWidth={1} />
@@ -109,9 +274,24 @@ function BetBars({ bets }: { bets: BetWithRound[] }) {
           const bh = (Math.abs(b.value) / maxAbs) * halfH;
           const x  = pad + i * slotW + (slotW - barW) / 2;
           const y  = b.value >= 0 ? zeroY - bh : zeroY;
-          return <rect key={i} x={x} y={y} width={barW} height={Math.max(bh, 1)} fill={b.color} opacity={0.85} rx={1} />;
+          const isHovered = hoveredIdx === i;
+          return (
+            <rect
+              key={i} x={x} y={y} width={barW} height={Math.max(bh, 2)}
+              fill={b.color} opacity={isHovered ? 1 : 0.75} rx={1}
+              style={{ cursor: "pointer" }}
+              onMouseEnter={e => handleBarEnter(e, i)}
+              onMouseMove={handleBarMove}
+              onMouseLeave={handleBarLeave}
+            />
+          );
         })}
       </svg>
+      {tooltip && (
+        <div style={{ ...TOOLTIP_STYLE, left: tooltip.x, top: tooltip.y }}>
+          {tooltip.content}
+        </div>
+      )}
     </div>
   );
 }
@@ -119,7 +299,12 @@ function BetBars({ bets }: { bets: BetWithRound[] }) {
 function PnLLine({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | null }) {
   if (bets.length === 0) return null;
 
+  const [hovered, setHovered] = useState<number | null>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
+  const wrapRef = React.useRef<HTMLDivElement>(null);
+
   let cum = 0;
+  // points[0] = 0 (start), points[i+1] = cumulative after bets[i]
   const points = [0, ...bets.map(b => {
     if (b.result !== null) {
       cum += b.result === b.side ? (b.payout ?? 0) - b.amount : -b.amount;
@@ -139,19 +324,104 @@ function PnLLine({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | 
   const color   = finalPnL >= 0 ? "#22c55e" : "#ef4444";
   const zeroY   = toY(0);
 
-  // Fill area: path closes down to zero-line
   const fillD = `${pathD} L${toX(points.length - 1).toFixed(1)},${zeroY.toFixed(1)} L${toX(0).toFixed(1)},${zeroY.toFixed(1)} Z`;
 
+  // Hit-area per data point: invisible wide rect column
+  const hitW = (W - pad * 2) / Math.max(points.length - 1, 1);
+
+  function handlePointEnter(e: React.MouseEvent, idx: number) {
+    setHovered(idx);
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const pnl = points[idx];
+    // idx 0 = start (no bet), idx 1..n = after bets[idx-1]
+    const bet = idx > 0 ? bets[idx - 1] : null;
+    const date = bet ? new Date(bet.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "Start";
+    setTooltip({
+      x: e.clientX - rect.left + 12,
+      y: e.clientY - rect.top - 10,
+      content: (
+        <div>
+          <div style={{ color: "#6b7280", marginBottom: 3 }}>{date}</div>
+          {bet && (
+            <>
+              <div>
+                {bet.result === bet.side && bet.result !== null
+                  ? <span style={{ color: "#22c55e" }}>WIN</span>
+                  : bet.result !== null
+                    ? <span style={{ color: "#ef4444" }}>LOSS</span>
+                    : <span style={{ color: "#9ca3af" }}>Pending</span>}
+                {" "}
+                <span style={{ color: "#9ca3af" }}>{bet.side.toUpperCase()}</span>
+              </div>
+              <div>Bet: {bet.amount.toFixed(3)} SOL</div>
+            </>
+          )}
+          <div style={{ fontWeight: 700, color: pnl >= 0 ? "#22c55e" : "#ef4444", marginTop: 2 }}>
+            Running total: {pnl >= 0 ? "+" : ""}{pnl.toFixed(3)} SOL
+            {solPrice ? ` (${ pnl >= 0 ? "+" : ""}${(pnl * solPrice).toFixed(2)})` : ""}
+          </div>
+        </div>
+      ),
+    });
+  }
+
+  function handlePointMove(e: React.MouseEvent) {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    setTooltip(prev => prev ? { ...prev, x: e.clientX - rect.left + 12, y: e.clientY - rect.top - 10 } : null);
+  }
+
+  function handlePointLeave() {
+    setHovered(null);
+    setTooltip(null);
+  }
+
   return (
-    <div>
+    <div ref={wrapRef} className="relative">
       <p className="text-[10px] text-muted mb-1">Cumulative P&amp;L</p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ overflow: "visible" }}>
         {zeroY >= pad && zeroY <= H - pad && (
           <line x1={pad} y1={zeroY} x2={W - pad} y2={zeroY} stroke="#374151" strokeWidth={1} strokeDasharray="3 3" />
         )}
         <path d={fillD} fill={color} opacity={0.12} />
         <path d={pathD} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-        <circle cx={toX(points.length - 1)} cy={toY(finalPnL)} r={3} fill={color} />
+
+        {/* Crosshair + highlighted point */}
+        {hovered !== null && (() => {
+          const hx = toX(hovered);
+          const hy = toY(points[hovered]);
+          return (
+            <>
+              <line x1={hx} y1={pad} x2={hx} y2={H - pad} stroke="rgba(255,255,255,0.15)" strokeWidth={1} strokeDasharray="3 3" />
+              <circle cx={hx} cy={hy} r={5} fill={color} stroke="#0f0f1a" strokeWidth={2} />
+            </>
+          );
+        })()}
+
+        {/* Invisible hit areas for each point */}
+        {points.map((_, idx) => {
+          const hx = toX(idx);
+          return (
+            <rect
+              key={idx}
+              x={hx - hitW / 2} y={pad}
+              width={hitW} height={H - pad * 2}
+              fill="transparent"
+              style={{ cursor: "crosshair" }}
+              onMouseEnter={e => handlePointEnter(e, idx)}
+              onMouseMove={handlePointMove}
+              onMouseLeave={handlePointLeave}
+            />
+          );
+        })}
+
+        {/* Always-visible endpoint dot */}
+        {hovered === null && (
+          <circle cx={toX(points.length - 1)} cy={toY(finalPnL)} r={3} fill={color} />
+        )}
       </svg>
       <p className="text-[10px] text-right mt-0.5">
         <span className={finalPnL >= 0 ? "text-yes font-mono" : "text-no font-mono"}>
@@ -159,6 +429,11 @@ function PnLLine({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | 
           {solPrice ? ` ($${(finalPnL * solPrice).toFixed(2)})` : ""}
         </span>
       </p>
+      {tooltip && (
+        <div style={{ ...TOOLTIP_STYLE, left: tooltip.x, top: tooltip.y }}>
+          {tooltip.content}
+        </div>
+      )}
     </div>
   );
 }
@@ -299,8 +574,10 @@ export default function ProfilePage() {
                 wins={wins.length}
                 losses={resolvedBets.length - wins.length}
                 pending={bets.length - resolvedBets.length}
+                bets={bets}
+                solPrice={solPrice}
               />
-              <BetBars bets={bets} />
+              <BetBars bets={bets} solPrice={solPrice} />
               <PnLLine bets={bets} solPrice={solPrice} />
             </div>
           </div>
