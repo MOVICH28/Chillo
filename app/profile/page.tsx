@@ -20,7 +20,7 @@ interface BetWithRound {
   result: string | null;
   payout: number | null;
   paid: boolean;
-  round: { question: string; status: string };
+  round: { question: string; status: string } | null;
 }
 
 interface ReferralStats {
@@ -274,7 +274,7 @@ export default function ProfilePage() {
                     return (
                       <tr key={bet.id} className="border-b border-surface-3/50 hover:bg-surface-2/50 transition-colors">
                         <td className="px-4 py-3 text-muted text-xs">
-                          {bet.round.question}
+                          {bet.round?.question ?? bet.roundId}
                         </td>
                         <td className="px-3 py-3 text-center">
                           <span className={`px-2 py-0.5 rounded text-xs font-bold ${
