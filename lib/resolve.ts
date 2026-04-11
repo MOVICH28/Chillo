@@ -21,7 +21,16 @@ export interface PayoutResult {
   error?: string;
 }
 
+export interface RefundResult {
+  betId: string;
+  wallet: string;
+  refund: number;
+  txHash: string | null;
+  error?: string;
+}
+
 export interface ResolveResult {
+  type: "payout";
   roundId: string;
   winner: string;
   totalPool: number;
@@ -32,8 +41,20 @@ export interface ResolveResult {
   payouts: PayoutResult[];
 }
 
+export interface RefundOutcome {
+  type: "refund";
+  reason: "all_one_side";
+  roundId: string;
+  winner: string;
+  totalRefunded: number;
+  succeeded: number;
+  failed: number;
+  refunds: RefundResult[];
+}
+
 export type ResolveOutcome =
   | ResolveResult
+  | RefundOutcome
   | { message: string; payouts: PayoutResult[] };
 
 export function loadPlatformKeypair(): Keypair {
@@ -60,6 +81,66 @@ export async function resolveRound(
   const winningBets = allBets.filter((b) => b.side === winner);
   const losingBets = allBets.filter((b) => b.side !== winner);
 
+  // ── All bets on one side: refund everyone 100% ────────────────────────────
+  if (losingBets.length === 0) {
+    console.log(`[resolve] Round ${roundId}: all bets on one side — issuing full refunds`);
+    const platformKeypair = loadPlatformKeypair();
+    const connection = new Connection(RPC, "confirmed");
+    const refundResults: RefundResult[] = [];
+
+    for (const bet of allBets) {
+      const lamports = Math.floor(bet.amount * LAMPORTS_PER_SOL);
+      if (lamports <= 0) {
+        refundResults.push({ betId: bet.id, wallet: bet.walletAddress, refund: 0, txHash: null, error: "amount too small" });
+        continue;
+      }
+      try {
+        const tx = new Transaction().add(
+          SystemProgram.transfer({
+            fromPubkey: platformKeypair.publicKey,
+            toPubkey: new PublicKey(bet.walletAddress),
+            lamports,
+          })
+        );
+        const txHash = await sendAndConfirmTransaction(connection, tx, [platformKeypair], {
+          commitment: "confirmed",
+        });
+        await prisma.bet.update({
+          where: { id: bet.id },
+          data: { result: "refund", payout: bet.amount, paid: true },
+        });
+        refundResults.push({ betId: bet.id, wallet: bet.walletAddress, refund: bet.amount, txHash });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[resolve] refund failed for bet ${bet.id}`);
+        refundResults.push({ betId: bet.id, wallet: bet.walletAddress, refund: bet.amount, txHash: null, error: msg });
+      }
+    }
+
+    try {
+      await prisma.round.update({
+        where: { id: roundId },
+        data: { status: "resolved", winner, resolvedAt: new Date() },
+      });
+    } catch { /* legacy static round */ }
+
+    const succeeded = refundResults.filter((r) => r.txHash).length;
+    const failed    = refundResults.filter((r) => !r.txHash).length;
+    console.log(`[resolve] Round ${roundId} refunded: ${succeeded} succeeded, ${failed} failed`);
+
+    return {
+      type: "refund",
+      reason: "all_one_side",
+      roundId,
+      winner,
+      totalRefunded: allBets.reduce((s, b) => s + b.amount, 0),
+      succeeded,
+      failed,
+      refunds: refundResults,
+    };
+  }
+
+  // ── Normal resolution ─────────────────────────────────────────────────────
   if (losingBets.length > 0) {
     await prisma.bet.updateMany({
       where: { id: { in: losingBets.map((b) => b.id) } },
@@ -140,6 +221,7 @@ export async function resolveRound(
   }
 
   return {
+    type: "payout" as const,
     roundId,
     winner,
     totalPool,

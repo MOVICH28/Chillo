@@ -30,6 +30,7 @@ interface ReferralStats {
 }
 
 function resultLabel(bet: BetWithRound): { label: string; color: string } {
+  if (bet.result === "refund") return { label: "REFUND", color: "text-gray-400" };
   if (bet.result === null) return { label: "Pending", color: "text-yellow-400" };
   const won = bet.result === bet.side;
   return won
@@ -53,20 +54,23 @@ function PieTooltip({ active, payload, bets, solPrice }: any) {
   const entry = payload[0];
   const name: string  = entry.name;
   const count: number = entry.value;
-  const winSOL  = bets.filter((b: BetWithRound) => b.result === b.side && b.result !== null)
+  const winSOL    = bets.filter((b: BetWithRound) => b.result !== "refund" && b.result === b.side && b.result !== null)
     .reduce((s: number, b: BetWithRound) => s + ((b.payout ?? 0) - b.amount), 0);
-  const lossSOL = bets.filter((b: BetWithRound) => b.result !== null && b.result !== b.side)
+  const lossSOL   = bets.filter((b: BetWithRound) => b.result !== null && b.result !== "refund" && b.result !== b.side)
     .reduce((s: number, b: BetWithRound) => s + b.amount, 0);
-  const sol = name === "Wins" ? winSOL : name === "Losses" ? -lossSOL : null;
+  const refundSOL = bets.filter((b: BetWithRound) => b.result === "refund")
+    .reduce((s: number, b: BetWithRound) => s + b.amount, 0);
+  const sol = name === "Wins" ? winSOL : name === "Losses" ? -lossSOL : name === "Refunds" ? refundSOL : null;
   return (
     <div style={{ background: "#1a1a2e", border: "1px solid #444", borderRadius: 8, color: "#fff", fontSize: 12 }} className="px-3 py-2 text-xs leading-5">
       <p style={{ color: entry.payload.color, fontWeight: 700 }}>{name}: {count} bets</p>
       {sol !== null && (
         <p className="font-mono">
-          {sol >= 0 ? "+" : ""}{sol.toFixed(3)} SOL
+          {name !== "Losses" && sol >= 0 ? "+" : ""}{sol.toFixed(3)} SOL
           {solPrice && <span className="text-gray-400 ml-1">(${Math.abs(sol * solPrice).toFixed(2)})</span>}
         </p>
       )}
+      {name === "Refunds" && <p className="text-gray-400 text-[10px]">Returned — no opposing bets</p>}
       {name === "Pending" && <p className="text-gray-400">Awaiting resolution</p>}
     </div>
   );
@@ -160,7 +164,8 @@ export default function ProfilePage() {
   }, [publicKey, fetchBets]);
 
   const totalWagered = bets.reduce((s, b) => s + b.amount, 0);
-  const resolvedBets = bets.filter((b) => b.result !== null);
+  const resolvedBets = bets.filter((b) => b.result !== null && b.result !== "refund");
+  const refundedBets = bets.filter((b) => b.result === "refund");
   const wins = resolvedBets.filter((b) => b.result === b.side);
   const winRate = resolvedBets.length > 0
     ? ((wins.length / resolvedBets.length) * 100).toFixed(0)
@@ -296,28 +301,30 @@ export default function ProfilePage() {
 
         {/* Performance charts */}
         {bets.length > 0 && (() => {
-          const lossCount = resolvedBets.length - wins.length;
-          const pendingCount = bets.length - resolvedBets.length;
+          const lossCount    = resolvedBets.length - wins.length;
+          const pendingCount = bets.length - resolvedBets.length - refundedBets.length;
 
           const winData = [
-            { name: "Wins",    value: wins.length,  color: "#22c55e" },
-            { name: "Losses",  value: lossCount,    color: "#ef4444" },
-            { name: "Pending", value: pendingCount, color: "#6b7280" },
+            { name: "Wins",    value: wins.length,         color: "#22c55e" },
+            { name: "Losses",  value: lossCount,           color: "#ef4444" },
+            { name: "Refunds", value: refundedBets.length, color: "#6b7280" },
+            { name: "Pending", value: pendingCount,        color: "#374151" },
           ].filter(d => d.value > 0);
 
           let cumulative = 0;
           const sortedBets = [...bets].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
           const pnlData = sortedBets.map((b, i) => {
-            const isWin  = b.result !== null && b.result === b.side;
-            const isLoss = b.result !== null && b.result !== b.side;
-            const profit = isWin ? (b.payout ?? 0) - b.amount : isLoss ? -b.amount : 0;
+            const isRefund = b.result === "refund";
+            const isWin    = !isRefund && b.result !== null && b.result === b.side;
+            const isLoss   = !isRefund && b.result !== null && b.result !== b.side;
+            const profit   = isWin ? (b.payout ?? 0) - b.amount : isLoss ? -b.amount : 0;
             cumulative += profit;
             return {
               name: `#${i + 1}`,
               pnl: parseFloat(cumulative.toFixed(4)),
               profit: parseFloat(profit.toFixed(4)),
               question: b.round?.question?.slice(0, 30) ?? b.roundId,
-              result: isWin ? "WIN" : isLoss ? "LOSS" : "Pending",
+              result: isWin ? "WIN" : isLoss ? "LOSS" : isRefund ? "REFUND" : "Pending",
               side: b.side,
             };
           });
@@ -364,8 +371,8 @@ export default function ProfilePage() {
                         formatter={(value: any, _name: any, props: any) => {
                           const d = props.payload;
                           const isWin = d.result === "WIN";
-                          const isPending = d.result === "Pending";
-                          const color = isWin ? "#22c55e" : isPending ? "#6b7280" : "#ef4444";
+                          const isActive = d.result === "LOSS" || d.result === "WIN" || d.result === "REFUND";
+                          const color = isWin ? "#22c55e" : d.result === "REFUND" ? "#6b7280" : isActive ? "#ef4444" : "#6b7280";
                           return [
                             <span key="val" style={{ color }}>
                               {`${d.result} | ${d.side?.toUpperCase()} | ${d.profit > 0 ? "+" : ""}${d.profit} SOL`}
@@ -379,7 +386,8 @@ export default function ProfilePage() {
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         activeDot={(props: any) => {
                           const color = props.payload?.result === "WIN" ? "#22c55e"
-                            : props.payload?.result === "LOSS" ? "#ef4444" : "#6b7280";
+                            : props.payload?.result === "LOSS" ? "#ef4444"
+                            : "#6b7280";
                           return <circle cx={props.cx} cy={props.cy} r={7} fill={color} stroke="#fff" strokeWidth={2} />;
                         }} />
                     </LineChart>
@@ -493,8 +501,9 @@ export default function ProfilePage() {
                 <tbody>
                   {bets.map((bet) => {
                     const { label, color } = resultLabel(bet);
-                    const isWin = bet.result !== null && bet.result === bet.side;
-                    const isLoss = bet.result !== null && bet.result !== bet.side;
+                    const isRefund = bet.result === "refund";
+                    const isWin  = !isRefund && bet.result !== null && bet.result === bet.side;
+                    const isLoss = !isRefund && bet.result !== null && bet.result !== bet.side;
                     const estPayout = bet.amount * bet.odds;
                     return (
                       <tr key={bet.id} className="border-b border-surface-3/50 hover:bg-surface-2/50 transition-colors">
@@ -522,6 +531,11 @@ export default function ProfilePage() {
                             <>
                               <span className="text-yes font-semibold">+{bet.payout.toFixed(3)} SOL</span>
                               {solPrice && <div className="text-muted text-[10px]">{usd(bet.payout)}</div>}
+                            </>
+                          ) : isRefund ? (
+                            <>
+                              <span className="text-gray-400 font-semibold">{bet.amount.toFixed(3)} SOL</span>
+                              {solPrice && <div className="text-muted text-[10px]">{usd(bet.amount)}</div>}
                             </>
                           ) : isLoss ? (
                             <span className="text-muted">—</span>
