@@ -91,10 +91,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Find round from DB BEFORE any on-chain work
+    console.log(`[POST /api/bets] roundId received: ${roundId}`);
     const round = await prisma.round.findUnique({ where: { id: roundId } });
     if (!round) {
+      console.error(`[POST /api/bets] round not found in DB for id: ${roundId}`);
       return NextResponse.json({ error: "Round not found" }, { status: 404 });
     }
+    console.log(`[POST /api/bets] found round: ${round.id} status=${round.status}`);
     if (round.status !== "open") {
       return NextResponse.json({ error: "Round is not open for betting" }, { status: 400 });
     }
@@ -116,9 +119,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Upsert RoundPool atomically, then compute odds from live totals
-    // Seed with static base pools so odds start realistically (not from zero)
-    const baseYes = round.yesPool ?? 0;
-    const baseNo  = round.noPool  ?? 0;
+    // Seed with round's base pools so odds start realistically (not from zero)
+    const baseYes = round.yesPool;
+    const baseNo  = round.noPool;
+    console.log(`[POST /api/bets] upserting RoundPool for roundId=${round.id} side=${side} amount=${amount} base=${baseYes}/${baseNo}`);
     const pool = await prisma.roundPool.upsert({
       where: { roundId },
       create: {
