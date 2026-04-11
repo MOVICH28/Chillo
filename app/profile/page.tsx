@@ -81,7 +81,6 @@ export default function ProfilePage() {
   }, [publicKey, fetchBets]);
 
   const totalWagered = bets.reduce((s, b) => s + b.amount, 0);
-  const pendingBets = bets.filter((b) => b.result === null);
   const resolvedBets = bets.filter((b) => b.result !== null);
   const wins = resolvedBets.filter((b) => b.result === b.side);
   const winRate = resolvedBets.length > 0
