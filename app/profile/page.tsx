@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+export const dynamic = "force-dynamic";
+
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useWallet } from "@/components/WalletProvider";
 import { useSolBalance } from "@/lib/useSolBalance";
@@ -15,6 +17,9 @@ interface BetWithRound {
   odds: number;
   txHash: string;
   createdAt: string;
+  result: string | null;
+  payout: number | null;
+  paid: boolean;
   round: { question: string; status: string };
 }
 
@@ -25,9 +30,11 @@ interface ReferralStats {
 }
 
 function resultLabel(bet: BetWithRound): { label: string; color: string } {
-  if (bet.round.status === "open" || bet.round.status === "closed")
-    return { label: "Pending", color: "text-yellow-400" };
-  return { label: "Resolved", color: "text-muted" };
+  if (bet.result === null) return { label: "Pending", color: "text-yellow-400" };
+  const won = bet.result === bet.side;
+  return won
+    ? { label: "WIN", color: "text-yes" }
+    : { label: "LOSS", color: "text-no" };
 }
 
 const BASE_URL = "https://chillo-f11o.vercel.app";
@@ -46,25 +53,39 @@ export default function ProfilePage() {
 
   useEffect(() => { setMounted(true); }, []);
 
+  const fetchBets = useCallback(() => {
+    if (!publicKey) return;
+    fetch(`/api/bets?wallet=${publicKey}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setBets(data);
+          setBetsLoading(false);
+        }
+      })
+      .catch(() => setBetsLoading(false));
+  }, [publicKey]);
+
   useEffect(() => {
     if (!publicKey) return;
     setBetsLoading(true);
-    fetch(`/api/bets?wallet=${publicKey}`)
-      .then((r) => r.json())
-      .then((data) => { if (Array.isArray(data)) setBets(data); })
-      .catch(() => {})
-      .finally(() => setBetsLoading(false));
+    fetchBets();
+    const id = setInterval(fetchBets, 10000);
 
     fetch(`/api/referral?wallet=${publicKey}`)
       .then((r) => r.json())
       .then((data) => { if (data && typeof data.referralCount === "number") setRefStats(data); })
       .catch(() => {});
-  }, [publicKey]);
+
+    return () => clearInterval(id);
+  }, [publicKey, fetchBets]);
 
   const totalWagered = bets.reduce((s, b) => s + b.amount, 0);
-  const pendingBets = bets.filter((b) => b.round.status === "open" || b.round.status === "closed");
-  const winRate = bets.length > 0
-    ? (((bets.length - pendingBets.length) / bets.length) * 100).toFixed(0)
+  const pendingBets = bets.filter((b) => b.result === null);
+  const resolvedBets = bets.filter((b) => b.result !== null);
+  const wins = resolvedBets.filter((b) => b.result === b.side);
+  const winRate = resolvedBets.length > 0
+    ? ((wins.length / resolvedBets.length) * 100).toFixed(0)
     : "0";
 
   const usd = (sol: number) => solPrice ? `$${(sol * solPrice).toFixed(2)}` : "—";
@@ -136,7 +157,7 @@ export default function ProfilePage() {
           {[
             { label: "Total Bets", value: bets.length.toString() },
             { label: "Total Wagered", value: `${totalWagered.toFixed(3)} SOL` },
-            { label: "Pending", value: pendingBets.length.toString() },
+            { label: "Wins / Losses", value: `${wins.length} / ${resolvedBets.length - wins.length}` },
             { label: "Win Rate", value: `${winRate}%` },
           ].map(({ label, value }) => (
             <div key={label} className="bg-surface border border-surface-3 rounded-xl p-3">
@@ -248,7 +269,9 @@ export default function ProfilePage() {
                 <tbody>
                   {bets.map((bet) => {
                     const { label, color } = resultLabel(bet);
-                    const payout = bet.amount * bet.odds;
+                    const isWin = bet.result !== null && bet.result === bet.side;
+                    const isLoss = bet.result !== null && bet.result !== bet.side;
+                    const estPayout = bet.amount * bet.odds;
                     return (
                       <tr key={bet.id} className="border-b border-surface-3/50 hover:bg-surface-2/50 transition-colors">
                         <td className="px-4 py-3 text-muted text-xs">
@@ -270,14 +293,23 @@ export default function ProfilePage() {
                         <td className="px-3 py-3 text-right font-mono text-muted text-xs">
                           {bet.odds.toFixed(2)}x
                         </td>
-                        <td className="px-3 py-3 text-right font-mono text-xs text-white">
-                          {payout.toFixed(3)} SOL
-                          {solPrice && (
-                            <div className="text-muted text-[10px]">{usd(payout)}</div>
+                        <td className="px-3 py-3 text-right font-mono text-xs">
+                          {isWin && bet.payout != null ? (
+                            <>
+                              <span className="text-yes font-semibold">+{bet.payout.toFixed(3)} SOL</span>
+                              {solPrice && <div className="text-muted text-[10px]">{usd(bet.payout)}</div>}
+                            </>
+                          ) : isLoss ? (
+                            <span className="text-muted">—</span>
+                          ) : (
+                            <>
+                              <span className="text-white">{estPayout.toFixed(3)} SOL</span>
+                              {solPrice && <div className="text-muted text-[10px]">{usd(estPayout)}</div>}
+                            </>
                           )}
                         </td>
                         <td className="px-3 py-3 text-center">
-                          <span className={`text-xs font-medium ${color}`}>{label}</span>
+                          <span className={`text-xs font-semibold ${color}`}>{label}</span>
                         </td>
                         <td className="px-4 py-3 text-right text-muted text-xs">
                           {new Date(bet.createdAt).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit'})}

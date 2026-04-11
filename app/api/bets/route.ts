@@ -3,6 +3,8 @@ import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { prisma } from "@/lib/prisma";
 import { ROUNDS_DATA } from "@/lib/rounds-data";
 
+export const dynamic = "force-dynamic";
+
 const PLATFORM_WALLET = "GsvhgEARAKjYX2oFRzgKpWU7XufuGPtVeN58M983prtb";
 const RPC = "https://api.devnet.solana.com";
 
