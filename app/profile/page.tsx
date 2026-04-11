@@ -84,13 +84,19 @@ export default function ProfilePage() {
   const [refStats, setRefStats] = useState<ReferralStats | null>(null);
   const [copied, setCopied] = useState(false);
   const [avatar, setAvatar] = useState("");
+  const [username, setUsername] = useState("");
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [usernameInput, setUsernameInput] = useState("");
 
   useEffect(() => { setMounted(true); }, []);
 
-  // Load avatar from localStorage once wallet is known
+  // Load avatar + username from localStorage once wallet is known
   useEffect(() => {
     if (!publicKey) return;
     setAvatar(localStorage.getItem(`avatar_${publicKey}`) ?? "");
+    const saved = localStorage.getItem(`username_${publicKey}`) ?? "";
+    setUsername(saved);
+    setUsernameInput(saved);
   }, [publicKey]);
 
   function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -112,8 +118,18 @@ export default function ProfilePage() {
       img.src = ev.target?.result as string;
     };
     reader.readAsDataURL(file);
-    // reset so the same file can be re-uploaded
     e.target.value = "";
+  }
+
+  function saveUsername() {
+    if (!publicKey) return;
+    const clean = usernameInput.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 20);
+    setUsernameInput(clean);
+    localStorage.setItem(`username_${publicKey}`, clean);
+    setUsername(clean);
+    setEditingUsername(false);
+    // Notify Navbar to update
+    window.dispatchEvent(new Event("usernameChanged"));
   }
 
   const fetchBets = useCallback(() => {
@@ -184,51 +200,82 @@ export default function ProfilePage() {
 
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-white font-bold text-2xl">Profile</h1>
-            <p className="text-muted text-sm mt-0.5 font-mono">{publicKey}</p>
-          </div>
+          <h1 className="text-white font-bold text-2xl">Profile</h1>
           <Link href="/" className="text-muted text-sm hover:text-white transition-colors">← Markets</Link>
         </div>
 
         {/* Wallet card */}
-        <div className="bg-surface border border-surface-3 rounded-xl p-4 mb-6 flex flex-wrap items-center gap-6">
+        <div className="bg-surface border border-surface-3 rounded-xl p-5 mb-6">
+          <div className="flex flex-wrap items-center gap-5">
 
-          {/* Avatar */}
-          <label className="relative cursor-pointer shrink-0 group">
-            <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
-            <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-surface-3 group-hover:border-brand transition-colors">
-              {avatar ? (
-                <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
+            {/* Avatar */}
+            <label className="relative cursor-pointer shrink-0 group">
+              <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+              <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-surface-3 group-hover:border-brand transition-colors">
+                {avatar ? (
+                  <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-brand/20 flex items-center justify-center text-brand font-bold text-xl select-none">
+                    {publicKey.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="text-white text-[10px] font-semibold">Edit</span>
+              </div>
+            </label>
+
+            {/* Username + wallet address */}
+            <div className="flex-1 min-w-0">
+              {editingUsername ? (
+                <div className="flex items-center gap-2 mb-1">
+                  <input
+                    autoFocus
+                    value={usernameInput}
+                    onChange={e => setUsernameInput(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 20))}
+                    onKeyDown={e => { if (e.key === "Enter") saveUsername(); if (e.key === "Escape") setEditingUsername(false); }}
+                    placeholder="username"
+                    className="bg-surface-2 border border-surface-3 focus:border-brand outline-none rounded-lg px-3 py-1.5 text-white text-lg font-bold w-48 transition-colors"
+                  />
+                  <button onClick={saveUsername} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand hover:bg-brand-dim text-black transition-colors">Save</button>
+                  <button onClick={() => setEditingUsername(false)} className="px-3 py-1.5 rounded-lg text-xs text-muted hover:text-white transition-colors">Cancel</button>
+                </div>
               ) : (
-                <div className="w-full h-full bg-brand/20 flex items-center justify-center text-brand font-bold text-xl select-none">
-                  {publicKey.slice(0, 2).toUpperCase()}
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-white font-bold text-xl truncate">
+                    {username || <span className="text-muted font-normal text-base">Set username</span>}
+                  </span>
+                  <button
+                    onClick={() => setEditingUsername(true)}
+                    className="text-muted hover:text-white transition-colors shrink-0"
+                    title="Edit username"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                    </svg>
+                  </button>
                 </div>
               )}
+              <p className="text-muted text-xs font-mono truncate">{publicKey}</p>
             </div>
-            <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <span className="text-white text-[10px] font-semibold">Edit</span>
-            </div>
-          </label>
 
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-muted mb-1">Wallet</p>
-            <p className="text-white font-mono text-sm">
-              {publicKey.slice(0, 8)}...{publicKey.slice(-8)}
-            </p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-muted mb-1">Balance</p>
-            <p className="text-brand font-mono font-semibold">
-              {balance !== null ? `${balance.toFixed(4)} SOL` : "—"}
-              {balance !== null && solPrice && (
-                <span className="text-muted font-normal ml-2 text-xs">{usd(balance)}</span>
-              )}
-            </p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-muted mb-1">Network</p>
-            <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">devnet</span>
+            {/* Balance + network */}
+            <div className="flex flex-wrap gap-4 shrink-0">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-muted mb-1">Balance</p>
+                <p className="text-brand font-mono font-semibold">
+                  {balance !== null ? `${balance.toFixed(4)} SOL` : "—"}
+                  {balance !== null && solPrice && (
+                    <span className="text-muted font-normal ml-2 text-xs">{usd(balance)}</span>
+                  )}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-muted mb-1">Network</p>
+                <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">devnet</span>
+              </div>
+            </div>
+
           </div>
         </div>
 

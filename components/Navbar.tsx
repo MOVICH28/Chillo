@@ -15,10 +15,23 @@ export default function Navbar({ rounds }: NavbarProps) {
   const { publicKey, disconnect, connected, connect } = useWallet();
   const balance = useSolBalance(connected ? publicKey : null);
   const [avatar, setAvatar] = useState("");
+  const [username, setUsername] = useState("");
 
   useEffect(() => {
-    if (!publicKey) { setAvatar(""); return; }
+    if (!publicKey) { setAvatar(""); setUsername(""); return; }
     setAvatar(localStorage.getItem(`avatar_${publicKey}`) ?? "");
+    setUsername(localStorage.getItem(`username_${publicKey}`) ?? "");
+  }, [publicKey]);
+
+  // Re-read when username is saved on the profile page
+  useEffect(() => {
+    function onUsernameChanged() {
+      if (!publicKey) return;
+      setAvatar(localStorage.getItem(`avatar_${publicKey}`) ?? "");
+      setUsername(localStorage.getItem(`username_${publicKey}`) ?? "");
+    }
+    window.addEventListener("usernameChanged", onUsernameChanged);
+    return () => window.removeEventListener("usernameChanged", onUsernameChanged);
   }, [publicKey]);
 
   const totalPool = rounds.reduce((sum, r) => sum + r.totalPool, 0);
@@ -74,8 +87,8 @@ export default function Navbar({ rounds }: NavbarProps) {
               </div>
             )}
           </div>
-          <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted font-mono">
-            <span>{shortKey}</span>
+          <div className="hidden sm:flex items-center gap-1.5 text-xs font-mono">
+            <span className={username ? "text-white font-semibold" : "text-muted"}>{username || shortKey}</span>
             {balance !== null && (
               <>
                 <span className="text-surface-3">|</span>
