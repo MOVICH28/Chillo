@@ -39,32 +39,21 @@ function resultLabel(bet: BetWithRound): { label: string; color: string } {
 
 const BASE_URL = "https://chillo-f11o.vercel.app";
 
-// ── Chart helpers ─────────────────────────────────────────────────────────────
+// ── Shared tooltip types ──────────────────────────────────────────────────────
 
-const TOOLTIP_STYLE: React.CSSProperties = {
-  position: "fixed",
-  background: "#0f0f1a",
-  border: "1px solid rgba(255,255,255,0.1)",
-  borderRadius: 8,
-  padding: "8px 10px",
-  fontSize: 11,
-  color: "#e5e7eb",
-  pointerEvents: "none",
-  whiteSpace: "nowrap",
-  zIndex: 9999,
-  boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
-  transform: "translate(12px, -100%)",
-};
+type ShowTooltip = (e: React.MouseEvent, content: string) => void;
+type HideTooltip = () => void;
 
+// ── Chart components ──────────────────────────────────────────────────────────
 
 function DonutChart({
-  wins, losses, pending, bets, solPrice,
+  wins, losses, pending, bets, solPrice, showTooltip, hideTooltip,
 }: {
   wins: number; losses: number; pending: number;
   bets: BetWithRound[]; solPrice: number | null;
+  showTooltip: ShowTooltip; hideTooltip: HideTooltip;
 }) {
   const total = wins + losses + pending;
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   if (total === 0) return <p className="text-xs text-muted text-center py-4">No bets yet</p>;
@@ -77,174 +66,102 @@ function DonutChart({
 
   const segments = [
     {
-      count: wins, color: "#22c55e", label: "Wins",
-      content: (
-        <div>
-          <div style={{ color: "#22c55e", fontWeight: 700 }}>Wins: {wins} bets</div>
-          <div>+{winSOL.toFixed(3)} SOL</div>
-          {solPrice && <div style={{ color: "#6b7280" }}>${(winSOL * solPrice).toFixed(2)}</div>}
-        </div>
-      ),
+      count: wins,    color: "#22c55e",
+      tip: `Wins: ${wins} bets\n+${winSOL.toFixed(3)} SOL${solPrice ? `  ($${(winSOL * solPrice).toFixed(2)})` : ""}`,
     },
     {
-      count: losses, color: "#ef4444", label: "Losses",
-      content: (
-        <div>
-          <div style={{ color: "#ef4444", fontWeight: 700 }}>Losses: {losses} bets</div>
-          <div>-{lossSOL.toFixed(3)} SOL</div>
-          {solPrice && <div style={{ color: "#6b7280" }}>-${(lossSOL * solPrice).toFixed(2)}</div>}
-        </div>
-      ),
+      count: losses,  color: "#ef4444",
+      tip: `Losses: ${losses} bets\n-${lossSOL.toFixed(3)} SOL${solPrice ? `  (-$${(lossSOL * solPrice).toFixed(2)})` : ""}`,
     },
     {
-      count: pending, color: "#374151", label: "Pending",
-      content: (
-        <div>
-          <div style={{ color: "#9ca3af", fontWeight: 700 }}>Pending: {pending} bets</div>
-          <div style={{ color: "#6b7280" }}>Awaiting resolution</div>
-        </div>
-      ),
+      count: pending, color: "#6b7280",
+      tip: `Pending: ${pending} bets\nAwaiting resolution`,
     },
   ].filter(s => s.count > 0);
 
   let startAngle = -90;
   const winPct = Math.round((wins / total) * 100);
 
-  function arcPath(startDeg: number, endDeg: number) {
-    const pct = (endDeg - startDeg) / 360;
-    return { dash: pct * circ, gap: circ, rotate: startDeg };
-  }
-
-  function handleSegmentEnter(e: React.MouseEvent<SVGCircleElement>, idx: number) {
-    setHoveredIdx(idx);
-    setTooltip({ x: e.clientX, y: e.clientY, content: segments[idx].content });
-  }
-
-  function handleMouseMove(e: React.MouseEvent<SVGCircleElement>) {
-    setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
-  }
-
-  function handleSegmentLeave() {
-    setHoveredIdx(null);
-    setTooltip(null);
-  }
-
   return (
-    <div className="flex flex-col items-center gap-2 relative">
-      <div className="relative">
-        <svg viewBox="0 0 120 120" className="w-28 h-28 shrink-0" style={{ overflow: "visible" }}>
-          {segments.map((seg, i) => {
-            const pct = seg.count / total;
-            const angle = startAngle;
-            startAngle += pct * 360;
-            const { dash, gap, rotate } = arcPath(angle, angle + pct * 360);
-            const isHovered = hoveredIdx === i;
-            return (
-              <circle
-                key={i}
-                cx={cx} cy={cy} r={isHovered ? r + 3 : r}
-                fill="none"
-                stroke={seg.color}
-                strokeWidth={isHovered ? sw + 4 : sw}
-                strokeDasharray={`${dash} ${gap}`}
-                transform={`rotate(${rotate}, ${cx}, ${cy})`}
-                style={{ cursor: "pointer", transition: "r 0.15s, stroke-width 0.15s" }}
-                onMouseEnter={e => handleSegmentEnter(e, i)}
-                onMouseMove={handleMouseMove}
-                onMouseLeave={handleSegmentLeave}
-              />
-            );
-          })}
-          <text x={cx} y={cy - 4}  textAnchor="middle" fill="white"   fontSize="15" fontWeight="bold">{winPct}%</text>
-          <text x={cx} y={cy + 11} textAnchor="middle" fill="#6b7280"  fontSize="8">win rate</text>
-        </svg>
-        {tooltip && (
-          <div style={{ ...TOOLTIP_STYLE, left: tooltip.x, top: tooltip.y }}>
-            {tooltip.content}
-          </div>
-        )}
-      </div>
+    <div className="flex flex-col items-center gap-2">
+      <svg viewBox="0 0 120 120" className="w-28 h-28 shrink-0" style={{ overflow: "visible" }}>
+        {segments.map((seg, i) => {
+          const pct = seg.count / total;
+          const angle = startAngle;
+          startAngle += pct * 360;
+          const dash = pct * circ;
+          const isHovered = hoveredIdx === i;
+          return (
+            <circle
+              key={i}
+              cx={cx} cy={cy}
+              r={isHovered ? r + 3 : r}
+              fill="none"
+              stroke={seg.color}
+              strokeWidth={isHovered ? sw + 4 : sw}
+              strokeDasharray={`${dash} ${circ}`}
+              transform={`rotate(${angle}, ${cx}, ${cy})`}
+              style={{ cursor: "pointer", transition: "r 0.15s, stroke-width 0.15s" }}
+              onMouseEnter={e => { setHoveredIdx(i); showTooltip(e, seg.tip); }}
+              onMouseMove={e => showTooltip(e, seg.tip)}
+              onMouseLeave={() => { setHoveredIdx(null); hideTooltip(); }}
+            />
+          );
+        })}
+        <text x={cx} y={cy - 4}  textAnchor="middle" fill="white"  fontSize="15" fontWeight="bold">{winPct}%</text>
+        <text x={cx} y={cy + 11} textAnchor="middle" fill="#6b7280" fontSize="8">win rate</text>
+      </svg>
       <div className="flex gap-3 text-[10px] text-muted">
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: "#22c55e" }} />{wins}W</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: "#ef4444" }} />{losses}L</span>
-        {pending > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: "#374151" }} />{pending}P</span>}
+        {pending > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: "#6b7280" }} />{pending}P</span>}
       </div>
     </div>
   );
 }
 
-function BetBars({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | null }) {
+function BetBars({
+  bets, solPrice, showTooltip, hideTooltip,
+}: {
+  bets: BetWithRound[]; solPrice: number | null;
+  showTooltip: ShowTooltip; hideTooltip: HideTooltip;
+}) {
   if (bets.length === 0) return <p className="text-xs text-muted text-center py-4">No data</p>;
 
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   const bars = bets.map(b => {
-    if (b.result === null) return { value: 0, color: "#374151", bet: b };
-    if (b.result === b.side)  return { value: (b.payout ?? 0) - b.amount, color: "#22c55e", bet: b };
-    return { value: -b.amount, color: "#ef4444", bet: b };
+    if (b.result === null)       return { value: 0,                        color: "#374151", bet: b };
+    if (b.result === b.side)     return { value: (b.payout ?? 0) - b.amount, color: "#22c55e", bet: b };
+    return                              { value: -b.amount,                color: "#ef4444", bet: b };
   });
 
   const maxAbs = Math.max(...bars.map(d => Math.abs(d.value)), 0.01);
   const W = 300, H = 90, pad = 8;
-  const usableW = W - pad * 2;
   const halfH = (H - pad * 2) / 2;
   const zeroY = pad + halfH;
-  const slotW = usableW / bars.length;
-  const barW = Math.max(2, slotW - 2);
+  const slotW = (W - pad * 2) / bars.length;
+  const barW  = Math.max(2, slotW - 2);
 
-  function handleBarEnter(e: React.MouseEvent<SVGRectElement>, i: number) {
-    setHoveredIdx(i);
-    const b = bars[i].bet;
+  function tipFor(i: number): string {
+    const b    = bars[i].bet;
     const isWin  = b.result !== null && b.result === b.side;
     const isLoss = b.result !== null && b.result !== b.side;
     const profit = isWin ? (b.payout ?? 0) - b.amount : isLoss ? -b.amount : 0;
-    const question = b.round?.question ?? b.roundId;
-    const shortQ = question.length > 40 ? question.slice(0, 40) + "…" : question;
-    setTooltip({
-      x: e.clientX,
-      y: e.clientY,
-      content: (
-        <div>
-          <div style={{ color: "#9ca3af", marginBottom: 4, maxWidth: 200 }}>{shortQ}</div>
-          <div>
-            Side: <span style={{ color: b.side === "yes" ? "#22c55e" : "#ef4444", fontWeight: 700 }}>
-              {b.side.toUpperCase()}
-            </span>
-          </div>
-          <div>Amount: {b.amount.toFixed(3)} SOL{solPrice ? ` ($${(b.amount * solPrice).toFixed(2)})` : ""}</div>
-          {isWin && b.payout != null && (
-            <div style={{ color: "#22c55e" }}>Payout: +{b.payout.toFixed(3)} SOL</div>
-          )}
-          {isWin && (
-            <div style={{ color: "#22c55e", fontWeight: 700 }}>
-              Profit: +{profit.toFixed(3)} SOL{solPrice ? ` (+$${(profit * solPrice).toFixed(2)})` : ""}
-            </div>
-          )}
-          {isLoss && (
-            <div style={{ color: "#ef4444", fontWeight: 700 }}>
-              Loss: {profit.toFixed(3)} SOL{solPrice ? ` (-$${Math.abs(profit * (solPrice ?? 0)).toFixed(2)})` : ""}
-            </div>
-          )}
-          {!isWin && !isLoss && (
-            <div style={{ color: "#9ca3af" }}>Pending resolution</div>
-          )}
-        </div>
-      ),
-    });
-  }
-
-  function handleBarMove(e: React.MouseEvent<SVGRectElement>) {
-    setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
-  }
-
-  function handleBarLeave() {
-    setHoveredIdx(null);
-    setTooltip(null);
+    const q = (b.round?.question ?? b.roundId);
+    const shortQ = q.length > 44 ? q.slice(0, 44) + "…" : q;
+    const lines = [
+      shortQ,
+      `Side: ${b.side.toUpperCase()}   Amount: ${b.amount.toFixed(3)} SOL${solPrice ? ` ($${(b.amount * solPrice).toFixed(2)})` : ""}`,
+    ];
+    if (isWin)  lines.push(`WIN  Profit: +${profit.toFixed(3)} SOL${solPrice ? ` (+$${(profit * solPrice).toFixed(2)})` : ""}`);
+    if (isLoss) lines.push(`LOSS  -${Math.abs(profit).toFixed(3)} SOL${solPrice ? ` (-$${Math.abs(profit * (solPrice ?? 0)).toFixed(2)})` : ""}`);
+    if (!isWin && !isLoss) lines.push("Pending resolution");
+    return lines.join("\n");
   }
 
   return (
-    <div className="relative">
+    <div>
       <p className="text-[10px] text-muted mb-1">Profit / Loss per bet</p>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
         <line x1={pad} y1={zeroY} x2={W - pad} y2={zeroY} stroke="#374151" strokeWidth={1} />
@@ -252,106 +169,71 @@ function BetBars({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | 
           const bh = (Math.abs(b.value) / maxAbs) * halfH;
           const x  = pad + i * slotW + (slotW - barW) / 2;
           const y  = b.value >= 0 ? zeroY - bh : zeroY;
-          const isHovered = hoveredIdx === i;
           return (
             <rect
               key={i} x={x} y={y} width={barW} height={Math.max(bh, 2)}
-              fill={b.color} opacity={isHovered ? 1 : 0.75} rx={1}
+              fill={b.color} opacity={hoveredIdx === i ? 1 : 0.75} rx={1}
               style={{ cursor: "pointer" }}
-              onMouseEnter={e => handleBarEnter(e, i)}
-              onMouseMove={handleBarMove}
-              onMouseLeave={handleBarLeave}
+              onMouseEnter={e => { setHoveredIdx(i); showTooltip(e, tipFor(i)); }}
+              onMouseMove={e  => showTooltip(e, tipFor(i))}
+              onMouseLeave={() => { setHoveredIdx(null); hideTooltip(); }}
             />
           );
         })}
       </svg>
-      {tooltip && (
-        <div style={{ ...TOOLTIP_STYLE, left: tooltip.x, top: tooltip.y }}>
-          {tooltip.content}
-        </div>
-      )}
     </div>
   );
 }
 
-function PnLLine({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | null }) {
+function PnLLine({
+  bets, solPrice, showTooltip, hideTooltip,
+}: {
+  bets: BetWithRound[]; solPrice: number | null;
+  showTooltip: ShowTooltip; hideTooltip: HideTooltip;
+}) {
   if (bets.length === 0) return null;
 
   const [hovered, setHovered] = useState<number | null>(null);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
 
   let cum = 0;
-  // points[0] = 0 (start), points[i+1] = cumulative after bets[i]
   const points = [0, ...bets.map(b => {
-    if (b.result !== null) {
+    if (b.result !== null)
       cum += b.result === b.side ? (b.payout ?? 0) - b.amount : -b.amount;
-    }
     return cum;
   })];
 
   const W = 300, H = 80, pad = 10;
-  const minV = Math.min(...points);
-  const maxV = Math.max(...points);
+  const minV  = Math.min(...points);
+  const maxV  = Math.max(...points);
   const range = Math.max(maxV - minV, 0.001);
-  const toX = (i: number) => pad + (i / (points.length - 1)) * (W - pad * 2);
-  const toY = (v: number) => pad + ((maxV - v) / range) * (H - pad * 2);
+  const toX   = (i: number) => pad + (i / (points.length - 1)) * (W - pad * 2);
+  const toY   = (v: number) => pad + ((maxV - v) / range) * (H - pad * 2);
 
-  const pathD   = points.map((p, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)},${toY(p).toFixed(1)}`).join(" ");
+  const pathD    = points.map((p, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)},${toY(p).toFixed(1)}`).join(" ");
   const finalPnL = points[points.length - 1];
-  const color   = finalPnL >= 0 ? "#22c55e" : "#ef4444";
-  const zeroY   = toY(0);
+  const color    = finalPnL >= 0 ? "#22c55e" : "#ef4444";
+  const zeroY    = toY(0);
+  const fillD    = `${pathD} L${toX(points.length - 1).toFixed(1)},${zeroY.toFixed(1)} L${toX(0).toFixed(1)},${zeroY.toFixed(1)} Z`;
+  const hitW     = (W - pad * 2) / Math.max(points.length - 1, 1);
 
-  const fillD = `${pathD} L${toX(points.length - 1).toFixed(1)},${zeroY.toFixed(1)} L${toX(0).toFixed(1)},${zeroY.toFixed(1)} Z`;
-
-  // Hit-area per data point: invisible wide rect column
-  const hitW = (W - pad * 2) / Math.max(points.length - 1, 1);
-
-  function handlePointEnter(e: React.MouseEvent, idx: number) {
-    setHovered(idx);
-    const pnl = points[idx];
-    // idx 0 = start (no bet), idx 1..n = after bets[idx-1]
-    const bet = idx > 0 ? bets[idx - 1] : null;
-    const date = bet ? new Date(bet.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "Start";
-    setTooltip({
-      x: e.clientX,
-      y: e.clientY,
-      content: (
-        <div>
-          <div style={{ color: "#6b7280", marginBottom: 3 }}>{date}</div>
-          {bet && (
-            <>
-              <div>
-                {bet.result === bet.side && bet.result !== null
-                  ? <span style={{ color: "#22c55e" }}>WIN</span>
-                  : bet.result !== null
-                    ? <span style={{ color: "#ef4444" }}>LOSS</span>
-                    : <span style={{ color: "#9ca3af" }}>Pending</span>}
-                {" "}
-                <span style={{ color: "#9ca3af" }}>{bet.side.toUpperCase()}</span>
-              </div>
-              <div>Bet: {bet.amount.toFixed(3)} SOL</div>
-            </>
-          )}
-          <div style={{ fontWeight: 700, color: pnl >= 0 ? "#22c55e" : "#ef4444", marginTop: 2 }}>
-            Running total: {pnl >= 0 ? "+" : ""}{pnl.toFixed(3)} SOL
-            {solPrice ? ` (${ pnl >= 0 ? "+" : ""}${(pnl * solPrice).toFixed(2)})` : ""}
-          </div>
-        </div>
-      ),
-    });
-  }
-
-  function handlePointMove(e: React.MouseEvent) {
-    setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
-  }
-
-  function handlePointLeave() {
-    setHovered(null);
-    setTooltip(null);
+  function tipFor(idx: number): string {
+    const pnl  = points[idx];
+    const bet  = idx > 0 ? bets[idx - 1] : null;
+    const date = bet
+      ? new Date(bet.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+      : "Start";
+    const lines = [date];
+    if (bet) {
+      const result = bet.result === bet.side && bet.result !== null ? "WIN"
+        : bet.result !== null ? "LOSS" : "Pending";
+      lines.push(`${result}  ${bet.side.toUpperCase()}  ${bet.amount.toFixed(3)} SOL`);
+    }
+    lines.push(`Total: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(3)} SOL${solPrice ? `  (${pnl >= 0 ? "+" : ""}$${(pnl * solPrice).toFixed(2)})` : ""}`);
+    return lines.join("\n");
   }
 
   return (
-    <div className="relative">
+    <div>
       <p className="text-[10px] text-muted mb-1">Cumulative P&amp;L</p>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ overflow: "visible" }}>
         {zeroY >= pad && zeroY <= H - pad && (
@@ -360,39 +242,30 @@ function PnLLine({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | 
         <path d={fillD} fill={color} opacity={0.12} />
         <path d={pathD} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
 
-        {/* Crosshair + highlighted point */}
-        {hovered !== null && (() => {
-          const hx = toX(hovered);
-          const hy = toY(points[hovered]);
-          return (
-            <>
-              <line x1={hx} y1={pad} x2={hx} y2={H - pad} stroke="rgba(255,255,255,0.15)" strokeWidth={1} strokeDasharray="3 3" />
-              <circle cx={hx} cy={hy} r={5} fill={color} stroke="#0f0f1a" strokeWidth={2} />
-            </>
-          );
-        })()}
-
-        {/* Invisible hit areas for each point */}
-        {points.map((_, idx) => {
-          const hx = toX(idx);
-          return (
-            <rect
-              key={idx}
-              x={hx - hitW / 2} y={pad}
-              width={hitW} height={H - pad * 2}
-              fill="transparent"
-              style={{ cursor: "crosshair" }}
-              onMouseEnter={e => handlePointEnter(e, idx)}
-              onMouseMove={handlePointMove}
-              onMouseLeave={handlePointLeave}
-            />
-          );
-        })}
-
-        {/* Always-visible endpoint dot */}
+        {hovered !== null && (
+          <>
+            <line x1={toX(hovered)} y1={pad} x2={toX(hovered)} y2={H - pad}
+              stroke="rgba(255,255,255,0.2)" strokeWidth={1} strokeDasharray="3 3" />
+            <circle cx={toX(hovered)} cy={toY(points[hovered])} r={5}
+              fill={color} stroke="#0f0f1a" strokeWidth={2} />
+          </>
+        )}
         {hovered === null && (
           <circle cx={toX(points.length - 1)} cy={toY(finalPnL)} r={3} fill={color} />
         )}
+
+        {points.map((_, idx) => (
+          <rect
+            key={idx}
+            x={toX(idx) - hitW / 2} y={pad}
+            width={hitW} height={H - pad * 2}
+            fill="transparent"
+            style={{ cursor: "crosshair" }}
+            onMouseEnter={e => { setHovered(idx); showTooltip(e, tipFor(idx)); }}
+            onMouseMove={e  => showTooltip(e, tipFor(idx))}
+            onMouseLeave={() => { setHovered(null); hideTooltip(); }}
+          />
+        ))}
       </svg>
       <p className="text-[10px] text-right mt-0.5">
         <span className={finalPnL >= 0 ? "text-yes font-mono" : "text-no font-mono"}>
@@ -400,11 +273,6 @@ function PnLLine({ bets, solPrice }: { bets: BetWithRound[]; solPrice: number | 
           {solPrice ? ` ($${(finalPnL * solPrice).toFixed(2)})` : ""}
         </span>
       </p>
-      {tooltip && (
-        <div style={{ ...TOOLTIP_STYLE, left: tooltip.x, top: tooltip.y }}>
-          {tooltip.content}
-        </div>
-      )}
     </div>
   );
 }
@@ -420,6 +288,12 @@ export default function ProfilePage() {
   const [betsLoading, setBetsLoading] = useState(false);
   const [refStats, setRefStats] = useState<ReferralStats | null>(null);
   const [copied, setCopied] = useState(false);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string } | null>(null);
+
+  const showTooltip = (e: React.MouseEvent, content: string) => {
+    setTooltip({ x: e.clientX + 12, y: e.clientY - 10, content });
+  };
+  const hideTooltip = () => setTooltip(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -547,9 +421,11 @@ export default function ProfilePage() {
                 pending={bets.length - resolvedBets.length}
                 bets={bets}
                 solPrice={solPrice}
+                showTooltip={showTooltip}
+                hideTooltip={hideTooltip}
               />
-              <BetBars bets={bets} solPrice={solPrice} />
-              <PnLLine bets={bets} solPrice={solPrice} />
+              <BetBars bets={bets} solPrice={solPrice} showTooltip={showTooltip} hideTooltip={hideTooltip} />
+              <PnLLine bets={bets} solPrice={solPrice} showTooltip={showTooltip} hideTooltip={hideTooltip} />
             </div>
           </div>
         )}
@@ -711,6 +587,27 @@ export default function ProfilePage() {
         </div>
 
       </div>
+
+      {tooltip && (
+        <div style={{
+          position: "fixed",
+          left: tooltip.x,
+          top: tooltip.y,
+          background: "#1a1a2e",
+          border: "1px solid #444",
+          borderRadius: 8,
+          padding: "8px 12px",
+          color: "#fff",
+          fontSize: 13,
+          zIndex: 9999,
+          pointerEvents: "none",
+          whiteSpace: "pre-line",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
+          maxWidth: 260,
+        }}>
+          {tooltip.content}
+        </div>
+      )}
     </div>
   );
 }
