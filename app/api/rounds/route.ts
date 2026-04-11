@@ -9,8 +9,8 @@ function computeOdds(yesPool: number, noPool: number, totalPool: number) {
     return { yesOdds: 2.0, noOdds: 2.0, yesPct: 50, noPct: 50 };
   }
   return {
-    yesOdds: parseFloat((totalPool / Math.max(yesPool, 0.001)).toFixed(2)),
-    noOdds: parseFloat((totalPool / Math.max(noPool, 0.001)).toFixed(2)),
+    yesOdds: parseFloat(Math.max(1.05, totalPool / Math.max(yesPool, 0.001)).toFixed(2)),
+    noOdds: parseFloat(Math.max(1.05, totalPool / Math.max(noPool, 0.001)).toFixed(2)),
     yesPct: parseFloat(((yesPool / totalPool) * 100).toFixed(1)),
     noPct: parseFloat(((noPool / totalPool) * 100).toFixed(1)),
   };

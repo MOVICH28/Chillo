@@ -4,8 +4,8 @@ function computeOdds(yesPool: number, noPool: number, totalPool: number) {
   if (totalPool === 0 || yesPool === 0 || noPool === 0) {
     return { yesOdds: 2.0, noOdds: 2.0, yesPct: 50, noPct: 50 };
   }
-  const yesOdds = parseFloat((totalPool / yesPool).toFixed(2));
-  const noOdds = parseFloat((totalPool / noPool).toFixed(2));
+  const yesOdds = parseFloat(Math.max(1.05, totalPool / yesPool).toFixed(2));
+  const noOdds = parseFloat(Math.max(1.05, totalPool / noPool).toFixed(2));
   const yesPct = parseFloat(((yesPool / totalPool) * 100).toFixed(1));
   const noPct = parseFloat(((noPool / totalPool) * 100).toFixed(1));
   return { yesOdds, noOdds, yesPct, noPct };

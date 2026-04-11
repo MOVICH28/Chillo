@@ -113,13 +113,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Upsert RoundPool atomically, then compute odds from live totals
+    // Seed with static base pools so odds start realistically (not from zero)
+    const baseYes = round.yesPool ?? 0;
+    const baseNo  = round.noPool  ?? 0;
     const pool = await prisma.roundPool.upsert({
       where: { roundId },
       create: {
         roundId,
-        yesPool: side === "yes" ? amount : 0,
-        noPool: side === "no" ? amount : 0,
-        totalPool: amount,
+        yesPool:   (side === "yes" ? amount : 0) + baseYes,
+        noPool:    (side === "no"  ? amount : 0) + baseNo,
+        totalPool: amount + baseYes + baseNo,
       },
       update:
         side === "yes"
