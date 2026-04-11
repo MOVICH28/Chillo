@@ -7,15 +7,20 @@ datasource db {
 }
 
 model Round {
-  id        String   @id @default(cuid())
-  question  String
-  category  String
-  yesPool   Float    @default(0)
-  noPool    Float    @default(0)
-  totalPool Float    @default(0)
-  status    String   @default("open") // open | closed | resolved
-  endsAt    DateTime
-  createdAt DateTime @default(now())
+  id          String    @id @default(cuid())
+  question    String
+  category    String
+  yesPool     Float     @default(0)
+  noPool      Float     @default(0)
+  totalPool   Float     @default(0)
+  status      String    @default("open") // open | closed | resolved
+  endsAt      DateTime
+  createdAt   DateTime  @default(now())
+  targetPrice Float?
+  targetToken String?   // "bitcoin" | "solana"
+  tokenList   String?   // JSON array of pump.fun token addresses
+  resolvedAt  DateTime?
+  winner      String?   // "yes" | "no"
 }
 
 model Bet {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRound } from "@/lib/resolve";
-import { ROUNDS_DATA } from "@/lib/rounds-data";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   let roundId: string;
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "winner must be 'yes' or 'no'" }, { status: 400 });
   }
 
-  const round = ROUNDS_DATA.find((r) => r.id === roundId);
+  const round = await prisma.round.findUnique({ where: { id: roundId } });
   if (!round) {
     return NextResponse.json({ error: "Round not found" }, { status: 404 });
   }

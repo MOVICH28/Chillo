@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { prisma } from "@/lib/prisma";
-import { ROUNDS_DATA } from "@/lib/rounds-data";
 
 export const dynamic = "force-dynamic";
 
@@ -16,9 +15,13 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
       take: wallet ? undefined : 10, // live feed: last 10 across all wallets
     });
+    const roundIds = Array.from(new Set(bets.map((b) => b.roundId)));
+    const rounds = await prisma.round.findMany({ where: { id: { in: roundIds } } });
+    const roundMap = new Map(rounds.map((r) => [r.id, r]));
+
     return NextResponse.json(
       bets.map((b) => {
-        const round = ROUNDS_DATA.find((r) => r.id === b.roundId);
+        const round = roundMap.get(b.roundId);
         return {
           ...b,
           createdAt: b.createdAt.toISOString(),
@@ -87,15 +90,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "amount must be a positive number" }, { status: 400 });
     }
 
-    // Find round from static data BEFORE any on-chain work
-    const round = ROUNDS_DATA.find((r) => r.id === roundId);
+    // Find round from DB BEFORE any on-chain work
+    const round = await prisma.round.findUnique({ where: { id: roundId } });
     if (!round) {
       return NextResponse.json({ error: "Round not found" }, { status: 404 });
     }
     if (round.status !== "open") {
       return NextResponse.json({ error: "Round is not open for betting" }, { status: 400 });
     }
-    if (new Date() > new Date(round.endsAt)) {
+    if (new Date() > round.endsAt) {
       return NextResponse.json({ error: "Round has ended" }, { status: 400 });
     }
 

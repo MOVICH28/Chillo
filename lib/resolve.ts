@@ -129,6 +129,16 @@ export async function resolveRound(
   const succeeded = results.filter((r) => r.txHash).length;
   const failed = results.filter((r) => !r.txHash).length;
 
+  // Mark round as resolved in DB (best-effort — round may be a legacy static round)
+  try {
+    await prisma.round.update({
+      where: { id: roundId },
+      data: { status: "resolved", winner, resolvedAt: new Date() },
+    });
+  } catch {
+    // Round not in DB (legacy static round) — safe to ignore
+  }
+
   return {
     roundId,
     winner,

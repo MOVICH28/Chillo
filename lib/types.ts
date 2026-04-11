@@ -11,6 +11,12 @@ export interface Round {
   status: RoundStatus;
   endsAt: string;
   createdAt: string;
+  // Dynamic round fields
+  targetPrice?: number | null;
+  targetToken?: string | null;
+  tokenList?: string | null;
+  resolvedAt?: string | null;
+  winner?: string | null;
   // Computed by API
   yesOdds?: number;
   noOdds?: number;
