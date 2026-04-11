@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySignatureAppRouter } from "@upstash/qstash/nextjs";
 import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
 import { resolveRound } from "@/lib/resolve";
 import { createDailyRounds } from "@/lib/create-rounds";
 
@@ -145,13 +147,17 @@ export async function GET(req: NextRequest) {
     return runCron();
   }
 
-  // Lazy-init: only built when a non-Bearer request actually arrives.
+  // Guard: if QStash keys are absent, reject rather than letting the
+  // Receiver constructor throw (which would crash during Next.js build).
+  const currentSigningKey = process.env.QSTASH_CURRENT_SIGNING_KEY;
+  const nextSigningKey    = process.env.QSTASH_NEXT_SIGNING_KEY;
+  if (!currentSigningKey || !nextSigningKey) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const qstashHandler = verifySignatureAppRouter(
     () => runCron(),
-    {
-      currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
-      nextSigningKey:    process.env.QSTASH_NEXT_SIGNING_KEY,
-    },
+    { currentSigningKey, nextSigningKey },
   );
   return qstashHandler(req);
 }
