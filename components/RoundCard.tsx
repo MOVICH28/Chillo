@@ -57,7 +57,7 @@ function fmt(n: number): string {
 function LiveDot() {
   return (
     <span className="inline-flex items-center gap-1 text-[9px] font-bold tracking-widest text-brand uppercase">
-      <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
+      <span className="w-2 h-2 rounded-full bg-[#22c55e] pulse-dot" />
       LIVE
     </span>
   );
@@ -372,7 +372,7 @@ export default function RoundCard({ round, onBet, liveData }: RoundCardProps) {
             {CATEGORY_LABELS[round.category] ?? round.category}
           </span>
           <div className="flex items-center gap-1 text-xs text-muted shrink-0">
-            <span className={`w-1.5 h-1.5 rounded-full ${isEnded ? "bg-no" : "bg-brand animate-pulse-slow"}`} />
+            <span className={`w-2 h-2 rounded-full ${isEnded ? "bg-no" : "bg-[#22c55e] pulse-dot"}`} />
             {timeLeft}
           </div>
         </div>

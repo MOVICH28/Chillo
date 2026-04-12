@@ -55,7 +55,7 @@ export default function Navbar({ rounds }: NavbarProps) {
 
       {/* Live indicator */}
       <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-3 text-xs text-muted">
-        <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse-slow" />
+        <span className="w-2 h-2 rounded-full bg-[#22c55e] pulse-dot" />
         LIVE
       </div>
 
