@@ -52,9 +52,22 @@ export interface RefundOutcome {
   refunds: RefundResult[];
 }
 
+export interface NoBetsResult {
+  type: "no_bets";
+  roundId: string;
+  winner: string;
+  totalPool: number;
+  platformFee: number;
+  payoutPool: number;
+  succeeded: number;
+  failed: number;
+  payouts: PayoutResult[];
+}
+
 export type ResolveOutcome =
   | ResolveResult
   | RefundOutcome
+  | NoBetsResult
   | { message: string; payouts: PayoutResult[] };
 
 export function loadPlatformKeypair(): Keypair {
@@ -75,7 +88,23 @@ export async function resolveRound(
   const allBets = await prisma.bet.findMany({ where: { roundId, paid: false } });
 
   if (allBets.length === 0) {
-    return { message: "No unpaid bets for this round", payouts: [] };
+    try {
+      await prisma.round.update({
+        where: { id: roundId },
+        data: { status: "resolved", winner, resolvedAt: new Date() },
+      });
+    } catch { /* legacy static round */ }
+    return {
+      type: "no_bets",
+      roundId,
+      winner,
+      totalPool: 0,
+      platformFee: 0,
+      payoutPool: 0,
+      succeeded: 0,
+      failed: 0,
+      payouts: [],
+    };
   }
 
   const winningBets = allBets.filter((b) => b.side === winner);
@@ -149,6 +178,12 @@ export async function resolveRound(
   }
 
   if (winningBets.length === 0) {
+    try {
+      await prisma.round.update({
+        where: { id: roundId },
+        data: { status: "resolved", winner, resolvedAt: new Date() },
+      });
+    } catch { /* legacy static round */ }
     return { message: "No winning bets — losing bets marked resolved", payouts: [] };
   }
 
