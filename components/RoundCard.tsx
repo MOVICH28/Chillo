@@ -259,6 +259,63 @@ export default function RoundCard({ round, onBet, liveData }: RoundCardProps) {
     );
   }
 
+  // ── Resolved card ─────────────────────────────────────────────────────────
+  if (round.status === "resolved") {
+    const wonYes = round.winner === "yes";
+    return (
+      <div className="bg-surface rounded-xl border border-surface-3 overflow-hidden flex flex-col opacity-80 hover:opacity-100 transition-opacity">
+        <div className="p-4">
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <span
+              className={`inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border ${
+                CATEGORY_STYLES[round.category] ?? "bg-surface-3 text-muted border-transparent"
+              }`}
+            >
+              {CATEGORY_LABELS[round.category] ?? round.category}
+            </span>
+            {/* Winner badge */}
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                wonYes
+                  ? "bg-yes/15 text-yes border-yes/30"
+                  : "bg-no/15 text-no border-no/30"
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${wonYes ? "bg-yes" : "bg-no"}`} />
+              {wonYes ? "YES WON" : "NO WON"}
+            </span>
+          </div>
+
+          <p className="text-white/80 text-sm font-medium leading-snug mb-3">
+            {round.question}
+          </p>
+
+          <div className="flex items-center gap-4 text-xs text-muted">
+            <span>
+              Pool:{" "}
+              <span className="text-white font-mono">{round.totalPool.toFixed(1)} SOL</span>
+            </span>
+            <span className="text-surface-3">·</span>
+            <span>
+              YES <span className="text-white font-mono">{yesOdds.toFixed(2)}x</span>
+            </span>
+            <span className="text-surface-3">·</span>
+            <span>
+              NO <span className="text-white font-mono">{noOdds.toFixed(2)}x</span>
+            </span>
+            {round.resolvedAt && (
+              <>
+                <span className="text-surface-3">·</span>
+                <span>{new Date(round.resolvedAt).toLocaleDateString()}</span>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Open / active card ────────────────────────────────────────────────────
   return (
     <div className="bg-surface rounded-xl border border-surface-3 overflow-hidden flex flex-col hover:border-surface-2 transition-colors group">
       {/* Header */}

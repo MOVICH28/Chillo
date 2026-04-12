@@ -18,7 +18,7 @@ function computeOdds(yesPool: number, noPool: number, totalPool: number) {
 export async function GET() {
   const [rounds, pools] = await Promise.all([
     prisma.round.findMany({
-      where: { status: { in: ["open", "closed"] } },
+      where: { status: { in: ["open", "closed", "resolved"] } },
       orderBy: { createdAt: "desc" },
     }),
     prisma.roundPool.findMany(),
@@ -26,7 +26,7 @@ export async function GET() {
 
   const poolMap = new Map(pools.map((p) => [p.roundId, p]));
 
-  const result = rounds.map((round) => {
+  const mapped = rounds.map((round) => {
     const live = poolMap.get(round.id);
     const yp = live ? live.yesPool : round.yesPool;
     const np = live ? live.noPool  : round.noPool;
@@ -44,5 +44,16 @@ export async function GET() {
     };
   });
 
-  return NextResponse.json(result);
+  // Open/closed rounds first (sorted by createdAt desc already),
+  // then resolved rounds sorted by resolvedAt desc.
+  const open     = mapped.filter((r) => r.status !== "resolved");
+  const resolved = mapped
+    .filter((r) => r.status === "resolved")
+    .sort((a, b) => {
+      const ta = a.resolvedAt ? new Date(a.resolvedAt).getTime() : 0;
+      const tb = b.resolvedAt ? new Date(b.resolvedAt).getTime() : 0;
+      return tb - ta;
+    });
+
+  return NextResponse.json([...open, ...resolved]);
 }

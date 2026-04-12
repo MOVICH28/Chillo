@@ -27,6 +27,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("all");
   const [betTarget, setBetTarget] = useState<{ round: Round; side: "yes" | "no" } | null>(null);
+  const [completedOpen, setCompletedOpen] = useState(false);
   const { data: liveData } = useLiveData();
   const { publicKey, connected } = useWallet();
 
@@ -64,10 +65,14 @@ export default function Home() {
     return () => clearInterval(id);
   }, [fetchRounds]);
 
-  const filtered =
-    category === "all" ? rounds : rounds.filter((r) => r.category === category);
+  const openRounds     = rounds.filter((r) => r.status !== "resolved");
+  const resolvedRounds = rounds.filter((r) => r.status === "resolved").slice(0, 5);
 
-  const counts = rounds.reduce<Record<string, number>>((acc, r) => {
+  const filtered =
+    category === "all" ? openRounds : openRounds.filter((r) => r.category === category);
+
+  // Category counts reflect only open rounds
+  const counts = openRounds.reduce<Record<string, number>>((acc, r) => {
     acc[r.category] = (acc[r.category] ?? 0) + 1;
     acc["all"] = (acc["all"] ?? 0) + 1;
     return acc;
@@ -99,7 +104,7 @@ export default function Home() {
                 {category === "all" ? "All Markets" : category === "pumpfun" ? "pump.fun Markets" : "Crypto Markets"}
               </h1>
               <p className="text-muted text-xs mt-0.5">
-                {filtered.length} active market{filtered.length !== 1 ? "s" : ""}
+                {filtered.length} open market{filtered.length !== 1 ? "s" : ""}
               </p>
             </div>
 
@@ -140,6 +145,44 @@ export default function Home() {
                   liveData={liveData}
                 />
               ))}
+            </div>
+          )}
+
+          {/* Completed rounds */}
+          {resolvedRounds.length > 0 && (
+            <div className="mt-8">
+              <button
+                onClick={() => setCompletedOpen((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-surface border border-surface-3 hover:border-surface-2 transition-colors text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-surface-3" />
+                  <span className="text-white font-semibold text-sm">Completed Rounds</span>
+                  <span className="text-[10px] uppercase tracking-widest text-muted">
+                    {resolvedRounds.length} recent
+                  </span>
+                </div>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className={`w-4 h-4 text-muted transition-transform duration-200 ${completedOpen ? "rotate-180" : ""}`}
+                  viewBox="0 0 20 20" fill="currentColor"
+                >
+                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+
+              {completedOpen && (
+                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {resolvedRounds.map((round) => (
+                    <RoundCard
+                      key={round.id}
+                      round={round}
+                      onBet={() => {}}
+                      liveData={liveData}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
