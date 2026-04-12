@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+// Each round is seeded with 10 SOL per side as platform liquidity.
+// realPool = actual user bets only (excludes seed liquidity).
+const BASE_POOL_SEED = 20; // 10 YES + 10 NO
+
 function computeOdds(yesPool: number, noPool: number, totalPool: number) {
   if (totalPool === 0) {
     return { yesOdds: 2.0, noOdds: 2.0, yesPct: 50, noPct: 50 };
@@ -39,6 +43,7 @@ export async function GET() {
       yesPool: yp,
       noPool:  np,
       totalPool: tp,
+      realPool: Math.max(0, tp - BASE_POOL_SEED),
       ...computeOdds(yp, np, tp),
       bets: [],
     };

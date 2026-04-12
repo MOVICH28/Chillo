@@ -22,6 +22,7 @@ export interface Round {
   noOdds?: number;
   yesPct?: number;
   noPct?: number;
+  realPool?: number; // totalPool minus 20 SOL base seed — actual user bets only
   bets?: Bet[];
 }
 
