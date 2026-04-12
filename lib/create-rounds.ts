@@ -83,7 +83,7 @@ export async function createDailyRounds(): Promise<CreateRoundsResult> {
       const btcTarget = Math.round(prices.btc * 1.025);
       await prisma.round.create({
         data: {
-          question: `Will Bitcoin exceed $${btcTarget.toLocaleString()} in 24 hours?`,
+          question: `Will Bitcoin exceed $${btcTarget.toLocaleString('en-US')} in 24 hours?`,
           category: "crypto",
           targetToken: "bitcoin",
           targetPrice: btcTarget,
