@@ -262,10 +262,43 @@ export default function RoundCard({ round, onBet, liveData }: RoundCardProps) {
   // ── Resolved card ─────────────────────────────────────────────────────────
   if (round.status === "resolved") {
     const wonYes = round.winner === "yes";
+
+    // Build category-specific result summary
+    let resultContext: string;
+    if (round.category === "crypto" && round.targetPrice) {
+      const tokenName =
+        round.targetToken === "bitcoin" ? "Bitcoin" :
+        round.targetToken === "solana"  ? "Solana"  :
+        round.targetToken ?? "Asset";
+      const targetFmt = round.targetToken === "bitcoin"
+        ? `$${round.targetPrice.toLocaleString("en-US")}`
+        : `$${round.targetPrice.toFixed(2)}`;
+      resultContext = wonYes
+        ? `${tokenName} exceeded ${targetFmt} ✓`
+        : `${tokenName} did not reach ${targetFmt}`;
+    } else if (round.category === "pumpfun") {
+      resultContext = wonYes
+        ? "A token reached $1M market cap ✓"
+        : "No token reached $1M market cap";
+    } else {
+      resultContext = wonYes ? "Outcome: YES" : "Outcome: NO";
+    }
+
+    // Format resolved date/time
+    const resolvedDate = round.resolvedAt
+      ? (() => {
+          const d = new Date(round.resolvedAt);
+          const date = d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, ".");
+          const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+          return `${date} at ${time}`;
+        })()
+      : null;
+
     return (
       <div className="bg-surface rounded-xl border border-surface-3 overflow-hidden flex flex-col opacity-80 hover:opacity-100 transition-opacity">
         <div className="p-4">
-          <div className="flex items-start justify-between gap-2 mb-2">
+          {/* Top row: category + winner badge */}
+          <div className="flex items-start justify-between gap-2 mb-2.5">
             <span
               className={`inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border ${
                 CATEGORY_STYLES[round.category] ?? "bg-surface-3 text-muted border-transparent"
@@ -273,7 +306,6 @@ export default function RoundCard({ round, onBet, liveData }: RoundCardProps) {
             >
               {CATEGORY_LABELS[round.category] ?? round.category}
             </span>
-            {/* Winner badge */}
             <span
               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
                 wonYes
@@ -286,27 +318,35 @@ export default function RoundCard({ round, onBet, liveData }: RoundCardProps) {
             </span>
           </div>
 
-          <p className="text-white/80 text-sm font-medium leading-snug mb-3">
+          {/* Question */}
+          <p className="text-white/80 text-sm font-medium leading-snug mb-2.5">
             {round.question}
           </p>
 
-          <div className="flex items-center gap-4 text-xs text-muted">
+          {/* Result context */}
+          <p className={`text-xs mb-3 font-mono ${wonYes ? "text-yes/80" : "text-no/80"}`}>
+            {resultContext}
+          </p>
+
+          {/* Stats row */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted border-t border-surface-3/50 pt-2.5">
             <span>
               Pool:{" "}
-              <span className="text-white font-mono">{round.totalPool.toFixed(1)} SOL</span>
+              <span className="text-white font-mono font-semibold">{round.totalPool.toFixed(2)} SOL</span>
             </span>
             <span className="text-surface-3">·</span>
             <span>
-              YES <span className="text-white font-mono">{yesOdds.toFixed(2)}x</span>
+              Final odds —{" "}
+              YES <span className="font-mono text-white">{yesOdds.toFixed(2)}x</span>
+              {" / "}
+              NO <span className="font-mono text-white">{noOdds.toFixed(2)}x</span>
             </span>
-            <span className="text-surface-3">·</span>
-            <span>
-              NO <span className="text-white font-mono">{noOdds.toFixed(2)}x</span>
-            </span>
-            {round.resolvedAt && (
+            {resolvedDate && (
               <>
                 <span className="text-surface-3">·</span>
-                <span>{new Date(round.resolvedAt).toLocaleDateString()}</span>
+                <span className="text-muted">
+                  Resolved: <span className="text-white/70">{resolvedDate}</span>
+                </span>
               </>
             )}
           </div>
