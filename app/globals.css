@@ -2,9 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme: dark (default) ─────────────────────────────────────────────────── */
 :root {
-  --background: #13141a;
-  --foreground: #e8e9f0;
+  /* RGB channels — used as rgb(var(--color-x) / alpha) in Tailwind */
+  --color-base:      19 20 26;    /* #13141a */
+  --color-surface:   26 27 35;    /* #1a1b23 */
+  --color-surface-2: 34 35 46;    /* #22232e */
+  --color-surface-3: 42 43 56;    /* #2a2b38 */
+  --color-muted:     139 143 168; /* #8b8fa8 */
+  --text-primary:    #e8e9f0;
+}
+
+/* ── Theme: light ──────────────────────────────────────────────────────────── */
+html.light {
+  --color-base:      241 243 245; /* #f1f3f5 */
+  --color-surface:   255 255 255; /* #ffffff */
+  --color-surface-2: 248 249 250; /* #f8f9fa */
+  --color-surface-3: 229 231 235; /* #e5e7eb */
+  --color-muted:     107 114 128; /* #6b7280 */
+  --text-primary:    #111827;
 }
 
 * {
@@ -13,11 +29,21 @@
 
 html,
 body {
-  background: #13141a;
-  color: #e8e9f0;
+  background: rgb(var(--color-base));
+  color: var(--text-primary);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
+
+/* In light mode, override text-white (and opacity variants) to dark text */
+html.light .text-white,
+html.light [class*="text-white\/"] {
+  color: #111827;
+}
+html.light .text-white\/90 { color: rgba(17, 24, 39, 0.9); }
+html.light .text-white\/80 { color: rgba(17, 24, 39, 0.8); }
+html.light .text-white\/70 { color: rgba(17, 24, 39, 0.7); }
 
 /* Scrollbar */
 ::-webkit-scrollbar {
@@ -25,14 +51,14 @@ body {
   height: 4px;
 }
 ::-webkit-scrollbar-track {
-  background: #1a1b23;
+  background: rgb(var(--color-surface));
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a2b38;
+  background: rgb(var(--color-surface-3));
   border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3b4a;
+  background: rgb(var(--color-surface-3) / 0.8);
 }
 
 /* Wallet adapter overrides */

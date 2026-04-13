@@ -6,6 +6,7 @@ import { useWallet } from "@/components/WalletProvider";
 import { useSolBalance } from "@/lib/useSolBalance";
 import { Round } from "@/lib/types";
 import WinToastBanner from "@/components/WinToastBanner";
+import ThemeToggle from "@/components/ThemeToggle";
 
 interface NavbarProps {
   rounds: Round[];
@@ -82,6 +83,9 @@ export default function Navbar({ rounds }: NavbarProps) {
       <span className="hidden md:inline-flex px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
         devnet
       </span>
+
+      {/* Theme toggle */}
+      <ThemeToggle />
 
       {/* Wallet button */}
       {connected && publicKey ? (

@@ -11,11 +11,12 @@ const config: Config = {
       colors: {
         brand: "#1db954",
         "brand-dim": "#17a349",
-        surface: "#1a1b23",
-        "surface-2": "#22232e",
-        "surface-3": "#2a2b38",
-        base: "#13141a",
-        muted: "#8b8fa8",
+        // Theme-aware via CSS variables — supports opacity modifiers (bg-surface/50 etc.)
+        base:       "rgb(var(--color-base)       / <alpha-value>)",
+        surface:    "rgb(var(--color-surface)    / <alpha-value>)",
+        "surface-2":"rgb(var(--color-surface-2)  / <alpha-value>)",
+        "surface-3":"rgb(var(--color-surface-3)  / <alpha-value>)",
+        muted:      "rgb(var(--color-muted)      / <alpha-value>)",
         yes: "#1db954",
         no: "#e63946",
       },

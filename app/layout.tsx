@@ -26,7 +26,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-base text-white`}>
+      {/* Inject theme before first paint to avoid flash of wrong theme */}
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(localStorage.getItem('theme')==='light'){document.documentElement.classList.add('light');}}catch(e){}})();` }} />
+      </head>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-base`}>
         <SolanaWalletProvider>{children}</SolanaWalletProvider>
       </body>
     </html>
