@@ -1,8 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  LineChart, Line, YAxis, ReferenceArea, ReferenceLine,
+  ResponsiveContainer, Tooltip,
+} from "recharts";
 import { Round, Outcome } from "@/lib/types";
 import { LiveData } from "@/lib/useLiveData";
+import { usePriceHistory } from "@/lib/usePriceHistory";
 import Sparkline from "@/components/Sparkline";
 
 interface RangeCardProps {
@@ -18,7 +23,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   crypto: "Crypto",
 };
 
-// A–F label colours
+// Tailwind classes for outcome buttons / labels
 const OUTCOME_COLORS: Record<string, { bg: string; border: string; text: string; dot: string }> = {
   A: { bg: "bg-red-500/10",    border: "border-red-500/30",    text: "text-red-400",    dot: "bg-red-400" },
   B: { bg: "bg-orange-500/10", border: "border-orange-500/30", text: "text-orange-400", dot: "bg-orange-400" },
@@ -27,6 +32,26 @@ const OUTCOME_COLORS: Record<string, { bg: string; border: string; text: string;
   E: { bg: "bg-sky-500/10",    border: "border-sky-500/30",    text: "text-sky-400",    dot: "bg-sky-400" },
   F: { bg: "bg-purple-500/10", border: "border-purple-500/30", text: "text-purple-400", dot: "bg-purple-400" },
 };
+
+// rgba fill colors for chart zones (normal / active)
+const ZONE_FILL: Record<string, string> = {
+  A: "rgba(239,68,68,0.08)",    // red
+  B: "rgba(249,115,22,0.08)",   // orange
+  C: "rgba(234,179,8,0.08)",    // yellow
+  D: "rgba(29,185,84,0.08)",    // green
+  E: "rgba(14,165,233,0.08)",   // sky
+  F: "rgba(168,85,247,0.08)",   // purple
+};
+const ZONE_FILL_ACTIVE: Record<string, string> = {
+  A: "rgba(239,68,68,0.22)",
+  B: "rgba(249,115,22,0.22)",
+  C: "rgba(234,179,8,0.22)",
+  D: "rgba(29,185,84,0.22)",
+  E: "rgba(14,165,233,0.22)",
+  F: "rgba(168,85,247,0.22)",
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatCountdown(ms: number): string {
   if (ms <= 0) return "00:00";
@@ -58,11 +83,159 @@ function fmt(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
-// ── Resolved range card ───────────────────────────────────────────────────────
+function findActiveOutcome(price: number, outcomes: Outcome[]): Outcome | null {
+  return outcomes.find(o => {
+    const above = o.minPrice === null || price >= o.minPrice;
+    const below = o.maxPrice === null || price <  o.maxPrice;
+    return above && below;
+  }) ?? null;
+}
+
+// ── Live price chart ──────────────────────────────────────────────────────────
+
+interface PriceChartProps {
+  token: "bitcoin" | "solana";
+  outcomes: Outcome[];
+}
+
+function PriceChart({ token, outcomes }: PriceChartProps) {
+  const history = usePriceHistory(token);
+
+  if (history.length < 2) {
+    return (
+      <div className="h-44 flex items-center justify-center text-muted text-[11px] gap-2">
+        <svg className="animate-spin w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+        </svg>
+        Loading price data…
+      </div>
+    );
+  }
+
+  const currentPrice = history[history.length - 1].price;
+  const activeOutcome = findActiveOutcome(currentPrice, outcomes);
+
+  // Y domain: span all boundary values + any out-of-range price points
+  const boundaries = outcomes
+    .flatMap(o => [o.minPrice, o.maxPrice])
+    .filter((b): b is number => b !== null);
+  const priceValues = history.map(p => p.price);
+  const allValues   = [...boundaries, ...priceValues];
+  const rawMin      = Math.min(...allValues);
+  const rawMax      = Math.max(...allValues);
+  const pad         = (rawMax - rawMin) * 0.12;
+  const domainMin   = rawMin - pad;
+  const domainMax   = rawMax + pad;
+
+  // Unique inner boundaries (dividers between zones)
+  const uniqueBoundaries = Array.from(new Set(boundaries)).sort((a, b) => a - b);
+
+  // Y axis formatter
+  const fmtY = token === "bitcoin"
+    ? (v: number) => `$${Math.round(v).toLocaleString("en-US")}`
+    : (v: number) => `$${v.toFixed(2)}`;
+
+  // Tooltip formatter
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tooltipFmt = (v: any) => [typeof v === "number" ? fmtY(v) : String(v), "Price"];
+
+  // Chart data — keep time as ms, recharts just needs a value
+  const data = history.map(p => ({ t: p.time, price: p.price }));
+
+  return (
+    <div className="h-44 w-full select-none">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 4, right: 56, left: 0, bottom: 0 }}>
+          {/* Zone bands */}
+          {outcomes.map(o => (
+            <ReferenceArea
+              key={o.id}
+              y1={o.minPrice ?? domainMin}
+              y2={o.maxPrice ?? domainMax}
+              yAxisId={0}
+              fill={o.id === activeOutcome?.id ? ZONE_FILL_ACTIVE[o.id] : ZONE_FILL[o.id]}
+              strokeOpacity={0}
+              ifOverflow="extendDomain"
+            />
+          ))}
+
+          {/* Inner boundary lines */}
+          {uniqueBoundaries.map(b => (
+            <ReferenceLine
+              key={b}
+              y={b}
+              yAxisId={0}
+              stroke="#3a3b4a"
+              strokeWidth={1}
+              strokeDasharray="4 3"
+            />
+          ))}
+
+          {/* Current price indicator */}
+          <ReferenceLine
+            y={currentPrice}
+            yAxisId={0}
+            stroke="#22c55e"
+            strokeWidth={1.5}
+            strokeDasharray="6 3"
+            label={{
+              value: fmtY(currentPrice),
+              position: "right",
+              fill: "#22c55e",
+              fontSize: 9,
+              dx: 4,
+            }}
+          />
+
+          <YAxis
+            yAxisId={0}
+            domain={[domainMin, domainMax]}
+            tickFormatter={fmtY}
+            width={token === "bitcoin" ? 64 : 52}
+            tick={{ fontSize: 8, fill: "#6b7280" }}
+            tickCount={5}
+            axisLine={false}
+            tickLine={false}
+          />
+
+          <Tooltip
+            formatter={tooltipFmt}
+            labelFormatter={() => ""}
+            contentStyle={{
+              background: "#1a1b23",
+              border: "1px solid #2a2b38",
+              borderRadius: 6,
+              fontSize: 11,
+              padding: "4px 8px",
+            }}
+            itemStyle={{ color: "#22c55e" }}
+            cursor={{ stroke: "#2a2b38", strokeWidth: 1 }}
+          />
+
+          {/* Price line */}
+          <Line
+            yAxisId={0}
+            type="monotone"
+            dataKey="price"
+            stroke="#22c55e"
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 3, fill: "#22c55e", stroke: "#13141a", strokeWidth: 2 }}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ── Resolved card ─────────────────────────────────────────────────────────────
+
 function ResolvedRangeCard({ round }: { round: Round }) {
-  const outcomes = round.outcomes ?? [];
-  const winning  = outcomes.find(o => o.id === round.winningOutcome);
-  const colors   = round.winningOutcome ? OUTCOME_COLORS[round.winningOutcome] : null;
+  const outcomes   = round.outcomes ?? [];
+  const winning    = outcomes.find(o => o.id === round.winningOutcome);
+  const colors     = round.winningOutcome ? OUTCOME_COLORS[round.winningOutcome] : null;
 
   const resolvedDate = round.resolvedAt
     ? (() => {
@@ -76,7 +249,6 @@ function ResolvedRangeCard({ round }: { round: Round }) {
   return (
     <div className="bg-surface rounded-xl border border-surface-3 overflow-hidden opacity-80 hover:opacity-100 transition-opacity">
       <div className="p-4">
-        {/* Top row */}
         <div className="flex items-start justify-between gap-2 mb-2.5">
           <span className={`inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border ${CATEGORY_STYLES[round.category] ?? "bg-surface-3 text-muted border-transparent"}`}>
             {CATEGORY_LABELS[round.category] ?? round.category}
@@ -89,17 +261,14 @@ function ResolvedRangeCard({ round }: { round: Round }) {
           )}
         </div>
 
-        {/* Question */}
         <p className="text-white/80 text-sm font-medium leading-snug mb-2">{round.question}</p>
 
-        {/* Winning range */}
         {winning && (
           <p className={`text-xs mb-3 font-mono ${colors?.text ?? "text-muted"}`}>
             Result: {winning.label} ✓
           </p>
         )}
 
-        {/* Outcome grid */}
         <div className="grid grid-cols-2 gap-1.5 mb-3">
           {outcomes.map(o => {
             const isWinner = o.id === round.winningOutcome;
@@ -121,7 +290,6 @@ function ResolvedRangeCard({ round }: { round: Round }) {
           })}
         </div>
 
-        {/* Footer */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted border-t border-surface-3/50 pt-2.5">
           <span>Pool: <span className="text-white font-mono">{(round.realPool ?? 0).toFixed(2)} SOL</span></span>
           {resolvedDate && (
@@ -136,22 +304,28 @@ function ResolvedRangeCard({ round }: { round: Round }) {
   );
 }
 
-// ── Main card ─────────────────────────────────────────────────────────────────
+// ── Active card ───────────────────────────────────────────────────────────────
+
 export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
   const resultCountdown  = useCountdown(round.endsAt);
   const bettingCountdown = useCountdown(round.bettingClosesAt ?? round.endsAt);
-  const outcomes         = round.outcomes ?? [];
-  const totalPool        = round.realPool ?? 0;
-  const isEnded          = round.status !== "open";
-  const bettingClosed    = round.bettingClosesAt
+  const [showChart, setShowChart] = useState(false);
+
+  const outcomes   = round.outcomes ?? [];
+  const totalPool  = round.realPool ?? 0;
+  const isEnded    = round.status !== "open";
+  const bettingClosed = round.bettingClosesAt
     ? new Date() > new Date(round.bettingClosesAt)
     : isEnded;
+
+  const chartToken: "bitcoin" | "solana" | null =
+    round.targetToken === "bitcoin" ? "bitcoin" :
+    round.targetToken === "solana"  ? "solana"  : null;
 
   if (round.status === "resolved") {
     return <ResolvedRangeCard round={round} />;
   }
 
-  // Live price context
   const isBtc = round.targetToken === "bitcoin";
   const isSol = round.targetToken === "solana";
   const asset  = isBtc ? liveData?.btc : isSol ? liveData?.sol : undefined;
@@ -159,7 +333,7 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
   return (
     <div className="bg-surface rounded-xl border border-surface-3 overflow-hidden flex flex-col hover:border-surface-2 transition-colors group">
       <div className="p-4 flex-1">
-        {/* Header row */}
+        {/* Header */}
         <div className="flex items-start justify-between gap-2 mb-3">
           <span className={`inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border ${CATEGORY_STYLES[round.category] ?? "bg-surface-3 text-muted border-transparent"}`}>
             {CATEGORY_LABELS[round.category] ?? round.category}
@@ -175,7 +349,7 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
           {round.question}
         </p>
 
-        {/* Live price widget */}
+        {/* Live price row */}
         {asset && (
           <div className="rounded-lg bg-surface-2 border border-surface-3/60 px-3 py-2 mb-3">
             <div className="flex items-center justify-between">
@@ -216,7 +390,6 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
                     : `${c.bg} ${c.border} hover:opacity-90 active:scale-[0.98]`
                   }`}
               >
-                {/* Outcome ID + label */}
                 <div className="flex items-center gap-1.5">
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${c.bg} ${c.text} border ${c.border}`}>
                     {o.id}
@@ -224,7 +397,6 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
                   <span className="text-[10px] text-muted leading-tight">{o.label}</span>
                 </div>
 
-                {/* Pool bar */}
                 <div className="h-1 rounded-full bg-surface-3 overflow-hidden w-full">
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${c.dot}`}
@@ -232,7 +404,6 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
                   />
                 </div>
 
-                {/* Stats */}
                 <div className="flex items-center justify-between text-[10px]">
                   <span className="text-muted font-mono">{o.pool.toFixed(2)} SOL</span>
                   {multiplier !== null ? (
@@ -272,20 +443,46 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
             </div>
           </div>
         )}
+
+        {/* Live chart (collapsible) */}
+        {chartToken && showChart && (
+          <div className="mt-3 rounded-lg border border-surface-3/60 bg-surface-2 overflow-hidden">
+            <div className="flex items-center gap-1.5 px-3 pt-2 pb-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] pulse-dot" />
+              <span className="text-[9px] font-bold tracking-widest uppercase text-brand">Live Price</span>
+            </div>
+            <PriceChart token={chartToken} outcomes={outcomes} />
+          </div>
+        )}
       </div>
 
       {/* Footer */}
       <div className="px-4 pb-4 border-t border-surface-3/50 pt-3">
-        <div className="flex items-center justify-between text-xs text-muted">
-          <span>
-            Total pool:{" "}
-            {totalPool <= 0 ? (
-              <span className="font-mono text-muted">0 SOL</span>
-            ) : (
-              <span className="text-white font-mono">{totalPool.toFixed(2)} SOL</span>
-            )}
-          </span>
-          <span className="text-[10px]">{outcomes.length} outcomes · parimutuel</span>
+        <div className="flex items-center justify-between">
+          <div className="text-xs text-muted">
+            <span>
+              Pool:{" "}
+              {totalPool <= 0 ? (
+                <span className="font-mono text-muted">0 SOL</span>
+              ) : (
+                <span className="text-white font-mono">{totalPool.toFixed(2)} SOL</span>
+              )}
+            </span>
+            <span className="ml-2 text-[10px]">{outcomes.length} outcomes · parimutuel</span>
+          </div>
+
+          {/* Chart toggle */}
+          {chartToken && (
+            <button
+              onClick={() => setShowChart(v => !v)}
+              className="flex items-center gap-1 text-[10px] text-muted hover:text-white transition-colors px-2 py-1 rounded bg-surface-3 hover:bg-surface-2 border border-surface-3"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+              </svg>
+              {showChart ? "Hide" : "Chart"}
+            </button>
+          )}
         </div>
       </div>
     </div>
