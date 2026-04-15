@@ -83,15 +83,22 @@ export function loadPlatformKeypair(): Keypair {
 
 export async function resolveRound(
   roundId: string,
-  winner: "yes" | "no"
+  winner: string  // "yes" | "no" for pumpfun, or "A"|"B"|"C"|"D" for range rounds
 ): Promise<ResolveOutcome> {
   const allBets = await prisma.bet.findMany({ where: { roundId, paid: false } });
+
+  const isRange = ["A", "B", "C", "D"].includes(winner);
 
   if (allBets.length === 0) {
     try {
       await prisma.round.update({
         where: { id: roundId },
-        data: { status: "resolved", winner, resolvedAt: new Date() },
+        data: {
+          status: "resolved",
+          winner,
+          resolvedAt: new Date(),
+          ...(isRange ? { winningOutcome: winner } : {}),
+        },
       });
     } catch { /* legacy static round */ }
     return {
@@ -149,7 +156,12 @@ export async function resolveRound(
     try {
       await prisma.round.update({
         where: { id: roundId },
-        data: { status: "resolved", winner, resolvedAt: new Date() },
+        data: {
+          status: "resolved",
+          winner,
+          resolvedAt: new Date(),
+          ...(isRange ? { winningOutcome: winner } : {}),
+        },
       });
     } catch { /* legacy static round */ }
 
@@ -181,7 +193,12 @@ export async function resolveRound(
     try {
       await prisma.round.update({
         where: { id: roundId },
-        data: { status: "resolved", winner, resolvedAt: new Date() },
+        data: {
+          status: "resolved",
+          winner,
+          resolvedAt: new Date(),
+          ...(isRange ? { winningOutcome: winner } : {}),
+        },
       });
     } catch { /* legacy static round */ }
     return { message: "No winning bets — losing bets marked resolved", payouts: [] };
@@ -249,7 +266,12 @@ export async function resolveRound(
   try {
     await prisma.round.update({
       where: { id: roundId },
-      data: { status: "resolved", winner, resolvedAt: new Date() },
+      data: {
+        status: "resolved",
+        winner,
+        resolvedAt: new Date(),
+        ...(isRange ? { winningOutcome: winner } : {}),
+      },
     });
   } catch {
     // Round not in DB (legacy static round) — safe to ignore

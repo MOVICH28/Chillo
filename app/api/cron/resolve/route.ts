@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySignatureAppRouter } from "@upstash/qstash/nextjs";
 import { prisma } from "@/lib/prisma";
+import { Outcome } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 import { resolveRound } from "@/lib/resolve";
@@ -41,33 +42,48 @@ async function fetchPumpFunTopMcap(): Promise<number | null> {
 
 // ─── Winner determination ─────────────────────────────────────────────────────
 
-async function determineWinner(round: {
+type RoundRow = {
   id: string;
   question: string;
   category: string;
   targetPrice: number | null;
   targetToken: string | null;
   tokenList: string | null;
-}): Promise<"yes" | "no" | null> {
-  // Crypto: use stored targetToken + targetPrice — no regex needed
+  outcomes: unknown; // Prisma.JsonValue | null
+};
+
+/** For range rounds: find which outcome bracket the current price falls into. */
+function determineRangeOutcome(round: RoundRow, prices: CoinGeckoPrices): string | null {
+  const current =
+    round.targetToken === "bitcoin" ? prices.bitcoin?.usd :
+    round.targetToken === "solana"  ? prices.solana?.usd  : undefined;
+  if (!current) return null;
+
+  const outcomes = round.outcomes as Outcome[];
+  for (const o of outcomes) {
+    const aboveMin = o.minPrice === null || current >= o.minPrice;
+    const belowMax = o.maxPrice === null || current <  o.maxPrice;
+    if (aboveMin && belowMax) return o.id;
+  }
+  // Fallback: last outcome if nothing matched (price exactly at upper boundary)
+  return outcomes[outcomes.length - 1]?.id ?? null;
+}
+
+/** For yes/no rounds: return "yes" | "no" | null */
+async function determineYesNoWinner(
+  round: RoundRow,
+  prices: CoinGeckoPrices,
+): Promise<"yes" | "no" | null> {
   if (round.category === "crypto" && round.targetToken && round.targetPrice) {
-    let prices: CoinGeckoPrices;
-    try {
-      prices = await fetchCryptoPrices();
-    } catch (err) {
-      console.warn(`[cron] ${round.id}: price fetch failed`, err);
-      return null;
-    }
     const current =
       round.targetToken === "bitcoin"
         ? prices.bitcoin?.usd
         : prices.solana?.usd;
     if (!current) return null;
-    console.log(`[cron] ${round.id}: resolving crypto round`);
+    console.log(`[cron] ${round.id}: resolving yes/no crypto round`);
     return current >= round.targetPrice ? "yes" : "no";
   }
 
-  // pump.fun: check top market cap across all tokens
   if (round.category === "pumpfun") {
     const topMcap = await fetchPumpFunTopMcap();
     if (topMcap === null) {
@@ -84,7 +100,6 @@ async function determineWinner(round: {
 
 // ─── Cron handler ─────────────────────────────────────────────────────────────
 
-// Core logic — called after auth is confirmed by either path below.
 async function runCron(): Promise<NextResponse> {
   const now = new Date();
 
@@ -97,6 +112,17 @@ async function runCron(): Promise<NextResponse> {
     where: { status: "open", endsAt: { lte: now } },
   });
 
+  // Fetch crypto prices once — used for both range and yes/no crypto rounds
+  let cryptoPrices: CoinGeckoPrices = {};
+  const needsCrypto = endedRounds.some(r => r.category === "crypto");
+  if (needsCrypto) {
+    try {
+      cryptoPrices = await fetchCryptoPrices();
+    } catch (err) {
+      console.warn("[cron] Failed to fetch crypto prices:", err instanceof Error ? err.message : err);
+    }
+  }
+
   const summary: {
     roundId: string;
     status: "resolved" | "skipped" | "no_data" | "error";
@@ -105,18 +131,29 @@ async function runCron(): Promise<NextResponse> {
   }[] = [];
 
   for (const round of endedRounds) {
-    let winner: "yes" | "no" | null;
+    let winner: string | null;
+
     try {
-      winner = await determineWinner(round);
+      if (round.outcomes !== null) {
+        // Range round: find bracket containing current price
+        winner = determineRangeOutcome(round, cryptoPrices);
+        if (winner === null) {
+          console.warn(`[cron] ${round.id}: could not determine range outcome (price data missing)`);
+          summary.push({ roundId: round.id, status: "no_data", detail: "crypto price unavailable" });
+          continue;
+        }
+      } else {
+        // Yes/no round
+        winner = await determineYesNoWinner(round, cryptoPrices);
+        if (winner === null) {
+          summary.push({ roundId: round.id, status: "no_data", detail: "could not fetch external data" });
+          continue;
+        }
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[cron] ${round.id} determineWinner error:`, msg);
+      console.error(`[cron] ${round.id} winner determination error:`, msg);
       summary.push({ roundId: round.id, status: "error", detail: msg });
-      continue;
-    }
-
-    if (winner === null) {
-      summary.push({ roundId: round.id, status: "no_data", detail: "could not fetch external data" });
       continue;
     }
 
@@ -131,24 +168,20 @@ async function runCron(): Promise<NextResponse> {
   }
 
   return NextResponse.json({
-    ran_at: now.toISOString(),
-    rounds_created: createResult,
+    ran_at:          now.toISOString(),
+    rounds_created:  createResult,
     rounds_resolved: summary,
   });
 }
 
 // Exported GET — Bearer token short-circuits for manual testing;
 // all other requests go through QStash signature verification.
-// qstashHandler is created lazily (inside GET) so the Receiver constructor
-// never runs at build time when env vars are absent.
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret && req.headers.get("authorization") === `Bearer ${cronSecret}`) {
     return runCron();
   }
 
-  // Guard: if QStash keys are absent, reject rather than letting the
-  // Receiver constructor throw (which would crash during Next.js build).
   const currentSigningKey = process.env.QSTASH_CURRENT_SIGNING_KEY;
   const nextSigningKey    = process.env.QSTASH_NEXT_SIGNING_KEY;
   if (!currentSigningKey || !nextSigningKey) {

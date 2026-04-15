@@ -6,9 +6,10 @@ import Navbar from "@/components/Navbar";
 import LiveTicker from "@/components/LiveTicker";
 import Sidebar from "@/components/Sidebar";
 import RoundCard from "@/components/RoundCard";
+import RangeCard from "@/components/RangeCard";
 import RightPanel from "@/components/RightPanel";
 import BetModal from "@/components/BetModal";
-import { Round } from "@/lib/types";
+import { Round, Outcome } from "@/lib/types";
 import { useLiveData } from "@/lib/useLiveData";
 import { useWallet } from "@/components/WalletProvider";
 
@@ -26,7 +27,7 @@ export default function Home() {
   const [rounds, setRounds] = useState<Round[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("all");
-  const [betTarget, setBetTarget] = useState<{ round: Round; side: "yes" | "no" } | null>(null);
+  const [betTarget, setBetTarget] = useState<{ round: Round; side: string; outcome?: Outcome } | null>(null);
   const [completedOpen, setCompletedOpen] = useState(false);
   const { data: liveData } = useLiveData();
   const { publicKey, connected } = useWallet();
@@ -137,14 +138,23 @@ export default function Home() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filtered.map((round) => (
-                <RoundCard
-                  key={round.id}
-                  round={round}
-                  onBet={(r, side) => setBetTarget({ round: r, side })}
-                  liveData={liveData}
-                />
-              ))}
+              {filtered.map((round) =>
+                round.outcomes ? (
+                  <RangeCard
+                    key={round.id}
+                    round={round}
+                    onBet={(r, outcomeId, outcome) => setBetTarget({ round: r, side: outcomeId, outcome })}
+                    liveData={liveData}
+                  />
+                ) : (
+                  <RoundCard
+                    key={round.id}
+                    round={round}
+                    onBet={(r, side) => setBetTarget({ round: r, side })}
+                    liveData={liveData}
+                  />
+                )
+              )}
             </div>
           )}
 
@@ -173,14 +183,23 @@ export default function Home() {
 
               {completedOpen && (
                 <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {resolvedRounds.map((round) => (
-                    <RoundCard
-                      key={round.id}
-                      round={round}
-                      onBet={() => {}}
-                      liveData={liveData}
-                    />
-                  ))}
+                  {resolvedRounds.map((round) =>
+                    round.outcomes ? (
+                      <RangeCard
+                        key={round.id}
+                        round={round}
+                        onBet={() => {}}
+                        liveData={liveData}
+                      />
+                    ) : (
+                      <RoundCard
+                        key={round.id}
+                        round={round}
+                        onBet={() => {}}
+                        liveData={liveData}
+                      />
+                    )
+                  )}
                 </div>
               )}
             </div>
@@ -214,6 +233,7 @@ export default function Home() {
         <BetModal
           round={betTarget.round}
           side={betTarget.side}
+          outcome={betTarget.outcome}
           onClose={() => setBetTarget(null)}
           onSuccess={fetchRounds}
           solPrice={liveData.sol?.price}

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { Outcome } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +63,6 @@ async function verifyTransaction(
     if (!tx || !tx.meta) continue;
     if (tx.meta.err) return { valid: false, reason: "transaction failed on-chain" };
 
-    // Age check: blockTime is in seconds
     if (tx.blockTime) {
       const ageSec = Math.floor(Date.now() / 1000) - tx.blockTime;
       if (ageSec > TX_MAX_AGE_MS / 1000) {
@@ -69,7 +70,6 @@ async function verifyTransaction(
       }
     }
 
-    // Resolve account keys
     const message = tx.transaction.message;
     let accountKeys: string[];
     if ("staticAccountKeys" in message) {
@@ -79,17 +79,14 @@ async function verifyTransaction(
       accountKeys = (message as any).accountKeys.map((k: PublicKey) => k.toBase58());
     }
 
-    // Check platform wallet received funds
     const platformIdx = accountKeys.indexOf(PLATFORM_WALLET);
     if (platformIdx === -1) return { valid: false, reason: "platform wallet not in transaction" };
 
-    // Check sender matches claimed wallet
     if (accountKeys[0] !== senderAddress) {
       return { valid: false, reason: "transaction sender does not match wallet" };
     }
 
-    // Check amount within 1% tolerance
-    const received = tx.meta.postBalances[platformIdx] - tx.meta.preBalances[platformIdx];
+    const received  = tx.meta.postBalances[platformIdx] - tx.meta.preBalances[platformIdx];
     const tolerance = Math.max(expectedLamports * 0.01, 1000);
     if (Math.abs(received - expectedLamports) > tolerance) {
       return { valid: false, reason: "amount mismatch" };
@@ -106,7 +103,6 @@ async function verifyTransaction(
 export async function GET(req: NextRequest) {
   const wallet = req.nextUrl.searchParams.get("wallet");
 
-  // Validate wallet param if provided
   if (wallet && !isValidSolanaAddress(wallet)) {
     return NextResponse.json({ error: "Invalid wallet address" }, { status: 400 });
   }
@@ -118,7 +114,7 @@ export async function GET(req: NextRequest) {
       take: wallet ? undefined : 10,
     });
     const roundIds = Array.from(new Set(bets.map(b => b.roundId)));
-    const rounds = await prisma.round.findMany({ where: { id: { in: roundIds } } });
+    const rounds   = await prisma.round.findMany({ where: { id: { in: roundIds } } });
     const roundMap = new Map(rounds.map(r => [r.id, r]));
 
     return NextResponse.json(
@@ -150,8 +146,9 @@ export async function POST(req: NextRequest) {
     if (!isValidSolanaAddress(walletAddress)) {
       return NextResponse.json({ error: "Invalid wallet address" }, { status: 400 });
     }
-    if (side !== "yes" && side !== "no") {
-      return NextResponse.json({ error: "side must be 'yes' or 'no'" }, { status: 400 });
+    const VALID_SIDES = ["yes", "no", "A", "B", "C", "D"];
+    if (!VALID_SIDES.includes(side)) {
+      return NextResponse.json({ error: "Invalid side value" }, { status: 400 });
     }
     if (typeof amount !== "number" || !isFinite(amount) || amount <= 0 || amount > 10000) {
       return NextResponse.json({ error: "amount must be a positive number" }, { status: 400 });
@@ -180,6 +177,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Round has ended" }, { status: 400 });
     }
 
+    const isRange = round.outcomes !== null;
+
+    if (isRange) {
+      // Range round: validate side is a valid outcome id, check bettingClosesAt
+      const outcomes = round.outcomes as unknown as Outcome[];
+      const outcomeIds = outcomes.map(o => o.id);
+      if (!outcomeIds.includes(side)) {
+        return NextResponse.json({ error: `Invalid outcome — must be one of ${outcomeIds.join(", ")}` }, { status: 400 });
+      }
+      if (round.bettingClosesAt && new Date() > round.bettingClosesAt) {
+        return NextResponse.json({ error: "Betting is closed for this round" }, { status: 400 });
+      }
+    } else {
+      // Yes/No round
+      if (side !== "yes" && side !== "no") {
+        return NextResponse.json({ error: "side must be 'yes' or 'no'" }, { status: 400 });
+      }
+    }
+
     // ── On-chain verification ─────────────────────────────────────────────────
     let verifyResult: { valid: boolean; reason?: string } = { valid: false, reason: "not attempted" };
     try {
@@ -193,39 +209,63 @@ export async function POST(req: NextRequest) {
       console.warn(`[POST /api/bets] tx unverified: ${verifyResult.reason}`);
     }
 
-    // ── Upsert pool ───────────────────────────────────────────────────────────
-    const baseYes = round.yesPool;
-    const baseNo  = round.noPool;
+    let odds: number;
 
-    const pool = await prisma.roundPool.upsert({
-      where: { roundId },
-      create: {
-        roundId,
-        yesPool:   (side === "yes" ? amount : 0) + baseYes,
-        noPool:    (side === "no"  ? amount : 0) + baseNo,
-        totalPool: amount + baseYes + baseNo,
-      },
-      update:
-        side === "yes"
-          ? { yesPool: { increment: amount }, totalPool: { increment: amount } }
-          : { noPool: { increment: amount }, totalPool: { increment: amount } },
-    });
+    if (isRange) {
+      // ── Range round: update outcome pool in outcomes JSON ───────────────────
+      const outcomes = round.outcomes as unknown as Outcome[];
+      const updatedOutcomes = outcomes.map(o =>
+        o.id === side ? { ...o, pool: o.pool + amount } : o,
+      );
+      const outcomePool = updatedOutcomes.find(o => o.id === side)!.pool;
 
-    const odds =
-      side === "yes"
-        ? pool.totalPool / Math.max(pool.yesPool, 0.001)
-        : pool.totalPool / Math.max(pool.noPool, 0.001);
+      // Compute new totalPool
+      const newTotalPool = updatedOutcomes.reduce((s, o) => s + o.pool, 0);
+
+      // Odds: totalPool / this outcome's pool
+      odds = parseFloat(Math.max(1.05, (newTotalPool * 0.95) / Math.max(outcomePool, 0.001)).toFixed(2));
+
+      // Update outcomes JSON on the Round and sync totalPool on RoundPool
+      await prisma.$transaction([
+        prisma.round.update({
+          where: { id: roundId },
+          data: { totalPool: newTotalPool, outcomes: updatedOutcomes as unknown as Prisma.InputJsonValue },
+        }),
+        prisma.roundPool.upsert({
+          where: { roundId },
+          create: { roundId, yesPool: 0, noPool: 0, totalPool: newTotalPool },
+          update: { totalPool: { increment: amount } },
+        }),
+      ]);
+    } else {
+      // ── Yes/No round: original pool logic ─────────────────────────────────
+      const baseYes = round.yesPool;
+      const baseNo  = round.noPool;
+
+      const pool = await prisma.roundPool.upsert({
+        where: { roundId },
+        create: {
+          roundId,
+          yesPool:   (side === "yes" ? amount : 0) + baseYes,
+          noPool:    (side === "no"  ? amount : 0) + baseNo,
+          totalPool: amount + baseYes + baseNo,
+        },
+        update:
+          side === "yes"
+            ? { yesPool: { increment: amount }, totalPool: { increment: amount } }
+            : { noPool: { increment: amount }, totalPool: { increment: amount } },
+      });
+
+      odds = parseFloat(
+        (side === "yes"
+          ? pool.totalPool / Math.max(pool.yesPool, 0.001)
+          : pool.totalPool / Math.max(pool.noPool, 0.001)
+        ).toFixed(2),
+      );
+    }
 
     const bet = await prisma.bet.create({
-      data: {
-        walletAddress,
-        roundId,
-        side,
-        amount,
-        odds: parseFloat(odds.toFixed(2)),
-        txHash,
-        status,
-      },
+      data: { walletAddress, roundId, side, amount, odds, txHash, status },
     });
 
     return NextResponse.json({ ...bet, createdAt: bet.createdAt.toISOString() }, { status: 201 });

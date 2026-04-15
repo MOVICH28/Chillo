@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Outcome } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-// Each round is seeded with 10 SOL per side as platform liquidity.
-// realPool = actual user bets only (excludes seed liquidity).
-const BASE_POOL_SEED = 20; // 10 YES + 10 NO
+// Pumpfun rounds are seeded with 10 SOL per side as platform liquidity.
+// Range rounds (crypto) start with 0 pool — no seed subtraction needed.
+const BASE_POOL_SEED = 20; // 10 YES + 10 NO (pumpfun only)
 
 function computeOdds(yesPool: number, noPool: number, totalPool: number) {
   if (totalPool === 0) {
@@ -32,25 +33,41 @@ export async function GET() {
 
   const mapped = rounds.map((round) => {
     const live = poolMap.get(round.id);
-    const yp = live ? live.yesPool : round.yesPool;
-    const np = live ? live.noPool  : round.noPool;
-    const tp = live ? live.totalPool : round.totalPool;
+    const yp   = live ? live.yesPool   : round.yesPool;
+    const np   = live ? live.noPool    : round.noPool;
+    const tp   = live ? live.totalPool : round.totalPool;
+
+    // For range rounds (has outcomes), realPool = all user bets (no seed).
+    // For pumpfun yes/no rounds, subtract the 20 SOL platform seed.
+    const isRange  = round.outcomes !== null;
+    const realPool = isRange
+      ? Math.max(0, tp)
+      : Math.max(0, tp - BASE_POOL_SEED);
+
+    // For range rounds, merge live totalPool back into outcomes array
+    let outcomes: Outcome[] | null = null;
+    if (isRange && round.outcomes) {
+      // outcomes stored on the Round itself (updated on each bet)
+      outcomes = round.outcomes as unknown as Outcome[];
+    }
+
     return {
       ...round,
-      endsAt:     round.endsAt.toISOString(),
-      createdAt:  round.createdAt.toISOString(),
-      resolvedAt: round.resolvedAt?.toISOString() ?? null,
-      yesPool: yp,
-      noPool:  np,
+      endsAt:          round.endsAt.toISOString(),
+      createdAt:       round.createdAt.toISOString(),
+      resolvedAt:      round.resolvedAt?.toISOString()      ?? null,
+      bettingClosesAt: round.bettingClosesAt?.toISOString() ?? null,
+      yesPool:  yp,
+      noPool:   np,
       totalPool: tp,
-      realPool: Math.max(0, tp - BASE_POOL_SEED),
+      realPool,
+      outcomes,
       ...computeOdds(yp, np, tp),
       bets: [],
     };
   });
 
-  // Open/closed rounds first (sorted by createdAt desc already),
-  // then resolved rounds sorted by resolvedAt desc.
+  // Open/closed rounds first, then resolved sorted by resolvedAt desc.
   const open     = mapped.filter((r) => r.status !== "resolved");
   const resolved = mapped
     .filter((r) => r.status === "resolved")

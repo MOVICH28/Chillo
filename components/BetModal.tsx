@@ -10,11 +10,12 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import { useWallet } from "@/components/WalletProvider";
-import { Round } from "@/lib/types";
+import { Round, Outcome } from "@/lib/types";
 
 interface BetModalProps {
   round: Round;
-  side: "yes" | "no";
+  side: string;       // "yes" | "no" | "A" | "B" | "C" | "D"
+  outcome?: Outcome;  // set for range rounds
   onClose: () => void;
   onSuccess: () => void;
   solPrice?: number;
@@ -36,14 +37,23 @@ const STATUS_MESSAGES: Record<TxStatus, string> = {
   error: "",
 };
 
-export default function BetModal({ round, side, onClose, onSuccess, solPrice }: BetModalProps) {
+export default function BetModal({ round, side, outcome, onClose, onSuccess, solPrice }: BetModalProps) {
   const { publicKey, connected, connect } = useWallet();
   const [amount, setAmount] = useState("0.1");
   const [txStatus, setTxStatus] = useState<TxStatus>("idle");
   const [error, setError] = useState("");
 
-  const isYes = side === "yes";
-  const odds = isYes ? (round.yesOdds ?? 2) : (round.noOdds ?? 2);
+  const isRange = !!outcome;
+  const isYes   = side === "yes";
+
+  // For range rounds: compute estimated odds from outcome pool vs total pool
+  const rangeOdds = isRange && outcome && round.totalPool > 0 && outcome.pool > 0
+    ? Math.max(1.05, (round.totalPool * 0.95) / outcome.pool)
+    : null;
+
+  const odds = isRange
+    ? (rangeOdds ?? 2)
+    : (isYes ? (round.yesOdds ?? 2) : (round.noOdds ?? 2));
   const numAmount = parseFloat(amount) || 0;
   const payout = numAmount * odds;
   const profit = payout - numAmount;
@@ -143,11 +153,20 @@ export default function BetModal({ round, side, onClose, onSuccess, solPrice }: 
           <p className="text-xs text-muted mb-4 leading-relaxed">{round.question}</p>
 
           {/* Side indicator */}
-          <div className={`flex items-center justify-center gap-2 py-3 rounded-xl mb-4 font-bold text-lg
-            ${isYes ? "bg-yes/10 text-yes border border-yes/30" : "bg-no/10 text-no border border-no/30"}`}>
-            {isYes ? "YES" : "NO"}
-            <span className="text-sm font-normal opacity-70">· {odds}x odds</span>
-          </div>
+          {isRange && outcome ? (
+            <div className="flex items-center justify-center gap-2 py-3 rounded-xl mb-4 font-bold text-lg bg-brand/10 text-brand border border-brand/30">
+              <span className="px-2 py-0.5 rounded bg-brand/20 text-sm font-bold">{outcome.id}</span>
+              <span className="text-sm font-normal max-w-[180px] truncate">{outcome.label}</span>
+              {rangeOdds && <span className="text-sm font-normal opacity-70">· {rangeOdds.toFixed(2)}x</span>}
+              {!rangeOdds && <span className="text-sm font-normal opacity-50">· first bet</span>}
+            </div>
+          ) : (
+            <div className={`flex items-center justify-center gap-2 py-3 rounded-xl mb-4 font-bold text-lg
+              ${isYes ? "bg-yes/10 text-yes border border-yes/30" : "bg-no/10 text-no border border-no/30"}`}>
+              {isYes ? "YES" : "NO"}
+              <span className="text-sm font-normal opacity-70">· {odds}x odds</span>
+            </div>
+          )}
 
           {/* Live odds warning */}
           <div className="flex items-start gap-2 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2.5 mb-4">
@@ -252,11 +271,18 @@ export default function BetModal({ round, side, onClose, onSuccess, solPrice }: 
               onClick={handleBet}
               disabled={busy || numAmount <= 0}
               className={`w-full py-3 rounded-xl font-bold transition-colors disabled:opacity-50
-                ${isYes ? "bg-yes hover:bg-yes/80 text-black" : "bg-no hover:bg-no/80 text-white"}`}
+                ${isRange
+                  ? "bg-brand hover:bg-brand-dim text-black"
+                  : isYes
+                    ? "bg-yes hover:bg-yes/80 text-black"
+                    : "bg-no hover:bg-no/80 text-white"
+                }`}
             >
               {busy
                 ? txStatus === "success" ? "Done!" : "Processing..."
-                : `Bet ${isYes ? "YES" : "NO"} · ${numAmount.toFixed(2)} SOL`}
+                : isRange
+                  ? `Bet ${outcome?.id} · ${numAmount.toFixed(2)} SOL`
+                  : `Bet ${isYes ? "YES" : "NO"} · ${numAmount.toFixed(2)} SOL`}
             </button>
           )}
 
