@@ -2,8 +2,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { Outcome } from "@/lib/types";
 
-const ROUND_DURATION_MS = 24 * 60 * 60 * 1000;
-const BETTING_CLOSES_BEFORE_END_MS = 5 * 60 * 1000; // 5 min before end
+const ROUND_DURATION_MS          = 15 * 60 * 1000; // 15 min total
+const BETTING_CLOSES_BEFORE_END_MS = 5 * 60 * 1000; // betting stops 5 min before end
 
 async function fetchCryptoPrices(): Promise<{ btc: number; sol: number } | null> {
   try {
@@ -49,29 +49,47 @@ async function fetchRecentPumpTokens(): Promise<PumpToken[]> {
   }
 }
 
-async function roundExistsToday(category: string, targetToken?: string): Promise<boolean> {
-  const oneDayAgo = new Date(Date.now() - ROUND_DURATION_MS);
+/** Only skip if there is already an open or closed (not yet resolved) round for this category. */
+async function roundExistsActive(category: string, targetToken?: string): Promise<boolean> {
   const count = await prisma.round.count({
     where: {
       category,
+      status: { in: ["open", "closed"] },
       ...(targetToken ? { targetToken } : {}),
-      createdAt: { gte: oneDayAgo },
     },
   });
   return count > 0;
 }
 
-/** Build 4 range outcomes centered around the current price (±2.5% bands). */
-function buildRangeOutcomes(price: number, isInt: boolean): Outcome[] {
-  const fmt = (n: number) => isInt ? Math.round(n) : parseFloat(n.toFixed(2));
-  const lo  = fmt(price * 0.975);
-  const hi  = fmt(price * 1.025);
+// ── BTC: 6 outcomes, $70 intervals, rounded to nearest $70 ───────────────────
+function buildBtcOutcomes(price: number): Outcome[] {
+  const p   = Math.round(price / 70) * 70; // snap to nearest $70
+  const fmt = (n: number) => `$${n.toLocaleString("en-US")}`;
 
   return [
-    { id: "A", label: `Below $${lo.toLocaleString("en-US")}`,          minPrice: null, maxPrice: lo,   pool: 0 },
-    { id: "B", label: `$${lo.toLocaleString("en-US")} – $${price.toLocaleString("en-US")}`,  minPrice: lo,  maxPrice: fmt(price), pool: 0 },
-    { id: "C", label: `$${price.toLocaleString("en-US")} – $${hi.toLocaleString("en-US")}`,  minPrice: fmt(price), maxPrice: hi, pool: 0 },
-    { id: "D", label: `Above $${hi.toLocaleString("en-US")}`,           minPrice: hi,  maxPrice: null, pool: 0 },
+    { id: "A", label: `Below ${fmt(p - 140)}`,              minPrice: null,    maxPrice: p - 140, pool: 0 },
+    { id: "B", label: `${fmt(p - 140)} – ${fmt(p - 70)}`,  minPrice: p - 140, maxPrice: p - 70,  pool: 0 },
+    { id: "C", label: `${fmt(p - 70)} – ${fmt(p)}`,        minPrice: p - 70,  maxPrice: p,       pool: 0 },
+    { id: "D", label: `${fmt(p)} – ${fmt(p + 70)}`,        minPrice: p,       maxPrice: p + 70,  pool: 0 },
+    { id: "E", label: `${fmt(p + 70)} – ${fmt(p + 140)}`,  minPrice: p + 70,  maxPrice: p + 140, pool: 0 },
+    { id: "F", label: `Above ${fmt(p + 140)}`,              minPrice: p + 140, maxPrice: null,    pool: 0 },
+  ];
+}
+
+// ── SOL: 6 outcomes, $0.10 intervals, rounded to nearest $0.10 ───────────────
+function buildSolOutcomes(price: number): Outcome[] {
+  // Use integer tenths to avoid floating-point drift
+  const p10  = Math.round(price * 10); // price in $0.10 units
+  const at   = (t: number) => parseFloat((t / 10).toFixed(2));
+  const fmt  = (t: number) => `$${(t / 10).toFixed(2)}`;
+
+  return [
+    { id: "A", label: `Below ${fmt(p10 - 2)}`,              minPrice: null,       maxPrice: at(p10 - 2), pool: 0 },
+    { id: "B", label: `${fmt(p10 - 2)} – ${fmt(p10 - 1)}`, minPrice: at(p10 - 2), maxPrice: at(p10 - 1), pool: 0 },
+    { id: "C", label: `${fmt(p10 - 1)} – ${fmt(p10)}`,     minPrice: at(p10 - 1), maxPrice: at(p10),     pool: 0 },
+    { id: "D", label: `${fmt(p10)} – ${fmt(p10 + 1)}`,     minPrice: at(p10),     maxPrice: at(p10 + 1), pool: 0 },
+    { id: "E", label: `${fmt(p10 + 1)} – ${fmt(p10 + 2)}`, minPrice: at(p10 + 1), maxPrice: at(p10 + 2), pool: 0 },
+    { id: "F", label: `Above ${fmt(p10 + 2)}`,              minPrice: at(p10 + 2), maxPrice: null,        pool: 0 },
   ];
 }
 
@@ -82,8 +100,9 @@ export interface CreateRoundsResult {
 }
 
 export async function createDailyRounds(): Promise<CreateRoundsResult> {
-  const endsAt          = new Date(Date.now() + ROUND_DURATION_MS);
-  const bettingClosesAt = new Date(endsAt.getTime() - BETTING_CLOSES_BEFORE_END_MS);
+  const now             = Date.now();
+  const endsAt          = new Date(now + ROUND_DURATION_MS);
+  const bettingClosesAt = new Date(now + ROUND_DURATION_MS - BETTING_CLOSES_BEFORE_END_MS);
   const created: string[] = [];
   const skipped: string[] = [];
   const errors: string[]  = [];
@@ -94,14 +113,14 @@ export async function createDailyRounds(): Promise<CreateRoundsResult> {
     errors.push("Failed to fetch crypto prices");
   } else {
     // BTC
-    if (await roundExistsToday("crypto", "bitcoin")) {
+    if (await roundExistsActive("crypto", "bitcoin")) {
       skipped.push("btc");
     } else {
       const btcPrice    = Math.round(prices.btc);
-      const btcOutcomes = buildRangeOutcomes(btcPrice, true);
+      const btcOutcomes = buildBtcOutcomes(btcPrice);
       await prisma.round.create({
         data: {
-          question:       "Where will Bitcoin's price be in 24 hours?",
+          question:       "Where will Bitcoin's price be in 15 minutes?",
           category:       "crypto",
           targetToken:    "bitcoin",
           targetPrice:    btcPrice,
@@ -118,14 +137,14 @@ export async function createDailyRounds(): Promise<CreateRoundsResult> {
     }
 
     // SOL
-    if (await roundExistsToday("crypto", "solana")) {
+    if (await roundExistsActive("crypto", "solana")) {
       skipped.push("sol");
     } else {
       const solPrice    = parseFloat(prices.sol.toFixed(2));
-      const solOutcomes = buildRangeOutcomes(solPrice, false);
+      const solOutcomes = buildSolOutcomes(solPrice);
       await prisma.round.create({
         data: {
-          question:       "Where will Solana's price be in 24 hours?",
+          question:       "Where will Solana's price be in 15 minutes?",
           category:       "crypto",
           targetToken:    "solana",
           targetPrice:    solPrice,
@@ -142,8 +161,8 @@ export async function createDailyRounds(): Promise<CreateRoundsResult> {
     }
   }
 
-  // ── pump.fun 3-token round (YES/NO stays) ──────────────────────────────────
-  if (await roundExistsToday("pumpfun")) {
+  // ── pump.fun 3-token round (YES/NO) ────────────────────────────────────────
+  if (await roundExistsActive("pumpfun")) {
     skipped.push("pumpfun");
   } else {
     const tokens = await fetchRecentPumpTokens();
@@ -161,14 +180,15 @@ export async function createDailyRounds(): Promise<CreateRoundsResult> {
     const BASE_POOL = 10;
     await prisma.round.create({
       data: {
-        question:  `Will ${tickers} reach $1M market cap in 24 hours?`,
-        category:  "pumpfun",
+        question:       `Will ${tickers} reach $1M market cap in 15 minutes?`,
+        category:       "pumpfun",
         tokenList,
-        yesPool:   BASE_POOL,
-        noPool:    BASE_POOL,
-        totalPool: BASE_POOL * 2,
-        status:    "open",
+        yesPool:        BASE_POOL,
+        noPool:         BASE_POOL,
+        totalPool:      BASE_POOL * 2,
+        status:         "open",
         endsAt,
+        bettingClosesAt,
       },
     });
     created.push("pumpfun");

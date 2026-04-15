@@ -103,16 +103,12 @@ async function determineYesNoWinner(
 async function runCron(): Promise<NextResponse> {
   const now = new Date();
 
-  // ── Step 1: create fresh daily rounds ───────────────────────────────────────
-  const createResult = await createDailyRounds();
-  console.log("[cron] createDailyRounds:", createResult);
-
-  // ── Step 2: resolve ended open rounds ───────────────────────────────────────
+  // ── Step 1: resolve ended open rounds ─────────────────────────────────────
   const endedRounds = await prisma.round.findMany({
     where: { status: "open", endsAt: { lte: now } },
   });
 
-  // Fetch crypto prices once — used for both range and yes/no crypto rounds
+  // Fetch crypto prices once — reused for all crypto rounds
   let cryptoPrices: CoinGeckoPrices = {};
   const needsCrypto = endedRounds.some(r => r.category === "crypto");
   if (needsCrypto) {
@@ -135,7 +131,6 @@ async function runCron(): Promise<NextResponse> {
 
     try {
       if (round.outcomes !== null) {
-        // Range round: find bracket containing current price
         winner = determineRangeOutcome(round, cryptoPrices);
         if (winner === null) {
           console.warn(`[cron] ${round.id}: could not determine range outcome (price data missing)`);
@@ -143,7 +138,6 @@ async function runCron(): Promise<NextResponse> {
           continue;
         }
       } else {
-        // Yes/no round
         winner = await determineYesNoWinner(round, cryptoPrices);
         if (winner === null) {
           summary.push({ roundId: round.id, status: "no_data", detail: "could not fetch external data" });
@@ -167,10 +161,15 @@ async function runCron(): Promise<NextResponse> {
     }
   }
 
+  // ── Step 2: create new rounds for any category that no longer has an active round ──
+  // This runs AFTER resolution so newly-resolved rounds immediately spawn successors.
+  const createResult = await createDailyRounds();
+  console.log("[cron] createDailyRounds:", createResult);
+
   return NextResponse.json({
     ran_at:          now.toISOString(),
-    rounds_created:  createResult,
     rounds_resolved: summary,
+    rounds_created:  createResult,
   });
 }
 

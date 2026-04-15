@@ -87,7 +87,7 @@ export async function resolveRound(
 ): Promise<ResolveOutcome> {
   const allBets = await prisma.bet.findMany({ where: { roundId, paid: false } });
 
-  const isRange = ["A", "B", "C", "D"].includes(winner);
+  const isRange = ["A", "B", "C", "D", "E", "F"].includes(winner);
 
   if (allBets.length === 0) {
     try {

@@ -18,30 +18,38 @@ const CATEGORY_LABELS: Record<string, string> = {
   crypto: "Crypto",
 };
 
-// A–D label colours
+// A–F label colours
 const OUTCOME_COLORS: Record<string, { bg: string; border: string; text: string; dot: string }> = {
   A: { bg: "bg-red-500/10",    border: "border-red-500/30",    text: "text-red-400",    dot: "bg-red-400" },
-  B: { bg: "bg-yellow-500/10", border: "border-yellow-500/30", text: "text-yellow-400", dot: "bg-yellow-400" },
-  C: { bg: "bg-brand/10",      border: "border-brand/30",      text: "text-brand",      dot: "bg-brand" },
-  D: { bg: "bg-yes/10",        border: "border-yes/30",        text: "text-yes",        dot: "bg-yes" },
+  B: { bg: "bg-orange-500/10", border: "border-orange-500/30", text: "text-orange-400", dot: "bg-orange-400" },
+  C: { bg: "bg-yellow-500/10", border: "border-yellow-500/30", text: "text-yellow-400", dot: "bg-yellow-400" },
+  D: { bg: "bg-brand/10",      border: "border-brand/30",      text: "text-brand",      dot: "bg-brand" },
+  E: { bg: "bg-sky-500/10",    border: "border-sky-500/30",    text: "text-sky-400",    dot: "bg-sky-400" },
+  F: { bg: "bg-purple-500/10", border: "border-purple-500/30", text: "text-purple-400", dot: "bg-purple-400" },
 };
 
-function useCountdown(target: string) {
-  const [timeLeft, setTimeLeft] = useState("");
+function formatCountdown(ms: number): string {
+  if (ms <= 0) return "00:00";
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function useCountdown(target: string): string {
+  const [display, setDisplay] = useState("");
   useEffect(() => {
     function calc() {
       const diff = new Date(target).getTime() - Date.now();
-      if (diff <= 0) return setTimeLeft("Ended");
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
-      setTimeLeft(`${h}h ${m}m ${s}s`);
+      setDisplay(diff <= 0 ? "00:00" : formatCountdown(diff));
     }
     calc();
     const id = setInterval(calc, 1000);
     return () => clearInterval(id);
   }, [target]);
-  return timeLeft;
+  return display;
 }
 
 function fmt(n: number): string {
@@ -130,11 +138,11 @@ function ResolvedRangeCard({ round }: { round: Round }) {
 
 // ── Main card ─────────────────────────────────────────────────────────────────
 export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
-  const roundCountdown   = useCountdown(round.endsAt);
+  const resultCountdown  = useCountdown(round.endsAt);
   const bettingCountdown = useCountdown(round.bettingClosesAt ?? round.endsAt);
   const outcomes         = round.outcomes ?? [];
   const totalPool        = round.realPool ?? 0;
-  const isEnded          = roundCountdown === "Ended" || round.status !== "open";
+  const isEnded          = round.status !== "open";
   const bettingClosed    = round.bettingClosesAt
     ? new Date() > new Date(round.bettingClosesAt)
     : isEnded;
@@ -158,7 +166,7 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
           </span>
           <div className="flex items-center gap-1 text-xs text-muted shrink-0">
             <span className={`w-2 h-2 rounded-full ${isEnded ? "bg-no" : "bg-[#22c55e] pulse-dot"}`} />
-            {roundCountdown}
+            {resultCountdown}
           </div>
         </div>
 
@@ -238,17 +246,31 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
           })}
         </div>
 
-        {/* Betting closes notice */}
-        {!bettingClosed && round.bettingClosesAt && (
-          <div className="flex items-center gap-1.5 text-[10px] text-muted mb-1">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>Betting closes in <span className="text-white font-mono">{bettingCountdown}</span></span>
+        {/* Timer row */}
+        {!bettingClosed ? (
+          <div className="flex items-center justify-between text-[10px] mb-1">
+            <div className="flex items-center gap-1.5 text-muted">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Betting closes in <span className="text-white font-mono font-semibold">{bettingCountdown}</span></span>
+            </div>
+            <div className="text-muted">
+              Result in <span className="text-white font-mono font-semibold">{resultCountdown}</span>
+            </div>
           </div>
-        )}
-        {bettingClosed && !isEnded && (
-          <p className="text-[10px] text-no mb-1">Betting closed — awaiting resolution</p>
+        ) : (
+          <div className="flex items-center justify-between text-[10px] mb-1">
+            <div className="flex items-center gap-1.5 text-no font-semibold">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m0 0v2m0-2h2m-2 0H10M12 3a9 9 0 110 18A9 9 0 0112 3z" />
+              </svg>
+              Betting Closed — Awaiting Result
+            </div>
+            <div className="text-muted">
+              Result in <span className="text-white font-mono font-semibold">{resultCountdown}</span>
+            </div>
+          </div>
         )}
       </div>
 

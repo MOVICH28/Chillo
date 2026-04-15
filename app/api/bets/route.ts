@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
     if (!isValidSolanaAddress(walletAddress)) {
       return NextResponse.json({ error: "Invalid wallet address" }, { status: 400 });
     }
-    const VALID_SIDES = ["yes", "no", "A", "B", "C", "D"];
+    const VALID_SIDES = ["yes", "no", "A", "B", "C", "D", "E", "F"];
     if (!VALID_SIDES.includes(side)) {
       return NextResponse.json({ error: "Invalid side value" }, { status: 400 });
     }
