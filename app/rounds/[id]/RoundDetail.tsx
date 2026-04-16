@@ -3,12 +3,16 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
-  LineChart, Line, YAxis, ReferenceArea, ReferenceLine,
+  LineChart, Line, XAxis, YAxis, ReferenceArea, ReferenceLine,
   ResponsiveContainer, Tooltip,
 } from "recharts";
+import {
+  Connection, PublicKey, Transaction, SystemProgram,
+  LAMPORTS_PER_SOL, TransactionInstruction,
+} from "@solana/web3.js";
 import { Outcome } from "@/lib/types";
 import { useBinancePrice } from "@/lib/useBinancePrice";
-import BetModal from "@/components/BetModal";
+import { useWallet } from "@/components/WalletProvider";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -44,52 +48,39 @@ interface RecentBet {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const OUTCOME_COLORS: Record<string, { bg: string; border: string; text: string; dot: string }> = {
-  A: { bg: "bg-red-500/10",    border: "border-red-500/30",    text: "text-red-400",    dot: "bg-red-400" },
-  B: { bg: "bg-orange-500/10", border: "border-orange-500/30", text: "text-orange-400", dot: "bg-orange-400" },
-  C: { bg: "bg-yellow-500/10", border: "border-yellow-500/30", text: "text-yellow-400", dot: "bg-yellow-400" },
-  D: { bg: "bg-brand/10",      border: "border-brand/30",      text: "text-brand",      dot: "bg-brand" },
-  E: { bg: "bg-sky-500/10",    border: "border-sky-500/30",    text: "text-sky-400",    dot: "bg-sky-400" },
-  F: { bg: "bg-purple-500/10", border: "border-purple-500/30", text: "text-purple-400", dot: "bg-purple-400" },
+const OUTCOME_COLORS: Record<string, { bg: string; border: string; text: string; dot: string; hex: string }> = {
+  A: { bg: "bg-red-500/10",    border: "border-red-500/40",    text: "text-red-400",    dot: "bg-red-400",    hex: "#f87171" },
+  B: { bg: "bg-orange-500/10", border: "border-orange-500/40", text: "text-orange-400", dot: "bg-orange-400", hex: "#fb923c" },
+  C: { bg: "bg-yellow-500/10", border: "border-yellow-500/40", text: "text-yellow-400", dot: "bg-yellow-400", hex: "#facc15" },
+  D: { bg: "bg-green-500/10",  border: "border-green-500/40",  text: "text-green-400",  dot: "bg-green-400",  hex: "#4ade80" },
+  E: { bg: "bg-sky-500/10",    border: "border-sky-500/40",    text: "text-sky-400",    dot: "bg-sky-400",    hex: "#38bdf8" },
+  F: { bg: "bg-purple-500/10", border: "border-purple-500/40", text: "text-purple-400", dot: "bg-purple-400", hex: "#c084fc" },
 };
 
-const ZONE_FILL: Record<string, string> = {
-  A: "rgba(239,68,68,0.08)",
-  B: "rgba(249,115,22,0.08)",
-  C: "rgba(234,179,8,0.08)",
-  D: "rgba(29,185,84,0.08)",
-  E: "rgba(14,165,233,0.08)",
-  F: "rgba(168,85,247,0.08)",
-};
-const ZONE_FILL_ACTIVE: Record<string, string> = {
-  A: "rgba(239,68,68,0.22)",
-  B: "rgba(249,115,22,0.22)",
-  C: "rgba(234,179,8,0.22)",
-  D: "rgba(29,185,84,0.22)",
-  E: "rgba(14,165,233,0.22)",
-  F: "rgba(168,85,247,0.22)",
+const PLATFORM_WALLET = "GsvhgEARAKjYX2oFRzgKpWU7XufuGPtVeN58M983prtb";
+const RPC = "https://api.devnet.solana.com";
+const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+
+type TxStatus = "idle" | "approving" | "confirming" | "registering" | "success" | "error";
+const STATUS_MESSAGES: Record<TxStatus, string> = {
+  idle: "", approving: "Waiting for approval…", confirming: "Confirming on-chain…",
+  registering: "Registering bet…", success: "Bet placed!", error: "",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatCountdown(ms: number): string {
   if (ms <= 0) return "00:00";
-  const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  return `${String(m).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
 function useCountdown(target: string | null): string {
   const [display, setDisplay] = useState("");
   useEffect(() => {
     if (!target) return;
-    function calc() {
-      const diff = new Date(target!).getTime() - Date.now();
-      setDisplay(diff <= 0 ? "00:00" : formatCountdown(diff));
-    }
+    const calc = () => setDisplay(formatCountdown(new Date(target).getTime() - Date.now()));
     calc();
     const id = setInterval(calc, 1000);
     return () => clearInterval(id);
@@ -97,141 +88,160 @@ function useCountdown(target: string | null): string {
   return display;
 }
 
-
-function findActiveOutcome(price: number, outcomes: Outcome[]): Outcome | null {
-  return outcomes.find(o => {
-    const above = o.minPrice === null || price >= o.minPrice;
-    const below = o.maxPrice === null || price <  o.maxPrice;
-    return above && below;
-  }) ?? null;
-}
-
-function shortAddr(addr: string) {
-  return `${addr.slice(0, 4)}…${addr.slice(-4)}`;
-}
+function shortAddr(a: string) { return `${a.slice(0, 4)}…${a.slice(-4)}`; }
 
 // ── Live chart ────────────────────────────────────────────────────────────────
 
-interface ChartProps {
+function LiveChart({
+  token, priceToBeat,
+}: {
   token: "bitcoin" | "solana";
-  outcomes: Outcome[];
-}
-
-function LiveChart({ token, outcomes }: ChartProps) {
+  priceToBeat: number | null;
+}) {
   const { price, history, status } = useBinancePrice(token);
-
-  if (status === "connecting" || history.length < 2) {
-    return (
-      <div className="h-[300px] flex items-center justify-center text-muted text-xs gap-2">
-        <svg className="animate-spin w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-        </svg>
-        Connecting to Binance…
-      </div>
-    );
-  }
-
-  const currentPrice = price ?? history[history.length - 1].price;
-  const activeOutcome = findActiveOutcome(currentPrice, outcomes);
-
-  const boundaries = outcomes
-    .flatMap(o => [o.minPrice, o.maxPrice])
-    .filter((b): b is number => b !== null);
-  const priceValues = history.map(p => p.price);
-  const allValues   = [...boundaries, ...priceValues];
-  const rawMin      = Math.min(...allValues);
-  const rawMax      = Math.max(...allValues);
-  const pad         = (rawMax - rawMin) * 0.12;
-  const domainMin   = rawMin - pad;
-  const domainMax   = rawMax + pad;
-
-  const uniqueBoundaries = Array.from(new Set(boundaries)).sort((a, b) => a - b);
 
   const fmtY = token === "bitcoin"
     ? (v: number) => `$${Math.round(v).toLocaleString("en-US")}`
     : (v: number) => `$${v.toFixed(2)}`;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tooltipFmt = (v: any) => [typeof v === "number" ? fmtY(v) : String(v), "Price"];
+  if (history.length < 2) {
+    return (
+      <div className="h-[400px] flex flex-col items-center justify-center gap-3 bg-[#0f0f1a] rounded-xl border border-white/5">
+        <svg className="animate-spin w-5 h-5 text-white/20" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+        </svg>
+        <span className="text-xs text-white/30">
+          {status === "connecting" ? "Connecting to Binance…" : "Waiting for price data…"}
+        </span>
+      </div>
+    );
+  }
+
+  const currentPrice = price ?? history[history.length - 1].price;
+  const isAbove = priceToBeat !== null ? currentPrice >= priceToBeat : true;
+  const lineColor = priceToBeat !== null ? (isAbove ? "#22c55e" : "#ef4444") : "#22c55e";
+
+  // Y domain
+  const allPrices = [...history.map(p => p.price), ...(priceToBeat ? [priceToBeat] : [])];
+  const rawMin = Math.min(...allPrices);
+  const rawMax = Math.max(...allPrices);
+  const pad = Math.max((rawMax - rawMin) * 0.18, token === "bitcoin" ? 100 : 0.2);
+  const domainMin = rawMin - pad;
+  const domainMax = rawMax + pad;
+
+  // X axis: format as elapsed time from first point
+  const t0 = history[0].time;
+  const fmtX = (t: number) => {
+    const elapsed = Math.round((t - t0) / 1000);
+    const m = Math.floor(elapsed / 60);
+    const s = elapsed % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  };
 
   const data = history.map(p => ({ t: p.time, price: p.price }));
 
   return (
-    <div className="h-[300px] w-full select-none">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 4, right: 64, left: 0, bottom: 0 }}>
-          {outcomes.map(o => (
-            <ReferenceArea
-              key={o.id}
-              y1={o.minPrice ?? domainMin}
-              y2={o.maxPrice ?? domainMax}
-              yAxisId={0}
-              fill={o.id === activeOutcome?.id ? ZONE_FILL_ACTIVE[o.id] : ZONE_FILL[o.id]}
-              strokeOpacity={0}
-              ifOverflow="extendDomain"
-            />
-          ))}
+    <div className="h-[400px] w-full select-none bg-[#0f0f1a] rounded-xl border border-white/5 overflow-hidden">
+      {/* Status indicator */}
+      <div className="flex items-center gap-1.5 px-4 pt-3 pb-0">
+        <span className={`w-1.5 h-1.5 rounded-full ${status === "live" ? "bg-[#22c55e]" : "bg-white/20"}`} />
+        <span className="text-[10px] uppercase tracking-widest font-bold text-white/40">
+          {token === "bitcoin" ? "BTC/USDT" : "SOL/USDT"} · Binance
+        </span>
+        <span className="ml-auto text-xs font-mono font-semibold text-white/80">
+          {fmtY(currentPrice)}
+        </span>
+      </div>
 
-          {uniqueBoundaries.map(b => (
+      <ResponsiveContainer width="100%" height="90%">
+        <LineChart data={data} margin={{ top: 8, right: 72, left: 0, bottom: 8 }}>
+          {/* Green zone above Price to Beat, red zone below */}
+          {priceToBeat !== null && (
+            <>
+              <ReferenceArea y1={priceToBeat} y2={domainMax} fill="rgba(34,197,94,0.05)"  strokeOpacity={0} />
+              <ReferenceArea y1={domainMin}   y2={priceToBeat} fill="rgba(239,68,68,0.05)" strokeOpacity={0} />
+            </>
+          )}
+
+          {/* Price to Beat line */}
+          {priceToBeat !== null && (
             <ReferenceLine
-              key={b}
-              y={b}
-              yAxisId={0}
-              stroke="#3a3b4a"
+              y={priceToBeat}
+              stroke="#4b5563"
+              strokeDasharray="6 3"
               strokeWidth={1}
-              strokeDasharray="4 3"
+              label={{
+                value: `Start ${fmtY(priceToBeat)}`,
+                position: "insideTopLeft",
+                fill: "#6b7280",
+                fontSize: 9,
+                dy: -4,
+              }}
             />
-          ))}
+          )}
 
+          {/* Current price floating label */}
           <ReferenceLine
             y={currentPrice}
-            yAxisId={0}
-            stroke="#22c55e"
-            strokeWidth={1.5}
-            strokeDasharray="6 3"
+            stroke={lineColor}
+            strokeWidth={1}
+            strokeOpacity={0.6}
+            strokeDasharray="3 3"
             label={{
               value: fmtY(currentPrice),
               position: "right",
-              fill: "#22c55e",
-              fontSize: 10,
-              dx: 4,
+              fill: lineColor,
+              fontSize: 11,
+              fontWeight: 700,
+              dx: 6,
             }}
+          />
+
+          <XAxis
+            dataKey="t"
+            type="number"
+            domain={["dataMin", "dataMax"]}
+            tickFormatter={fmtX}
+            tick={{ fontSize: 9, fill: "#374151" }}
+            axisLine={{ stroke: "#1f2937" }}
+            tickLine={false}
+            interval="preserveStartEnd"
+            tickCount={6}
           />
 
           <YAxis
-            yAxisId={0}
             domain={[domainMin, domainMax]}
             tickFormatter={fmtY}
-            width={token === "bitcoin" ? 72 : 56}
-            tick={{ fontSize: 10, fill: "#6b7280" }}
-            tickCount={6}
+            width={token === "bitcoin" ? 72 : 58}
+            tick={{ fontSize: 9, fill: "#374151" }}
             axisLine={false}
             tickLine={false}
+            tickCount={6}
           />
 
           <Tooltip
-            formatter={tooltipFmt}
-            labelFormatter={() => ""}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            formatter={(v: any) => [fmtY(v as number), "Price"]}
+            labelFormatter={(t) => fmtX(t as number)}
             contentStyle={{
-              background: "#1a1b23",
-              border: "1px solid #2a2b38",
+              background: "#0f0f1a",
+              border: "1px solid #1f2937",
               borderRadius: 6,
               fontSize: 11,
-              padding: "4px 8px",
+              padding: "4px 10px",
             }}
-            itemStyle={{ color: "#22c55e" }}
-            cursor={{ stroke: "#2a2b38", strokeWidth: 1 }}
+            itemStyle={{ color: lineColor }}
+            cursor={{ stroke: "#1f2937", strokeWidth: 1 }}
           />
 
           <Line
-            yAxisId={0}
-            type="monotone"
+            type="linear"
             dataKey="price"
-            stroke="#22c55e"
+            stroke={lineColor}
             strokeWidth={2}
             dot={false}
-            activeDot={{ r: 3, fill: "#22c55e", stroke: "#13141a", strokeWidth: 2 }}
+            activeDot={{ r: 3, fill: lineColor, stroke: "#0f0f1a", strokeWidth: 2 }}
             isAnimationActive={false}
           />
         </LineChart>
@@ -240,30 +250,214 @@ function LiveChart({ token, outcomes }: ChartProps) {
   );
 }
 
+// ── Pool distribution bar ─────────────────────────────────────────────────────
+
+function PoolBar({ outcomes, totalPool }: { outcomes: Outcome[]; totalPool: number }) {
+  if (totalPool <= 0) {
+    return (
+      <div className="mt-3 rounded-xl border border-white/5 bg-white/[0.02] p-4">
+        <p className="text-xs text-white/30 text-center">No bets placed yet</p>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-3 rounded-xl border border-white/5 bg-white/[0.02] p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] text-white/30 uppercase tracking-wider">Pool Distribution</span>
+        <span className="text-xs font-mono text-white/50">{totalPool.toFixed(2)} SOL total</span>
+      </div>
+      <div className="flex h-2 rounded-full overflow-hidden gap-px">
+        {outcomes.map(o => {
+          const pct = (o.pool / totalPool) * 100;
+          if (pct < 0.1) return null;
+          return (
+            <div
+              key={o.id}
+              className={OUTCOME_COLORS[o.id].dot}
+              style={{ width: `${pct}%` }}
+              title={`${o.id}: ${pct.toFixed(1)}%`}
+            />
+          );
+        })}
+      </div>
+      <div className="flex justify-between mt-2">
+        {outcomes.map(o => {
+          const pct = (o.pool / totalPool) * 100;
+          const c = OUTCOME_COLORS[o.id];
+          return (
+            <div key={o.id} className="text-center">
+              <div className={`text-[10px] font-bold ${c.text}`}>{o.id}</div>
+              <div className="text-[9px] text-white/30">{pct.toFixed(0)}%</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Inline bet panel ──────────────────────────────────────────────────────────
+
+function BetPanel({
+  round, outcome, onSuccess, onCancel,
+}: {
+  round: RoundData;
+  outcome: Outcome;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const { publicKey, connected, connect } = useWallet();
+  const [amount, setAmount]   = useState("0.1");
+  const [txStatus, setTxStatus] = useState<TxStatus>("idle");
+  const [error, setError]     = useState("");
+
+  const PRESETS = ["0.05", "0.1", "0.5", "1"];
+  const numAmount = parseFloat(amount) || 0;
+  const multiplier = outcome.pool > 0 && round.totalPool > 0
+    ? Math.max(1.05, (round.totalPool * 0.95) / outcome.pool)
+    : 2;
+  const payout = numAmount * multiplier;
+  const busy   = txStatus !== "idle" && txStatus !== "error";
+
+  async function handleBet() {
+    if (!connected || !publicKey) { await connect(); return; }
+    if (numAmount <= 0) { setError("Enter a valid amount"); return; }
+    setError("");
+    setTxStatus("approving");
+    try {
+      const connection = new Connection(RPC, "confirmed");
+      const fromPubkey = new PublicKey(publicKey);
+      const toPubkey   = new PublicKey(PLATFORM_WALLET);
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      const memo = JSON.stringify({ roundId: round.id, side: outcome.id, walletAddress: publicKey });
+      const tx = new Transaction({ recentBlockhash: blockhash, feePayer: fromPubkey });
+      tx.add(
+        SystemProgram.transfer({ fromPubkey, toPubkey, lamports: Math.round(numAmount * LAMPORTS_PER_SOL) }),
+        new TransactionInstruction({
+          keys: [{ pubkey: fromPubkey, isSigner: true, isWritable: false }],
+          programId: MEMO_PROGRAM_ID,
+          data: Buffer.from(memo, "utf-8"),
+        })
+      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { signature } = await (window as any).solana.signAndSendTransaction(tx);
+      setTxStatus("confirming");
+      await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
+      setTxStatus("registering");
+      const res  = await fetch("/api/bets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletAddress: publicKey, roundId: round.id, side: outcome.id, amount: numAmount, txHash: signature }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to register bet");
+      setTxStatus("success");
+      window.dispatchEvent(new CustomEvent("betPlaced"));
+      setTimeout(onSuccess, 1500);
+    } catch (e: unknown) {
+      setTxStatus("error");
+      const msg = e instanceof Error ? e.message : "Something went wrong";
+      setError(msg.includes("rejected") || msg.includes("User rejected") ? "Transaction rejected." : msg);
+    }
+  }
+
+  const c = OUTCOME_COLORS[outcome.id];
+
+  return (
+    <div className={`mt-2 mb-3 rounded-xl border p-4 ${c.bg} ${c.border}`}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className={`px-2 py-0.5 rounded text-xs font-bold ${c.bg} ${c.text} border ${c.border}`}>{outcome.id}</span>
+        <span className="text-xs text-white/70 truncate">{outcome.label}</span>
+        <span className={`ml-auto text-xs font-mono font-bold ${c.text}`}>{multiplier.toFixed(2)}x</span>
+      </div>
+
+      {/* Presets */}
+      <div className="flex gap-1.5 mb-2">
+        {PRESETS.map(v => (
+          <button key={v} onClick={() => setAmount(v)} disabled={busy}
+            className={`flex-1 py-1 rounded text-xs font-mono transition-colors disabled:opacity-40
+              ${amount === v ? `${c.bg} ${c.text} border ${c.border}` : "bg-white/5 text-white/40 hover:text-white/70 border border-transparent"}`}>
+            {v}
+          </button>
+        ))}
+      </div>
+
+      {/* Amount input */}
+      <div className="flex items-center bg-black/30 rounded-lg px-3 py-2 mb-2 border border-white/10 focus-within:border-white/20">
+        <input
+          type="number" min="0.01" step="0.01" value={amount}
+          onChange={e => setAmount(e.target.value)} disabled={busy}
+          className="flex-1 bg-transparent text-white font-mono text-sm outline-none disabled:opacity-50"
+          placeholder="0.00"
+        />
+        <span className="text-white/40 text-xs ml-2">SOL</span>
+      </div>
+
+      {/* Payout */}
+      <div className="flex items-center justify-between text-xs mb-3 px-0.5">
+        <span className="text-white/40">If correct:</span>
+        <span className="text-[#22c55e] font-mono font-semibold">~{payout.toFixed(3)} SOL</span>
+      </div>
+
+      {/* Status */}
+      {txStatus !== "idle" && txStatus !== "error" && (
+        <div className={`flex items-center gap-2 text-xs mb-2 px-0.5 ${txStatus === "success" ? "text-[#22c55e]" : "text-white/50"}`}>
+          {txStatus !== "success" && (
+            <svg className="animate-spin w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+            </svg>
+          )}
+          {txStatus === "success" && <span>✓</span>}
+          {STATUS_MESSAGES[txStatus]}
+        </div>
+      )}
+      {error && <p className="text-red-400 text-xs mb-2 px-0.5">{error}</p>}
+
+      {/* CTA */}
+      {!connected ? (
+        <button onClick={connect}
+          className="w-full py-2.5 rounded-lg bg-[#22c55e] text-black font-bold text-sm hover:bg-[#16a34a] transition-colors">
+          Connect Wallet to Bet
+        </button>
+      ) : (
+        <button onClick={handleBet} disabled={busy || numAmount <= 0}
+          className="w-full py-2.5 rounded-lg bg-[#22c55e] text-black font-bold text-sm hover:bg-[#16a34a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+          {busy ? (txStatus === "success" ? "Done!" : "Processing…") : `Place Bet · ${numAmount.toFixed(2)} SOL`}
+        </button>
+      )}
+
+      <button onClick={onCancel} disabled={busy}
+        className="w-full text-xs text-white/30 hover:text-white/60 transition-colors mt-2 py-1 disabled:opacity-0">
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function RoundDetail({ initialRound }: { initialRound: RoundData }) {
-  const [round, setRound] = useState<RoundData>(initialRound);
+  const [round, setRound]           = useState<RoundData>(initialRound);
   const [recentBets, setRecentBets] = useState<RecentBet[]>([]);
-  const [betModal, setBetModal] = useState<{ side: string; outcome: Outcome } | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [selected, setSelected]     = useState<Outcome | null>(null);
+  const [copied, setCopied]         = useState(false);
 
   const resultCountdown  = useCountdown(round.endsAt);
   const bettingCountdown = useCountdown(round.bettingClosesAt ?? round.endsAt);
 
-  const outcomes     = round.outcomes ?? [];
-  const totalPool    = round.realPool ?? 0;
+  const outcomes      = round.outcomes ?? [];
+  const totalPool     = round.realPool ?? 0;
   const bettingClosed = round.bettingClosesAt
     ? new Date() > new Date(round.bettingClosesAt)
     : round.status !== "open";
 
-  const token: "bitcoin" | "solana" = round.targetToken === "solana" ? "solana" : "bitcoin";
   const hasToken = round.targetToken === "bitcoin" || round.targetToken === "solana";
+  const token: "bitcoin" | "solana" = round.targetToken === "solana" ? "solana" : "bitcoin";
 
-  // Poll for fresh round + bets
   const refreshRound = useCallback(async () => {
     try {
-      const res = await fetch(`/api/rounds/${round.id}`);
+      const res  = await fetch(`/api/rounds/${round.id}`);
       if (!res.ok) return;
       const data = await res.json();
       setRound(data);
@@ -285,243 +479,220 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
   }
 
   const resolvedDate = round.resolvedAt
-    ? (() => {
-        const d    = new Date(round.resolvedAt);
-        const date = d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, ".");
-        const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-        return `${date} at ${time}`;
-      })()
+    ? new Date(round.resolvedAt).toLocaleString("en-GB", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      })
     : null;
 
   return (
-    <div className="min-h-screen bg-[var(--background)] text-white">
-      <div className="max-w-2xl mx-auto px-4 py-6">
+    <div className="min-h-screen bg-[#13141a] text-white">
 
-        {/* Back link */}
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 text-muted hover:text-white text-sm mb-6 transition-colors"
-        >
+      {/* Top bar */}
+      <div className="border-b border-white/5 px-4 py-3 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-1.5 text-sm text-white/40 hover:text-white/80 transition-colors">
           <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
-          All Markets
+          Back to Markets
         </Link>
+        <button onClick={handleShare}
+          className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors">
+          {copied ? (
+            <><svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-[#22c55e]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg> Copied!</>
+          ) : (
+            <><svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg> Share</>
+          )}
+        </button>
+      </div>
 
-        {/* Header */}
-        <div className="bg-surface rounded-xl border border-surface-3 p-5 mb-4">
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div className="flex flex-wrap gap-2">
-              <span className="inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
-                Crypto
+      <div className="max-w-6xl mx-auto px-4 py-6">
+
+        {/* Question + status */}
+        <div className="mb-5">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
+              Crypto
+            </span>
+            {round.status === "resolved" ? (
+              <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-white/5 text-white/30 border-white/10">
+                Resolved {resolvedDate}
               </span>
-              {round.status === "resolved" ? (
-                <span className="inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border bg-surface-3 text-muted border-surface-3">
-                  Resolved
-                </span>
-              ) : bettingClosed ? (
-                <span className="inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border bg-no/10 text-no border-no/20">
-                  Betting Closed
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border bg-yes/10 text-yes border-yes/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] pulse-dot" />
-                  Live
-                </span>
-              )}
-            </div>
-
-            {/* Share button */}
-            <button
-              onClick={handleShare}
-              className="flex items-center gap-1.5 text-[11px] text-muted hover:text-white transition-colors px-2.5 py-1.5 rounded-lg bg-surface-3 hover:bg-surface-2 border border-surface-3 shrink-0"
-            >
-              {copied ? (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-yes" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                  </svg>
-                  Share
-                </>
-              )}
-            </button>
+            ) : bettingClosed ? (
+              <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-red-500/10 text-red-400 border-red-500/20">
+                Awaiting Result
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-[#22c55e]/10 text-[#22c55e] border-[#22c55e]/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
+                Live
+              </span>
+            )}
           </div>
-
-          <h1 className="text-white font-semibold text-lg leading-snug mb-3">
-            {round.question}
-          </h1>
+          <h1 className="text-xl font-semibold text-white leading-snug mb-3">{round.question}</h1>
 
           {/* Timers */}
           {round.status !== "resolved" && (
-            <div className="flex items-center justify-between text-xs text-muted">
+            <div className="flex flex-wrap items-center gap-4 text-xs">
               {!bettingClosed ? (
-                <>
-                  <span>
-                    Betting closes in{" "}
-                    <span className="text-white font-mono font-semibold">{bettingCountdown}</span>
-                  </span>
-                  <span>
-                    Result in{" "}
-                    <span className="text-white font-mono font-semibold">{resultCountdown}</span>
-                  </span>
-                </>
+                <span className="text-white/40">
+                  Betting closes in{" "}
+                  <span className="text-white font-mono font-bold text-sm">{bettingCountdown}</span>
+                </span>
               ) : (
-                <>
-                  <span className="text-no font-semibold">Betting Closed — Awaiting Result</span>
-                  <span>
-                    Result in{" "}
-                    <span className="text-white font-mono font-semibold">{resultCountdown}</span>
-                  </span>
-                </>
+                <span className="text-red-400 font-medium">Betting Closed</span>
               )}
+              <span className="text-white/40">
+                Result in{" "}
+                <span className="text-white font-mono font-bold text-sm">{resultCountdown}</span>
+              </span>
             </div>
-          )}
-
-          {round.status === "resolved" && resolvedDate && (
-            <p className="text-xs text-muted">Resolved {resolvedDate}</p>
           )}
         </div>
 
-        {/* Live chart */}
-        {hasToken && outcomes.length > 0 && (
-          <div className="bg-surface rounded-xl border border-surface-3 mb-4 overflow-hidden">
-            <div className="flex items-center justify-between px-4 pt-3 pb-1">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#22c55e] pulse-dot" />
-                <span className="text-xs font-bold tracking-widest uppercase text-brand">Live Price</span>
-              </div>
-              <span className="text-[10px] text-muted uppercase tracking-wider">
-                {round.targetToken === "bitcoin" ? "BTC/USDT" : "SOL/USDT"} · Binance
-              </span>
-            </div>
-            <LiveChart token={token} outcomes={outcomes} />
-          </div>
-        )}
+        {/* Two-column layout */}
+        <div className="flex flex-col lg:flex-row gap-5">
 
-        {/* Outcome buttons */}
-        {outcomes.length > 0 && (
-          <div className="bg-surface rounded-xl border border-surface-3 p-4 mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-white">Pick an Outcome</h2>
-              <span className="text-[10px] text-muted">
-                Pool: <span className="text-white font-mono">{totalPool.toFixed(2)} SOL</span>
-              </span>
-            </div>
-
-            {round.status === "resolved" && round.winningOutcome && (
-              <div className={`mb-3 flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-semibold
-                ${OUTCOME_COLORS[round.winningOutcome]?.bg} ${OUTCOME_COLORS[round.winningOutcome]?.text} ${OUTCOME_COLORS[round.winningOutcome]?.border}`}>
-                <span className={`w-2 h-2 rounded-full ${OUTCOME_COLORS[round.winningOutcome]?.dot}`} />
-                {round.winningOutcome} WON — {outcomes.find(o => o.id === round.winningOutcome)?.label}
+          {/* ── LEFT column (60%) ── */}
+          <div className="lg:w-[60%]">
+            {hasToken && outcomes.length > 0 ? (
+              <>
+                <LiveChart token={token} priceToBeat={round.targetPrice} />
+                <PoolBar outcomes={outcomes} totalPool={totalPool} />
+              </>
+            ) : (
+              <div className="h-[400px] flex items-center justify-center bg-[#0f0f1a] rounded-xl border border-white/5">
+                <span className="text-white/20 text-sm">No chart available</span>
               </div>
             )}
+          </div>
 
-            <div className="flex flex-col gap-2">
-              {outcomes.map((o) => {
-                const c          = OUTCOME_COLORS[o.id];
-                const isWinner   = round.winningOutcome === o.id;
-                const multiplier = o.pool > 0 && totalPool > 0
-                  ? Math.max(1.05, (totalPool * 0.95) / o.pool)
-                  : null;
-                const sharePct = totalPool > 0 ? (o.pool / totalPool) * 100 : 0;
-                const disabled = bettingClosed || round.status === "resolved";
+          {/* ── RIGHT column (40%) ── */}
+          <div className="lg:w-[40%]">
+            <div className="bg-white/[0.02] rounded-xl border border-white/5 p-4">
+              <h2 className="text-sm font-semibold text-white mb-1">Place a Bet</h2>
+              <p className="text-[11px] text-white/30 mb-4">Select an outcome then enter your amount</p>
 
-                return (
-                  <button
-                    key={o.id}
-                    onClick={() => { if (!disabled) setBetModal({ side: o.id, outcome: o }); }}
-                    disabled={disabled}
-                    className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all
-                      ${disabled
-                        ? isWinner
-                          ? `${c.bg} ${c.border} opacity-100`
-                          : "bg-surface-2 border-surface-3 opacity-50 cursor-not-allowed"
-                        : `${c.bg} ${c.border} hover:opacity-90 active:scale-[0.99] cursor-pointer`
-                      }`}
-                  >
-                    {/* ID badge */}
-                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0
-                      ${c.bg} ${c.text} border ${c.border}`}>
-                      {o.id}
-                    </span>
+              {round.status === "resolved" && round.winningOutcome && (
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border mb-4 text-xs font-semibold
+                  ${OUTCOME_COLORS[round.winningOutcome].bg} ${OUTCOME_COLORS[round.winningOutcome].text} ${OUTCOME_COLORS[round.winningOutcome].border}`}>
+                  <span className={`w-2 h-2 rounded-full ${OUTCOME_COLORS[round.winningOutcome].dot}`} />
+                  {round.winningOutcome} WON — {outcomes.find(o => o.id === round.winningOutcome)?.label}
+                </div>
+              )}
 
-                    {/* Label + bar */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className={`text-xs font-medium truncate ${isWinner ? c.text : "text-white/80"}`}>
+              {/* Outcome list */}
+              <div className="space-y-1.5">
+                {outcomes.map(o => {
+                  const c           = OUTCOME_COLORS[o.id];
+                  const isSelected  = selected?.id === o.id;
+                  const isWinner    = round.winningOutcome === o.id;
+                  const multiplier  = o.pool > 0 && totalPool > 0
+                    ? Math.max(1.05, (totalPool * 0.95) / o.pool) : null;
+                  const pct = totalPool > 0 ? (o.pool / totalPool * 100) : 0;
+                  const disabled = bettingClosed || round.status === "resolved";
+
+                  return (
+                    <div key={o.id}>
+                      <button
+                        onClick={() => { if (!disabled) setSelected(isSelected ? null : o); }}
+                        disabled={disabled}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-left
+                          ${isSelected
+                            ? `${c.bg} ${c.border} ring-1 ring-inset ${c.border}`
+                            : isWinner
+                              ? `${c.bg} ${c.border}`
+                              : disabled
+                                ? "bg-white/[0.02] border-white/5 opacity-50 cursor-not-allowed"
+                                : "bg-white/[0.02] border-white/5 hover:border-white/10 hover:bg-white/[0.04] cursor-pointer"
+                          }`}
+                      >
+                        {/* Dot */}
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${c.dot}`} />
+
+                        {/* Label */}
+                        <span className={`flex-1 text-xs ${isSelected || isWinner ? c.text : "text-white/60"} truncate`}>
                           {o.label}
-                          {isWinner && <span className="ml-1">✓</span>}
+                          {isWinner && <span className="ml-1 text-[10px]">✓</span>}
                         </span>
-                        {multiplier !== null ? (
-                          <span className={`text-xs font-mono font-bold ml-2 shrink-0 ${c.text}`}>
-                            {multiplier.toFixed(2)}x
-                          </span>
-                        ) : (
-                          <span className="text-xs font-mono text-muted ml-2 shrink-0">--x</span>
-                        )}
-                      </div>
-                      <div className="h-1 rounded-full bg-surface-3 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${c.dot}`}
-                          style={{ width: `${sharePct}%` }}
+
+                        {/* Pool */}
+                        <span className="text-[10px] font-mono text-white/30 shrink-0">
+                          {o.pool.toFixed(2)} SOL
+                        </span>
+
+                        {/* Multiplier */}
+                        <span className={`text-xs font-mono font-bold shrink-0 w-10 text-right ${c.text}`}>
+                          {multiplier !== null ? `${multiplier.toFixed(2)}x` : "--x"}
+                        </span>
+                      </button>
+
+                      {/* Inline bet panel */}
+                      {isSelected && !bettingClosed && round.status !== "resolved" && (
+                        <BetPanel
+                          round={round}
+                          outcome={o}
+                          onSuccess={() => { setSelected(null); refreshRound(); }}
+                          onCancel={() => setSelected(null)}
                         />
-                      </div>
+                      )}
                     </div>
+                  );
+                })}
+              </div>
 
-                    {/* Pool */}
-                    <span className="text-[10px] font-mono text-muted shrink-0 w-16 text-right">
-                      {o.pool.toFixed(2)} SOL
-                    </span>
-                  </button>
-                );
-              })}
+              {/* Odds percentages */}
+              {totalPool > 0 && (
+                <div className="mt-4 pt-4 border-t border-white/5 space-y-1.5">
+                  <p className="text-[10px] text-white/20 uppercase tracking-wider mb-2">Current Odds</p>
+                  {outcomes.map(o => {
+                    const pct = (o.pool / totalPool) * 100;
+                    const c   = OUTCOME_COLORS[o.id];
+                    return (
+                      <div key={o.id} className="flex items-center gap-2">
+                        <span className={`text-[10px] font-bold w-4 ${c.text}`}>{o.id}</span>
+                        <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all duration-500 ${c.dot}`}
+                            style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-[10px] font-mono text-white/30 w-9 text-right">
+                          {pct.toFixed(1)}%
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-
-            {!bettingClosed && round.status !== "resolved" && (
-              <p className="text-[10px] text-muted mt-3 text-center">
-                Click any outcome to place a bet · Parimutuel · 5% platform fee
-              </p>
-            )}
           </div>
-        )}
+        </div>
 
-        {/* Recent bets feed */}
-        <div className="bg-surface rounded-xl border border-surface-3 p-4">
+        {/* Recent bets */}
+        <div className="mt-5 bg-white/[0.02] rounded-xl border border-white/5 p-4">
           <h2 className="text-sm font-semibold text-white mb-3">
             Recent Bets
             {recentBets.length > 0 && (
-              <span className="text-muted font-normal text-xs ml-2">{recentBets.length} shown</span>
+              <span className="text-white/20 font-normal text-xs ml-2">{recentBets.length} shown</span>
             )}
           </h2>
 
           {recentBets.length === 0 ? (
-            <p className="text-muted text-xs text-center py-4">No bets yet — be the first!</p>
+            <p className="text-white/20 text-xs text-center py-6">No bets yet — be the first!</p>
           ) : (
-            <div className="space-y-2">
-              {recentBets.map((bet) => {
-                const c = OUTCOME_COLORS[bet.side] ?? { text: "text-muted", bg: "bg-surface-3", border: "border-surface-3", dot: "bg-muted" };
+            <div className="divide-y divide-white/5">
+              {recentBets.map(bet => {
+                const c = OUTCOME_COLORS[bet.side] ?? { text: "text-white/30", bg: "bg-white/5", border: "border-white/10", dot: "bg-white/20", hex: "#fff" };
+                const ago = Math.round((Date.now() - new Date(bet.createdAt).getTime()) / 60000);
                 return (
-                  <div
-                    key={bet.id}
-                    className="flex items-center justify-between text-xs py-2 border-b border-surface-3/50 last:border-0"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${c.bg} ${c.text} border ${c.border} shrink-0`}>
-                        {bet.side}
-                      </span>
-                      <span className="text-muted font-mono truncate">{shortAddr(bet.walletAddress)}</span>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-white font-mono">{bet.amount.toFixed(2)} SOL</span>
-                      <span className="text-muted font-mono">{bet.odds.toFixed(2)}x</span>
-                    </div>
+                  <div key={bet.id} className="flex items-center gap-3 py-2.5 text-xs">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${c.bg} ${c.text} border ${c.border} shrink-0`}>
+                      {bet.side}
+                    </span>
+                    <span className="text-white/30 font-mono">{shortAddr(bet.walletAddress)}</span>
+                    <span className="flex-1" />
+                    <span className="text-white font-mono">{bet.amount.toFixed(2)} SOL</span>
+                    <span className="text-white/20 font-mono">{bet.odds.toFixed(2)}x</span>
+                    <span className="text-white/20 w-12 text-right">{ago === 0 ? "now" : `${ago}m ago`}</span>
                   </div>
                 );
               })}
@@ -530,23 +701,6 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
         </div>
 
       </div>
-
-      {/* Bet modal */}
-      {betModal && (
-        <BetModal
-          round={{
-            ...round,
-            outcomes: round.outcomes ?? undefined,
-          }}
-          side={betModal.side}
-          outcome={betModal.outcome}
-          onClose={() => setBetModal(null)}
-          onSuccess={() => {
-            setBetModal(null);
-            refreshRound();
-          }}
-        />
-      )}
     </div>
   );
 }

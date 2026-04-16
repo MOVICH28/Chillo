@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { PricePoint } from "./usePriceHistory";
 
-const MAX_HISTORY   = 150; // ~5 min at 2s throttle
-const THROTTLE_MS   = 2_000;
+const MAX_HISTORY   = 150; // 2.5 min at 1s throttle
+const THROTTLE_MS   = 1_000;
 
 export interface BinancePriceState {
   price:   number | null;
