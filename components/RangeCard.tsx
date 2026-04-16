@@ -167,10 +167,12 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
           <span className={`inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border ${CATEGORY_STYLES[round.category] ?? "bg-surface-3 text-muted border-transparent"}`}>
             {CATEGORY_LABELS[round.category] ?? round.category}
           </span>
-          <div className="flex items-center gap-1 text-xs text-muted shrink-0">
-            <span className={`w-2 h-2 rounded-full ${isEnded ? "bg-no" : "bg-[#22c55e] pulse-dot"}`} />
-            {resultCountdown}
-          </div>
+          {!isEnded && (
+            <span className="flex items-center gap-1 text-[10px] text-muted shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] pulse-dot" />
+              Live
+            </span>
+          )}
         </div>
 
         {/* Question */}
