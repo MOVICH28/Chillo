@@ -2,8 +2,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { Outcome } from "@/lib/types";
 
-const ROUND_DURATION_MS          = 10 * 60 * 1000; // 10 min total
-const BETTING_CLOSES_BEFORE_END_MS = 3 * 60 * 1000; // betting stops 3 min before end
+const ROUND_DURATION_MS          = 15 * 60 * 1000; // 15 min total
+const BETTING_CLOSES_BEFORE_END_MS =  5 * 60 * 1000; // betting stops 5 min before end (closes at +10 min)
 
 async function fetchCryptoPrices(): Promise<{ btc: number; sol: number } | null> {
   try {
