@@ -2,8 +2,9 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { Outcome } from "@/lib/types";
 
-const ROUND_DURATION_MS          = 15 * 60 * 1000; // 15 min total
-const BETTING_CLOSES_BEFORE_END_MS =  5 * 60 * 1000; // betting stops 5 min before end (closes at +10 min)
+const ROUND_DURATION_MS            = 15 * 60 * 1000; // 15 min total
+const BETTING_CLOSES_BEFORE_END_MS =  5 * 60 * 1000; // betting closes at +10 min (5 min before end)
+const ROUND_CREATION_INTERVAL_MS   = 10 * 60 * 1000; // new round spawned every 10 min
 
 async function fetchCryptoPrices(): Promise<{ btc: number; sol: number } | null> {
   try {
@@ -21,24 +22,16 @@ async function fetchCryptoPrices(): Promise<{ btc: number; sol: number } | null>
 }
 
 /**
- * A round is "active" if:
- *   - status is "open", OR
- *   - status is "closed" AND endsAt is in the future (not yet resolved)
- * Only create a new round if no active round exists.
+ * Skip creation if a round for this token was already created within the last
+ * ROUND_CREATION_INTERVAL_MS (10 min). This allows overlapping rounds:
+ * one open for betting and one waiting for its result can coexist.
  */
-async function roundExistsActive(category: string, targetToken?: string): Promise<boolean> {
-  const now = new Date();
-  const count = await prisma.round.count({
-    where: {
-      category,
-      ...(targetToken ? { targetToken } : {}),
-      OR: [
-        { status: "open" },
-        { status: "closed", endsAt: { gt: now } },
-      ],
-    },
+async function roundCreatedRecently(targetToken: string): Promise<boolean> {
+  const since = new Date(Date.now() - ROUND_CREATION_INTERVAL_MS);
+  const found = await prisma.round.findFirst({
+    where: { targetToken, createdAt: { gte: since } },
   });
-  return count > 0;
+  return found !== null;
 }
 
 // ── BTC: 6 outcomes, $70 step, centered on current price (no rounding) ───────
@@ -92,7 +85,7 @@ export async function createDailyRounds(): Promise<CreateRoundsResult> {
     errors.push("Failed to fetch crypto prices");
   } else {
     // BTC
-    if (await roundExistsActive("crypto", "bitcoin")) {
+    if (await roundCreatedRecently("bitcoin")) {
       skipped.push("btc");
     } else {
       const btcPrice    = Math.round(prices.btc);
@@ -116,7 +109,7 @@ export async function createDailyRounds(): Promise<CreateRoundsResult> {
     }
 
     // SOL
-    if (await roundExistsActive("crypto", "solana")) {
+    if (await roundCreatedRecently("solana")) {
       skipped.push("sol");
     } else {
       const solPrice    = parseFloat(prices.sol.toFixed(2));
