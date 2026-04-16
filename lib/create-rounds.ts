@@ -20,35 +20,6 @@ async function fetchCryptoPrices(): Promise<{ btc: number; sol: number } | null>
   }
 }
 
-interface PumpToken {
-  address: string;
-  symbol: string;
-}
-
-async function fetchRecentPumpTokens(): Promise<PumpToken[]> {
-  try {
-    const res = await fetch(
-      "https://frontend-api.pump.fun/coins?offset=0&limit=10&sort=created_timestamp&order=DESC&includeNsfw=false",
-      { cache: "no-store", headers: { "User-Agent": "Mozilla/5.0" } }
-    );
-    if (!res.ok) return [];
-    const data = await res.json();
-    if (!Array.isArray(data)) return [];
-    const filtered = data.filter(
-      (t: { symbol?: string; mint?: string }) =>
-        t.symbol && t.mint && t.symbol.length <= 10
-    );
-    return filtered
-      .slice(0, 3)
-      .map((t: { mint: string; symbol: string }) => ({
-        address: t.mint,
-        symbol: t.symbol.toUpperCase(),
-      }));
-  } catch {
-    return [];
-  }
-}
-
 /**
  * A round is "active" if:
  *   - status is "open", OR
