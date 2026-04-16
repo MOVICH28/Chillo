@@ -441,7 +441,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                 return (
                   <button
                     key={o.id}
-                    onClick={() => !disabled && setBetModal({ side: o.id, outcome: o })}
+                    onClick={() => { if (!disabled) setBetModal({ side: o.id, outcome: o }); }}
                     disabled={disabled}
                     className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all
                       ${disabled
