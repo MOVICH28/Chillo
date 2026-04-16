@@ -168,10 +168,19 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
             {CATEGORY_LABELS[round.category] ?? round.category}
           </span>
           {!isEnded && (
-            <span className="flex items-center gap-1 text-[10px] text-muted shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] pulse-dot" />
-              Live
-            </span>
+            <div className="text-right shrink-0">
+              {!bettingClosed ? (
+                <>
+                  <p className="text-[10px] text-white/40 uppercase tracking-wider">Betting closes in</p>
+                  <p className="text-base font-mono font-bold text-[#22c55e] tabular-nums leading-tight">{bettingCountdown}</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[10px] text-red-400/70 uppercase tracking-wider">Result in</p>
+                  <p className="text-base font-mono font-bold text-red-400 tabular-nums leading-tight">{resultCountdown}</p>
+                </>
+              )}
+            </div>
           )}
         </div>
 
@@ -248,24 +257,12 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
           })}
         </div>
 
-        {/* Timer row */}
-        <div className="flex items-start justify-between gap-3 mb-1">
-          {!bettingClosed ? (
-            <div>
-              <p className="text-[10px] text-white/40 uppercase tracking-wider mb-0.5">Betting closes in</p>
-              <p className="text-3xl font-mono font-bold text-[#22c55e] tabular-nums leading-none">{bettingCountdown}</p>
-            </div>
-          ) : (
-            <div>
-              <p className="text-[10px] text-no/70 uppercase tracking-wider mb-0.5">Betting</p>
-              <p className="text-sm font-semibold text-no">Closed</p>
-            </div>
-          )}
-          <div className="text-right">
-            <p className="text-[10px] text-white/40 uppercase tracking-wider mb-0.5">Result in</p>
-            <p className="text-xl font-mono font-bold text-white/80 tabular-nums leading-none">{resultCountdown}</p>
+        {/* Result timer (small, bottom) */}
+        {!bettingClosed && (
+          <div className="flex items-center justify-end text-[10px] text-muted mb-1">
+            Result in <span className="ml-1 font-mono text-white/60">{resultCountdown}</span>
           </div>
-        </div>
+        )}
 
       </div>
 
