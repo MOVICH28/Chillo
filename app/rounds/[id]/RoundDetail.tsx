@@ -487,74 +487,69 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
 
   return (
     <div className="min-h-screen bg-[#13141a] text-white">
-
-      {/* Top bar */}
-      <div className="border-b border-white/5 px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-1.5 text-sm text-white/40 hover:text-white/80 transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to Markets
-        </Link>
-        <button onClick={handleShare}
-          className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors">
-          {copied ? (
-            <><svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-[#22c55e]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg> Copied!</>
-          ) : (
-            <><svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg> Share</>
-          )}
-        </button>
-      </div>
-
       <div className="max-w-6xl mx-auto px-4 py-6">
 
-        {/* Question + status */}
-        <div className="mb-5">
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
-              Crypto
-            </span>
-            {round.status === "resolved" ? (
-              <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-white/5 text-white/30 border-white/10">
-                Resolved {resolvedDate}
-              </span>
-            ) : bettingClosed ? (
-              <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-red-500/10 text-red-400 border-red-500/20">
-                Awaiting Result
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-[#22c55e]/10 text-[#22c55e] border-[#22c55e]/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
-                Live
-              </span>
-            )}
-          </div>
-          <h1 className="text-xl font-semibold text-white leading-snug mb-3">{round.question}</h1>
-
-          {/* Timers */}
-          {round.status !== "resolved" && (
-            <div className="flex flex-wrap items-center gap-4 text-xs">
-              {!bettingClosed ? (
-                <span className="text-white/40">
-                  Betting closes in{" "}
-                  <span className="text-white font-mono font-bold text-sm">{bettingCountdown}</span>
-                </span>
-              ) : (
-                <span className="text-red-400 font-medium">Betting Closed</span>
-              )}
-              <span className="text-white/40">
-                Result in{" "}
-                <span className="text-white font-mono font-bold text-sm">{resultCountdown}</span>
-              </span>
-            </div>
-          )}
-        </div>
-
         {/* Two-column layout */}
-        <div className="flex flex-col lg:flex-row gap-5">
+        <div className="flex flex-col lg:flex-row gap-6">
 
           {/* ── LEFT column (60%) ── */}
           <div className="lg:w-[60%]">
+
+            {/* Question + status badges */}
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
+                Crypto
+              </span>
+              {round.status === "resolved" ? (
+                <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-white/5 text-white/30 border-white/10">
+                  Resolved {resolvedDate}
+                </span>
+              ) : bettingClosed ? (
+                <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-red-500/10 text-red-400 border-red-500/20">
+                  Awaiting Result
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-[#22c55e]/10 text-[#22c55e] border-[#22c55e]/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
+                  Live
+                </span>
+              )}
+              {/* Share button */}
+              <button onClick={handleShare}
+                className="ml-auto flex items-center gap-1.5 text-[11px] text-white/30 hover:text-white/60 transition-colors">
+                {copied ? (
+                  <><svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-[#22c55e]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>Copied!</>
+                ) : (
+                  <><svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>Share</>
+                )}
+              </button>
+            </div>
+
+            <h1 className="text-xl font-semibold text-white leading-snug mb-4">{round.question}</h1>
+
+            {/* Countdown timers */}
+            {round.status !== "resolved" && (
+              <div className="flex flex-wrap items-center gap-5 mb-5 text-sm">
+                {!bettingClosed ? (
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wider text-white/30 mb-0.5">Betting closes in</span>
+                    <span className="text-white font-mono font-bold text-lg tabular-nums">{bettingCountdown}</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wider text-red-400/70 mb-0.5">Betting</span>
+                    <span className="text-red-400 font-semibold">Closed</span>
+                  </div>
+                )}
+                <div className="w-px h-8 bg-white/10" />
+                <div className="flex flex-col">
+                  <span className="text-[10px] uppercase tracking-wider text-white/30 mb-0.5">Result in</span>
+                  <span className="text-white font-mono font-bold text-lg tabular-nums">{resultCountdown}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Chart + pool bar */}
             {hasToken && outcomes.length > 0 ? (
               <>
                 <LiveChart token={token} priceToBeat={round.targetPrice} />
@@ -668,7 +663,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
         </div>
 
         {/* Recent bets */}
-        <div className="mt-5 bg-white/[0.02] rounded-xl border border-white/5 p-4">
+        <div className="mt-6 bg-white/[0.02] rounded-xl border border-white/5 p-4">
           <h2 className="text-sm font-semibold text-white mb-3">
             Recent Bets
             {recentBets.length > 0 && (
@@ -677,7 +672,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
           </h2>
 
           {recentBets.length === 0 ? (
-            <p className="text-white/20 text-xs text-center py-6">No bets yet — be the first!</p>
+            <p className="text-white/20 text-xs text-center py-6">No bets placed yet — be the first!</p>
           ) : (
             <div className="divide-y divide-white/5">
               {recentBets.map(bet => {
@@ -692,12 +687,23 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                     <span className="flex-1" />
                     <span className="text-white font-mono">{bet.amount.toFixed(2)} SOL</span>
                     <span className="text-white/20 font-mono">{bet.odds.toFixed(2)}x</span>
-                    <span className="text-white/20 w-12 text-right">{ago === 0 ? "now" : `${ago}m ago`}</span>
+                    <span className="text-white/20 w-14 text-right shrink-0">{ago === 0 ? "just now" : `${ago}m ago`}</span>
                   </div>
                 );
               })}
             </div>
           )}
+        </div>
+
+        {/* Back to Markets */}
+        <div className="mt-6 pb-2">
+          <Link href="/"
+            className="inline-flex items-center gap-1.5 text-sm text-white/30 hover:text-white/70 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Markets
+          </Link>
         </div>
 
       </div>
