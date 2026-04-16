@@ -164,7 +164,7 @@ async function runCron(): Promise<NextResponse> {
   // ── Step 2: create new rounds for any category that no longer has an active round ──
   // This runs AFTER resolution so newly-resolved rounds immediately spawn successors.
   const createResult = await createDailyRounds();
-  console.log("[cron] createDailyRounds:", createResult);
+  console.log(`[cron] rounds_created=${createResult.created.join(",") || "none"} skipped=${createResult.skipped.join(",") || "none"} errors=${createResult.errors.join(",") || "none"}`);
 
   return NextResponse.json({
     ran_at:          now.toISOString(),

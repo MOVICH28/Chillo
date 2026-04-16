@@ -49,47 +49,55 @@ async function fetchRecentPumpTokens(): Promise<PumpToken[]> {
   }
 }
 
-/** Only skip if there is already an open round for this category/token. */
+/**
+ * A round is "active" if:
+ *   - status is "open", OR
+ *   - status is "closed" AND endsAt is in the future (not yet resolved)
+ * Only create a new round if no active round exists.
+ */
 async function roundExistsActive(category: string, targetToken?: string): Promise<boolean> {
+  const now = new Date();
   const count = await prisma.round.count({
     where: {
       category,
-      status: "open",
       ...(targetToken ? { targetToken } : {}),
+      OR: [
+        { status: "open" },
+        { status: "closed", endsAt: { gt: now } },
+      ],
     },
   });
   return count > 0;
 }
 
-// ── BTC: 6 outcomes, $70 intervals, base = nearest $70 ───────────────────────
+// ── BTC: 6 outcomes, $70 step, centered on current price (no rounding) ───────
 function buildBtcOutcomes(price: number): Outcome[] {
-  const base = Math.round(price / 70) * 70;
+  const p    = Math.round(price); // drop decimals only
+  const step = 70;
   const fmt  = (n: number) => `$${n.toLocaleString("en-US")}`;
 
   return [
-    { id: "A", label: `Below ${fmt(base - 140)}`,                    minPrice: null,        maxPrice: base - 140, pool: 0 },
-    { id: "B", label: `${fmt(base - 140)} – ${fmt(base - 70)}`,      minPrice: base - 140,  maxPrice: base - 70,  pool: 0 },
-    { id: "C", label: `${fmt(base - 70)} – ${fmt(base)}`,            minPrice: base - 70,   maxPrice: base,       pool: 0 },
-    { id: "D", label: `${fmt(base)} – ${fmt(base + 70)}`,            minPrice: base,        maxPrice: base + 70,  pool: 0 },
-    { id: "E", label: `${fmt(base + 70)} – ${fmt(base + 140)}`,      minPrice: base + 70,   maxPrice: base + 140, pool: 0 },
-    { id: "F", label: `Above ${fmt(base + 140)}`,                    minPrice: base + 140,  maxPrice: null,       pool: 0 },
+    { id: "A", label: `Below ${fmt(p - step * 2)}`,                      minPrice: 0,              maxPrice: p - step * 2, pool: 0 },
+    { id: "B", label: `${fmt(p - step * 2)} – ${fmt(p - step)}`,         minPrice: p - step * 2,   maxPrice: p - step,     pool: 0 },
+    { id: "C", label: `${fmt(p - step)} – ${fmt(p)}`,                    minPrice: p - step,       maxPrice: p,            pool: 0 },
+    { id: "D", label: `${fmt(p)} – ${fmt(p + step)}`,                    minPrice: p,              maxPrice: p + step,     pool: 0 },
+    { id: "E", label: `${fmt(p + step)} – ${fmt(p + step * 2)}`,         minPrice: p + step,       maxPrice: p + step * 2, pool: 0 },
+    { id: "F", label: `Above ${fmt(p + step * 2)}`,                      minPrice: p + step * 2,   maxPrice: 9_999_999,    pool: 0 },
   ];
 }
 
-// ── SOL: 6 outcomes, $0.10 intervals, base = nearest $0.10 ───────────────────
+// ── SOL: 6 outcomes, $0.10 step, centered on exact current price ─────────────
 function buildSolOutcomes(price: number): Outcome[] {
-  // Round to nearest $0.10; use toFixed(2) on each boundary to avoid float drift
-  const base = parseFloat((Math.round(price * 10) / 10).toFixed(2));
-  const r    = (n: number) => parseFloat(n.toFixed(2));
-  const fmt  = (n: number) => `$${n.toFixed(2)}`;
+  const p    = parseFloat(price.toFixed(2)); // exact price, no rounding
+  const step = 0.10;
 
   return [
-    { id: "A", label: `Below ${fmt(r(base - 0.20))}`,                        minPrice: null,            maxPrice: r(base - 0.20), pool: 0 },
-    { id: "B", label: `${fmt(r(base - 0.20))} – ${fmt(r(base - 0.10))}`,    minPrice: r(base - 0.20),  maxPrice: r(base - 0.10), pool: 0 },
-    { id: "C", label: `${fmt(r(base - 0.10))} – ${fmt(base)}`,              minPrice: r(base - 0.10),  maxPrice: base,            pool: 0 },
-    { id: "D", label: `${fmt(base)} – ${fmt(r(base + 0.10))}`,              minPrice: base,            maxPrice: r(base + 0.10), pool: 0 },
-    { id: "E", label: `${fmt(r(base + 0.10))} – ${fmt(r(base + 0.20))}`,    minPrice: r(base + 0.10),  maxPrice: r(base + 0.20), pool: 0 },
-    { id: "F", label: `Above ${fmt(r(base + 0.20))}`,                        minPrice: r(base + 0.20),  maxPrice: null,           pool: 0 },
+    { id: "A", label: `Below $${(p - step * 2).toFixed(2)}`,                                           minPrice: 0,                          maxPrice: parseFloat((p - step * 2).toFixed(2)), pool: 0 },
+    { id: "B", label: `$${(p - step * 2).toFixed(2)} – $${(p - step).toFixed(2)}`,                    minPrice: parseFloat((p - step * 2).toFixed(2)), maxPrice: parseFloat((p - step).toFixed(2)),   pool: 0 },
+    { id: "C", label: `$${(p - step).toFixed(2)} – $${p.toFixed(2)}`,                                  minPrice: parseFloat((p - step).toFixed(2)),     maxPrice: p,                                   pool: 0 },
+    { id: "D", label: `$${p.toFixed(2)} – $${(p + step).toFixed(2)}`,                                  minPrice: p,                          maxPrice: parseFloat((p + step).toFixed(2)),   pool: 0 },
+    { id: "E", label: `$${(p + step).toFixed(2)} – $${(p + step * 2).toFixed(2)}`,                    minPrice: parseFloat((p + step).toFixed(2)),     maxPrice: parseFloat((p + step * 2).toFixed(2)), pool: 0 },
+    { id: "F", label: `Above $${(p + step * 2).toFixed(2)}`,                                           minPrice: parseFloat((p + step * 2).toFixed(2)), maxPrice: 9_999,                                pool: 0 },
   ];
 }
 
