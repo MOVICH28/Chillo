@@ -584,7 +584,6 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                   const isWinner    = round.winningOutcome === o.id;
                   const multiplier  = o.pool > 0 && totalPool > 0
                     ? Math.max(1.05, (totalPool * 0.95) / o.pool) : null;
-                  const pct = totalPool > 0 ? (o.pool / totalPool * 100) : 0;
                   const disabled = bettingClosed || round.status === "resolved";
 
                   return (
