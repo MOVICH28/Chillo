@@ -45,6 +45,7 @@ export default async function RoundDetailPage({ params }: PageProps) {
     noPool:   np,
     totalPool: tp,
     realPool,
+    roundNumber: round.roundNumber ?? null,
   };
 
   return <RoundDetail initialRound={serialized} />;
