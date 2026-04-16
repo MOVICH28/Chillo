@@ -211,7 +211,7 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
             return (
               <button
                 key={o.id}
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); !bettingClosed && onBet(round, o.id, o); }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!bettingClosed) onBet(round, o.id, o); }}
                 disabled={bettingClosed}
                 className={`relative flex flex-col gap-1 p-2.5 rounded-lg border text-left transition-all
                   ${bettingClosed

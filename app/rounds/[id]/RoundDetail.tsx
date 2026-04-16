@@ -97,11 +97,6 @@ function useCountdown(target: string | null): string {
   return display;
 }
 
-function fmt(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000)     return `$${n.toLocaleString("en-US")}`;
-  return `$${n.toFixed(2)}`;
-}
 
 function findActiveOutcome(price: number, outcomes: Outcome[]): Outcome | null {
   return outcomes.find(o => {
