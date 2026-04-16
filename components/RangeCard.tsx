@@ -171,13 +171,13 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
             <div className="text-right shrink-0">
               {!bettingClosed ? (
                 <>
-                  <p className="text-[10px] text-white/40 uppercase tracking-wider">Betting closes in</p>
-                  <p className="text-base font-mono font-bold text-[#22c55e] tabular-nums leading-tight">{bettingCountdown}</p>
+                  <p className="text-[10px] text-[#22c55e]/60 uppercase tracking-wider">Betting closes in</p>
+                  <p className="text-sm font-mono font-bold text-[#22c55e] tabular-nums leading-tight">{bettingCountdown}</p>
                 </>
               ) : (
                 <>
-                  <p className="text-[10px] text-red-400/70 uppercase tracking-wider">Result in</p>
-                  <p className="text-base font-mono font-bold text-red-400 tabular-nums leading-tight">{resultCountdown}</p>
+                  <p className="text-[10px] text-white/40 uppercase tracking-wider">Result in</p>
+                  <p className="text-lg font-mono font-bold text-white/80 tabular-nums leading-tight">{resultCountdown}</p>
                 </>
               )}
             </div>
