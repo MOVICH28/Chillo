@@ -24,6 +24,7 @@ model Round {
   outcomes        Json?     // Array of {id,label,minPrice,maxPrice,pool} for range rounds
   bettingClosesAt DateTime? // endsAt minus 5 min — betting locked after this
   winningOutcome  String?   // "A"|"B"|"C"|"D" — set on resolution of range rounds
+  roundNumber     Int?      // sequential round number, null for old rounds
 }
 
 model Bet {

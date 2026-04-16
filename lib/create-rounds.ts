@@ -84,6 +84,10 @@ export async function createDailyRounds(): Promise<CreateRoundsResult> {
   if (!prices) {
     errors.push("Failed to fetch crypto prices");
   } else {
+    // Get global round count once for sequential numbering
+    const totalCount = await prisma.round.count();
+    let nextNumber = totalCount + 1;
+
     // BTC
     if (await roundCreatedRecently("bitcoin")) {
       skipped.push("btc");
@@ -103,6 +107,7 @@ export async function createDailyRounds(): Promise<CreateRoundsResult> {
           endsAt,
           bettingClosesAt,
           outcomes:       btcOutcomes as unknown as Prisma.InputJsonValue,
+          roundNumber:    nextNumber++,
         },
       });
       created.push("btc");
@@ -127,6 +132,7 @@ export async function createDailyRounds(): Promise<CreateRoundsResult> {
           endsAt,
           bettingClosesAt,
           outcomes:       solOutcomes as unknown as Prisma.InputJsonValue,
+          roundNumber:    nextNumber++,
         },
       });
       created.push("sol");

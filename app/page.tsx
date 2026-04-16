@@ -67,7 +67,7 @@ export default function Home() {
   }, [fetchRounds]);
 
   const openRounds     = rounds.filter((r) => r.status !== "resolved");
-  const resolvedRounds = rounds.filter((r) => r.status === "resolved").slice(0, 5);
+  const resolvedRounds = rounds.filter((r) => r.status === "resolved").slice(0, 20);
 
   const filtered =
     category === "all" ? openRounds : openRounds.filter((r) => r.category === category);

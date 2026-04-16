@@ -67,7 +67,7 @@ export async function GET() {
     };
   });
 
-  // Open/closed rounds first, then resolved sorted by resolvedAt desc.
+  // Open/closed rounds first, then last 20 resolved sorted by resolvedAt desc.
   const open     = mapped.filter((r) => r.status !== "resolved");
   const resolved = mapped
     .filter((r) => r.status === "resolved")
@@ -75,7 +75,8 @@ export async function GET() {
       const ta = a.resolvedAt ? new Date(a.resolvedAt).getTime() : 0;
       const tb = b.resolvedAt ? new Date(b.resolvedAt).getTime() : 0;
       return tb - ta;
-    });
+    })
+    .slice(0, 20);
 
   return NextResponse.json([...open, ...resolved]);
 }

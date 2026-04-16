@@ -81,9 +81,16 @@ function ResolvedRangeCard({ round }: { round: Round }) {
     <div className="bg-surface rounded-xl border border-surface-3 overflow-hidden opacity-80 hover:opacity-100 transition-opacity">
       <div className="p-4">
         <div className="flex items-start justify-between gap-2 mb-2.5">
-          <span className={`inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border ${CATEGORY_STYLES[round.category] ?? "bg-surface-3 text-muted border-transparent"}`}>
-            {CATEGORY_LABELS[round.category] ?? round.category}
-          </span>
+          <div className="flex items-center gap-1.5">
+            {round.roundNumber != null && (
+              <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-mono text-muted bg-surface-3 border border-surface-3/60">
+                #{round.roundNumber}
+              </span>
+            )}
+            <span className={`inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border ${CATEGORY_STYLES[round.category] ?? "bg-surface-3 text-muted border-transparent"}`}>
+              {CATEGORY_LABELS[round.category] ?? round.category}
+            </span>
+          </div>
           {winning && colors && (
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${colors.bg} ${colors.text} ${colors.border}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${colors.dot}`} />
@@ -164,9 +171,16 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
       <div className="p-4 flex-1">
         {/* Header */}
         <div className="flex items-start justify-between gap-2 mb-3">
-          <span className={`inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border ${CATEGORY_STYLES[round.category] ?? "bg-surface-3 text-muted border-transparent"}`}>
-            {CATEGORY_LABELS[round.category] ?? round.category}
-          </span>
+          <div className="flex items-center gap-1.5">
+            {round.roundNumber != null && (
+              <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-mono text-muted bg-surface-3 border border-surface-3/60">
+                #{round.roundNumber}
+              </span>
+            )}
+            <span className={`inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border ${CATEGORY_STYLES[round.category] ?? "bg-surface-3 text-muted border-transparent"}`}>
+              {CATEGORY_LABELS[round.category] ?? round.category}
+            </span>
+          </div>
           {!isEnded && (
             <div className="text-right shrink-0">
               {!bettingClosed ? (

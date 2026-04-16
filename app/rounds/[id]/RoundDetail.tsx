@@ -35,6 +35,7 @@ interface RoundData {
   noPool: number;
   totalPool: number;
   realPool: number;
+  roundNumber: number | null;
 }
 
 interface RecentBet {
@@ -497,6 +498,11 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
 
             {/* Question + status badges */}
             <div className="flex flex-wrap items-center gap-2 mb-3">
+              {round.roundNumber != null && (
+                <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-mono text-muted bg-surface-3 border border-surface-3/60">
+                  #{round.roundNumber}
+                </span>
+              )}
               <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
                 Crypto
               </span>

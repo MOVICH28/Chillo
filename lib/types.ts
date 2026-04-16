@@ -35,6 +35,7 @@ export interface Round {
   yesPct?: number;
   noPct?: number;
   realPool?: number; // totalPool minus base seed (yes/no rounds) or totalPool (range rounds)
+  roundNumber?: number | null;
   bets?: Bet[];
 }
 
