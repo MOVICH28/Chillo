@@ -101,17 +101,22 @@ async function verifyTransaction(
 // ── GET ───────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const wallet = req.nextUrl.searchParams.get("wallet");
+  const wallet  = req.nextUrl.searchParams.get("wallet");
+  const roundId = req.nextUrl.searchParams.get("roundId");
 
   if (wallet && !isValidSolanaAddress(wallet)) {
     return NextResponse.json({ error: "Invalid wallet address" }, { status: 400 });
   }
 
   try {
+    const where: Record<string, unknown> = {};
+    if (wallet)  where.walletAddress = wallet;
+    if (roundId) where.roundId = roundId;
+
     const bets = await prisma.bet.findMany({
-      where: wallet ? { walletAddress: wallet } : undefined,
+      where: Object.keys(where).length ? where : undefined,
       orderBy: { createdAt: "desc" },
-      take: wallet ? undefined : 10,
+      take: wallet ? undefined : 50,
     });
     const roundIds = Array.from(new Set(bets.map(b => b.roundId)));
     const rounds   = await prisma.round.findMany({ where: { id: { in: roundIds } } });

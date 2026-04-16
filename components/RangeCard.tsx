@@ -1,13 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  LineChart, Line, YAxis, ReferenceArea, ReferenceLine,
-  ResponsiveContainer, Tooltip,
-} from "recharts";
+import Link from "next/link";
 import { Round, Outcome } from "@/lib/types";
 import { LiveData } from "@/lib/useLiveData";
-import { usePriceHistory } from "@/lib/usePriceHistory";
 import Sparkline from "@/components/Sparkline";
 
 interface RangeCardProps {
@@ -31,24 +27,6 @@ const OUTCOME_COLORS: Record<string, { bg: string; border: string; text: string;
   D: { bg: "bg-brand/10",      border: "border-brand/30",      text: "text-brand",      dot: "bg-brand" },
   E: { bg: "bg-sky-500/10",    border: "border-sky-500/30",    text: "text-sky-400",    dot: "bg-sky-400" },
   F: { bg: "bg-purple-500/10", border: "border-purple-500/30", text: "text-purple-400", dot: "bg-purple-400" },
-};
-
-// rgba fill colors for chart zones (normal / active)
-const ZONE_FILL: Record<string, string> = {
-  A: "rgba(239,68,68,0.08)",    // red
-  B: "rgba(249,115,22,0.08)",   // orange
-  C: "rgba(234,179,8,0.08)",    // yellow
-  D: "rgba(29,185,84,0.08)",    // green
-  E: "rgba(14,165,233,0.08)",   // sky
-  F: "rgba(168,85,247,0.08)",   // purple
-};
-const ZONE_FILL_ACTIVE: Record<string, string> = {
-  A: "rgba(239,68,68,0.22)",
-  B: "rgba(249,115,22,0.22)",
-  C: "rgba(234,179,8,0.22)",
-  D: "rgba(29,185,84,0.22)",
-  E: "rgba(14,165,233,0.22)",
-  F: "rgba(168,85,247,0.22)",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -81,153 +59,6 @@ function fmt(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000)     return `$${n.toLocaleString("en-US")}`;
   return `$${n.toFixed(2)}`;
-}
-
-function findActiveOutcome(price: number, outcomes: Outcome[]): Outcome | null {
-  return outcomes.find(o => {
-    const above = o.minPrice === null || price >= o.minPrice;
-    const below = o.maxPrice === null || price <  o.maxPrice;
-    return above && below;
-  }) ?? null;
-}
-
-// ── Live price chart ──────────────────────────────────────────────────────────
-
-interface PriceChartProps {
-  token: "bitcoin" | "solana";
-  outcomes: Outcome[];
-}
-
-function PriceChart({ token, outcomes }: PriceChartProps) {
-  const history = usePriceHistory(token);
-
-  if (history.length < 2) {
-    return (
-      <div className="h-44 flex items-center justify-center text-muted text-[11px] gap-2">
-        <svg className="animate-spin w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-        </svg>
-        Loading price data…
-      </div>
-    );
-  }
-
-  const currentPrice = history[history.length - 1].price;
-  const activeOutcome = findActiveOutcome(currentPrice, outcomes);
-
-  // Y domain: span all boundary values + any out-of-range price points
-  const boundaries = outcomes
-    .flatMap(o => [o.minPrice, o.maxPrice])
-    .filter((b): b is number => b !== null);
-  const priceValues = history.map(p => p.price);
-  const allValues   = [...boundaries, ...priceValues];
-  const rawMin      = Math.min(...allValues);
-  const rawMax      = Math.max(...allValues);
-  const pad         = (rawMax - rawMin) * 0.12;
-  const domainMin   = rawMin - pad;
-  const domainMax   = rawMax + pad;
-
-  // Unique inner boundaries (dividers between zones)
-  const uniqueBoundaries = Array.from(new Set(boundaries)).sort((a, b) => a - b);
-
-  // Y axis formatter
-  const fmtY = token === "bitcoin"
-    ? (v: number) => `$${Math.round(v).toLocaleString("en-US")}`
-    : (v: number) => `$${v.toFixed(2)}`;
-
-  // Tooltip formatter
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tooltipFmt = (v: any) => [typeof v === "number" ? fmtY(v) : String(v), "Price"];
-
-  // Chart data — keep time as ms, recharts just needs a value
-  const data = history.map(p => ({ t: p.time, price: p.price }));
-
-  return (
-    <div className="h-44 w-full select-none">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 4, right: 56, left: 0, bottom: 0 }}>
-          {/* Zone bands */}
-          {outcomes.map(o => (
-            <ReferenceArea
-              key={o.id}
-              y1={o.minPrice ?? domainMin}
-              y2={o.maxPrice ?? domainMax}
-              yAxisId={0}
-              fill={o.id === activeOutcome?.id ? ZONE_FILL_ACTIVE[o.id] : ZONE_FILL[o.id]}
-              strokeOpacity={0}
-              ifOverflow="extendDomain"
-            />
-          ))}
-
-          {/* Inner boundary lines */}
-          {uniqueBoundaries.map(b => (
-            <ReferenceLine
-              key={b}
-              y={b}
-              yAxisId={0}
-              stroke="#3a3b4a"
-              strokeWidth={1}
-              strokeDasharray="4 3"
-            />
-          ))}
-
-          {/* Current price indicator */}
-          <ReferenceLine
-            y={currentPrice}
-            yAxisId={0}
-            stroke="#22c55e"
-            strokeWidth={1.5}
-            strokeDasharray="6 3"
-            label={{
-              value: fmtY(currentPrice),
-              position: "right",
-              fill: "#22c55e",
-              fontSize: 9,
-              dx: 4,
-            }}
-          />
-
-          <YAxis
-            yAxisId={0}
-            domain={[domainMin, domainMax]}
-            tickFormatter={fmtY}
-            width={token === "bitcoin" ? 64 : 52}
-            tick={{ fontSize: 8, fill: "#6b7280" }}
-            tickCount={5}
-            axisLine={false}
-            tickLine={false}
-          />
-
-          <Tooltip
-            formatter={tooltipFmt}
-            labelFormatter={() => ""}
-            contentStyle={{
-              background: "#1a1b23",
-              border: "1px solid #2a2b38",
-              borderRadius: 6,
-              fontSize: 11,
-              padding: "4px 8px",
-            }}
-            itemStyle={{ color: "#22c55e" }}
-            cursor={{ stroke: "#2a2b38", strokeWidth: 1 }}
-          />
-
-          {/* Price line */}
-          <Line
-            yAxisId={0}
-            type="monotone"
-            dataKey="price"
-            stroke="#22c55e"
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 3, fill: "#22c55e", stroke: "#13141a", strokeWidth: 2 }}
-            isAnimationActive={false}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
 }
 
 // ── Resolved card ─────────────────────────────────────────────────────────────
@@ -309,7 +140,6 @@ function ResolvedRangeCard({ round }: { round: Round }) {
 export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
   const resultCountdown  = useCountdown(round.endsAt);
   const bettingCountdown = useCountdown(round.bettingClosesAt ?? round.endsAt);
-  const [showChart, setShowChart] = useState(false);
 
   const outcomes   = round.outcomes ?? [];
   const totalPool  = round.realPool ?? 0;
@@ -318,9 +148,7 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
     ? new Date() > new Date(round.bettingClosesAt)
     : isEnded;
 
-  const chartToken: "bitcoin" | "solana" | null =
-    round.targetToken === "bitcoin" ? "bitcoin" :
-    round.targetToken === "solana"  ? "solana"  : null;
+  const hasChart = round.targetToken === "bitcoin" || round.targetToken === "solana";
 
   if (round.status === "resolved") {
     return <ResolvedRangeCard round={round} />;
@@ -331,6 +159,7 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
   const asset  = isBtc ? liveData?.btc : isSol ? liveData?.sol : undefined;
 
   return (
+    <Link href={`/rounds/${round.id}`} className="block">
     <div className="bg-surface rounded-xl border border-surface-3 overflow-hidden flex flex-col hover:border-surface-2 transition-colors group">
       <div className="p-4 flex-1">
         {/* Header */}
@@ -382,7 +211,7 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
             return (
               <button
                 key={o.id}
-                onClick={() => !bettingClosed && onBet(round, o.id, o)}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); !bettingClosed && onBet(round, o.id, o); }}
                 disabled={bettingClosed}
                 className={`relative flex flex-col gap-1 p-2.5 rounded-lg border text-left transition-all
                   ${bettingClosed
@@ -444,16 +273,6 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
           </div>
         )}
 
-        {/* Live chart (collapsible) */}
-        {chartToken && showChart && (
-          <div className="mt-3 rounded-lg border border-surface-3/60 bg-surface-2 overflow-hidden">
-            <div className="flex items-center gap-1.5 px-3 pt-2 pb-0.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] pulse-dot" />
-              <span className="text-[9px] font-bold tracking-widest uppercase text-brand">Live Price</span>
-            </div>
-            <PriceChart token={chartToken} outcomes={outcomes} />
-          </div>
-        )}
       </div>
 
       {/* Footer */}
@@ -471,20 +290,17 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
             <span className="ml-2 text-[10px]">{outcomes.length} outcomes · parimutuel</span>
           </div>
 
-          {/* Chart toggle */}
-          {chartToken && (
-            <button
-              onClick={() => setShowChart(v => !v)}
-              className="flex items-center gap-1 text-[10px] text-muted hover:text-white transition-colors px-2 py-1 rounded bg-surface-3 hover:bg-surface-2 border border-surface-3"
-            >
+          {hasChart && (
+            <span className="flex items-center gap-1 text-[10px] text-brand hover:text-brand/80 transition-colors">
+              View Chart
               <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
-              {showChart ? "Hide" : "Chart"}
-            </button>
+            </span>
           )}
         </div>
       </div>
     </div>
+    </Link>
   );
 }
