@@ -247,31 +247,23 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
         </div>
 
         {/* Timer row */}
-        {!bettingClosed ? (
-          <div className="flex items-center justify-between text-[10px] mb-1">
-            <div className="flex items-center gap-1.5 text-muted">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>Betting closes in <span className="text-white font-mono font-semibold">{bettingCountdown}</span></span>
+        <div className="flex items-start justify-between gap-3 mb-1">
+          {!bettingClosed ? (
+            <div>
+              <p className="text-[10px] text-white/40 uppercase tracking-wider mb-0.5">Betting closes in</p>
+              <p className="text-3xl font-mono font-bold text-[#22c55e] tabular-nums leading-none">{bettingCountdown}</p>
             </div>
-            <div className="text-muted">
-              Result in <span className="text-white font-mono font-semibold">{resultCountdown}</span>
+          ) : (
+            <div>
+              <p className="text-[10px] text-no/70 uppercase tracking-wider mb-0.5">Betting</p>
+              <p className="text-sm font-semibold text-no">Closed</p>
             </div>
+          )}
+          <div className="text-right">
+            <p className="text-[10px] text-white/40 uppercase tracking-wider mb-0.5">Result in</p>
+            <p className="text-xl font-mono font-bold text-white/80 tabular-nums leading-none">{resultCountdown}</p>
           </div>
-        ) : (
-          <div className="flex items-center justify-between text-[10px] mb-1">
-            <div className="flex items-center gap-1.5 text-no font-semibold">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m0 0v2m0-2h2m-2 0H10M12 3a9 9 0 110 18A9 9 0 0112 3z" />
-              </svg>
-              Betting Closed — Awaiting Result
-            </div>
-            <div className="text-muted">
-              Result in <span className="text-white font-mono font-semibold">{resultCountdown}</span>
-            </div>
-          </div>
-        )}
+        </div>
 
       </div>
 
