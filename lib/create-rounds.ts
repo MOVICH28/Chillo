@@ -169,38 +169,9 @@ export async function createDailyRounds(): Promise<CreateRoundsResult> {
     }
   }
 
-  // ── pump.fun 3-token round (YES/NO) ────────────────────────────────────────
-  if (await roundExistsActive("pumpfun")) {
-    skipped.push("pumpfun");
-  } else {
-    const tokens = await fetchRecentPumpTokens();
-    let tickers: string;
-    let tokenList: string;
-
-    if (tokens.length >= 3) {
-      tickers   = tokens.map((t) => `$${t.symbol}`).join(", ");
-      tokenList = JSON.stringify(tokens.map((t) => t.address));
-    } else {
-      tickers   = "any new pump.fun token";
-      tokenList = JSON.stringify([]);
-    }
-
-    const BASE_POOL = 10;
-    await prisma.round.create({
-      data: {
-        question:       `Will ${tickers} reach $1M market cap in 15 minutes?`,
-        category:       "pumpfun",
-        tokenList,
-        yesPool:        BASE_POOL,
-        noPool:         BASE_POOL,
-        totalPool:      BASE_POOL * 2,
-        status:         "open",
-        endsAt,
-        bettingClosesAt,
-      },
-    });
-    created.push("pumpfun");
-  }
+  // ── pump.fun rounds disabled — external API unreliable ───────────────────────
+  // TODO: re-enable when a stable data source is available
+  skipped.push("pumpfun");
 
   return { created, skipped, errors };
 }
