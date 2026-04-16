@@ -241,14 +241,11 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
                 className={`relative flex flex-col gap-1 p-2.5 rounded-lg border text-left transition-all
                   ${bettingClosed
                     ? "opacity-40 cursor-not-allowed bg-surface-2 border-surface-3"
-                    : `${c.bg} ${c.border} hover:opacity-90 active:scale-[0.98]`
+                    : "bg-[#22c55e]/10 border-[#22c55e]/20 hover:opacity-90 active:scale-[0.98]"
                   }`}
               >
                 <div className="flex items-center gap-1.5">
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${c.bg} ${c.text} border ${c.border}`}>
-                    {o.id}
-                  </span>
-                  <span className="text-[10px] text-muted leading-tight">{o.label}</span>
+                  <span className="text-[10px] text-white leading-tight">{o.label}</span>
                 </div>
 
                 <div className="h-1 rounded-full bg-surface-3 overflow-hidden w-full">

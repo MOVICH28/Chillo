@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { Outcome } from "@/lib/types";
 import RoundDetail from "./RoundDetail";
+import NavbarWrapper from "./NavbarWrapper";
 
 export const dynamic = "force-dynamic";
 
@@ -48,5 +49,10 @@ export default async function RoundDetailPage({ params }: PageProps) {
     roundNumber: round.roundNumber ?? null,
   };
 
-  return <RoundDetail initialRound={serialized} />;
+  return (
+    <>
+      <NavbarWrapper />
+      <RoundDetail initialRound={serialized} />
+    </>
+  );
 }
