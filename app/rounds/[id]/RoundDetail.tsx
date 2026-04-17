@@ -113,7 +113,7 @@ function LiveChart({
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
         </svg>
         <span className="text-xs text-white/30">
-          {status === "connecting" ? "Connecting to Binance…" : "Waiting for price data…"}
+          {status === "connecting" ? "Connecting…" : "Waiting for price data…"}
         </span>
       </div>
     );
@@ -148,7 +148,7 @@ function LiveChart({
       <div className="flex items-center gap-1.5 px-4 pt-3 pb-0">
         <span className={`w-1.5 h-1.5 rounded-full ${status === "live" ? "bg-[#22c55e]" : "bg-white/20"}`} />
         <span className="text-[10px] uppercase tracking-widest font-bold text-white/40">
-          {token === "bitcoin" ? "BTC/USDT" : "SOL/USDT"} · Binance
+          {token === "bitcoin" ? "BTC/USDT" : "SOL/USDT"}
         </span>
         <span className="ml-auto text-xs font-mono font-semibold text-white/80">
           {fmtY(currentPrice)}
@@ -487,7 +487,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
     : null;
 
   return (
-    <div className="min-h-screen bg-[#13141a] text-white">
+    <div className="min-h-screen bg-[#13141a] text-white pt-16">
       <div className="max-w-6xl mx-auto px-4 py-6">
 
         {/* Two-column layout */}
