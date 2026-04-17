@@ -23,80 +23,76 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "What is Pumpdora?",
         answer:
-          "Pumpdora is a decentralized prediction market on the Solana blockchain. You bet SOL on YES or NO outcomes for crypto-related questions — like whether Bitcoin will hit a price target or whether Solana will outperform. Winners share the entire pool; the platform takes a small 5% fee.",
+          "Pumpdora is a prediction platform on Solana where you predict the price of BTC or SOL in the next 15 minutes. Pick the right price range — win a share of the prize pool!",
       },
       {
-        question: "How do I place a bet?",
+        question: "How does a round work?",
         answer: (
           <ol className="list-decimal list-inside space-y-1.5 text-muted">
-            <li>Connect your Solana wallet (Phantom or Backpack)</li>
-            <li>Make sure you have SOL on Solana devnet (<a href="https://faucet.solana.com" target="_blank" rel="noreferrer" className="text-brand hover:underline">get devnet SOL here</a>)</li>
-            <li>Pick an open market and choose YES or NO</li>
-            <li>Enter your bet amount and confirm the transaction in your wallet</li>
-            <li>Your bet is registered once the on-chain transaction is verified</li>
+            <li>A new round opens every 10 minutes</li>
+            <li>You see 6 price ranges — pick where you think the price will be in 15 minutes</li>
+            <li>You have 10 minutes to place your bet</li>
+            <li>After 15 minutes the result is announced using the live Binance price</li>
+            <li>Winners split the prize pool proportionally to their bet size</li>
           </ol>
         ),
       },
       {
-        question: "What is YES/NO betting?",
+        question: "Are there two separate rounds — BTC and SOL?",
         answer:
-          "Every market is a binary question with a YES or NO outcome. For example: \"Will BTC be above $100,000 by end of day?\" — you either believe YES (it will) or NO (it won't). When the market resolves, one side wins and the other loses.",
+          "Yes! There is always one active BTC round and one active SOL round running simultaneously. You can bet on both at the same time.",
       },
       {
-        question: "How are odds calculated?",
+        question: "How are results determined?",
         answer:
-          "Odds are parimutuel — they update in real time based on how much SOL is in each pool. If most people bet YES, YES odds get lower (smaller payout per SOL) and NO odds get higher (bigger payout per SOL). Your displayed odds at the time of betting are indicative; final payout is determined by the pool at resolution.",
-      },
-      {
-        question: "When do rounds end?",
-        answer:
-          "Each round has an end time shown on the market card. After the end time passes, no new bets are accepted. Pumpdora then checks the real-world result and resolves the round automatically, sending payouts to winners.",
+          "We use the real-time price from Binance at the exact moment the round ends. Whichever of the 6 price ranges contains that price is the winner.",
       },
     ],
   },
   {
-    title: "Payouts",
+    title: "Payouts & Fees",
     icon: "💸",
     items: [
       {
-        question: "How are winnings calculated?",
+        question: "How much can I win?",
         answer: (
           <div className="space-y-2 text-muted">
-            <p>Your payout is proportional to your share of the winning pool:</p>
+            <p>It depends on how many people bet on the same range as you. If few people picked your range but you were right — you win big. If many people picked your range — you share the pot with more people.</p>
             <code className="block bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-brand font-mono text-xs">
-              payout = (your_bet / total_winning_bets) × total_pool × 0.95
+              payout = (your bet / total bets on winning range) × 95% of total pool
             </code>
-            <p>The <span className="text-white">0.95</span> factor reflects the 5% platform fee deducted from the total pool before distribution.</p>
           </div>
         ),
-      },
-      {
-        question: "When do I receive my payout?",
-        answer:
-          "Payouts are sent automatically when a round ends. Our system checks results once daily at midnight UTC and immediately sends SOL to all winning wallets. You will see the SOL in your Phantom wallet within seconds after resolution. You can also track your bet status in your Profile page.",
       },
       {
         question: "What is the platform fee?",
         answer:
-          "Pumpdora takes a 5% fee from the total pool at resolution. This fee is only taken when there is a genuine contest between YES and NO sides. If everyone bet on the same side, 0% fee is charged and all bets are fully refunded.",
+          "Pumpdora takes 5% from each round's pool. 95% goes to winners.",
       },
       {
-        question: "What happens if everyone bets on one side?",
-        answer: (
-          <div className="space-y-2 text-muted">
-            <p>If all bets are on the same side (e.g. everyone bet YES), there is no pool to pay out from. In this case:</p>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-              <li><span className="text-white font-semibold">100% of your bet is refunded</span> — no platform fee</li>
-              <li>The transaction is sent on-chain back to your wallet</li>
-              <li>Your bet history shows a gray <span className="text-gray-400 font-semibold">REFUND</span> badge</li>
-            </ul>
-          </div>
-        ),
-      },
-      {
-        question: "What if a round cannot be resolved?",
+        question: "When do I receive my winnings?",
         answer:
-          "If Pumpdora cannot confirm the result (for example, a data source is temporarily unavailable), the round is held open and retried the following day. Rounds are never resolved without confirmed real-world data. In the rare event of a permanent data failure, all bets will be fully refunded.",
+          "Winnings are sent automatically to your wallet right after the round resolves — usually within seconds. You can track your bet status in your Profile page.",
+      },
+      {
+        question: "What if nobody bets on the winning range?",
+        answer:
+          "If no one picks the correct range, all bets are refunded to everyone — no fee charged.",
+      },
+    ],
+  },
+  {
+    title: "Betting Rules",
+    icon: "🎯",
+    items: [
+      {
+        question: "What is the minimum bet?",
+        answer: "The minimum bet is 0.05 SOL.",
+      },
+      {
+        question: "Can I bet on multiple ranges in one round?",
+        answer:
+          "No, you can only place one bet per round per token (BTC or SOL). Choose your range carefully!",
       },
     ],
   },
@@ -105,62 +101,22 @@ const FAQ_SECTIONS: FAQSection[] = [
     icon: "🔐",
     items: [
       {
-        question: "Which wallets are supported?",
+        question: "What wallet do I need?",
         answer: (
           <div className="space-y-2 text-muted">
-            <p>Pumpdora supports any Solana wallet that injects a standard wallet adapter. Tested and recommended:</p>
+            <p>You need a Phantom or Solflare wallet with some SOL.</p>
             <ul className="list-disc list-inside space-y-1 ml-2">
-              <li><span className="text-white">Phantom</span> — most popular, available at phantom.app</li>
-              <li><span className="text-white">Backpack</span> — available at backpack.app</li>
+              <li><span className="text-white">Phantom</span> — download free at <a href="https://phantom.app" target="_blank" rel="noreferrer" className="text-brand hover:underline">phantom.app</a> — takes 2 minutes to set up</li>
+              <li><span className="text-white">Solflare</span> — available at <a href="https://solflare.com" target="_blank" rel="noreferrer" className="text-brand hover:underline">solflare.com</a></li>
             </ul>
-            <p>Make sure to switch your wallet to <span className="text-yellow-400">Devnet</span> before connecting.</p>
+            <p>Make sure to switch your wallet to <span className="text-yellow-400">Devnet</span> and get free devnet SOL from the <a href="https://faucet.solana.com" target="_blank" rel="noreferrer" className="text-brand hover:underline">Solana faucet</a>.</p>
           </div>
         ),
       },
       {
-        question: "Is my wallet safe?",
+        question: "Is it safe?",
         answer:
-          "Pumpdora never asks for your private key or seed phrase. All interactions are standard Solana transactions that you sign in your own wallet. We only read your public key (wallet address) to look up your bets and balance. You are always in control of your funds.",
-      },
-      {
-        question: "What network does Pumpdora use?",
-        answer: (
-          <div className="space-y-2 text-muted">
-            <p>Pumpdora currently runs on <span className="text-yellow-400 font-semibold">Solana Devnet</span> — a test network where SOL has no real-world value. This means:</p>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-              <li>You cannot lose real money</li>
-              <li>You can get free devnet SOL from the <a href="https://faucet.solana.com" target="_blank" rel="noreferrer" className="text-brand hover:underline">Solana faucet</a></li>
-              <li>Transaction speeds and fees mirror mainnet behavior</li>
-            </ul>
-            <p>Mainnet launch will be announced when the platform is fully audited.</p>
-          </div>
-        ),
-      },
-      {
-        question: "How are transactions verified?",
-        answer:
-          "After you send SOL, Pumpdora automatically looks up your transaction on the Solana blockchain and confirms: the payment went through without errors, it was sent recently (within 5 minutes), it came from your wallet, and the amount matches your bet. Your bet is only registered after all checks pass — this protects everyone from fake or duplicate bets.",
-      },
-    ],
-  },
-  {
-    title: "Referral Program",
-    icon: "🔗",
-    items: [
-      {
-        question: "How does the referral program work?",
-        answer:
-          "Go to your Profile page and copy your unique referral link. Share it with friends. When someone connects their wallet for the first time via your link, they are registered as your referral and all their future bets earn you a reward.",
-      },
-      {
-        question: "How much do I earn from referrals?",
-        answer:
-          "You earn 1% of every bet placed by wallets you referred. This is tracked automatically and accumulates over time. The more active your referrals, the more you earn — there is no cap.",
-      },
-      {
-        question: "When are referral rewards paid?",
-        answer:
-          "Referral earnings are tracked in your profile stats. Payouts are currently manual and batched. Automated referral payouts are on the roadmap for a future release.",
+          "Your SOL is held in a platform wallet during the round and sent back automatically when resolved. We never ask for your seed phrase or private keys. All interactions are standard Solana transactions that you sign in your own wallet.",
       },
     ],
   },
@@ -220,11 +176,11 @@ export default function FAQPage() {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-brand rounded-lg flex items-center justify-center text-black font-bold text-sm shrink-0">
-              C
+              P
             </div>
             <div>
               <h1 className="text-white font-bold text-2xl leading-tight">
-                Chill<span className="text-brand">o</span> FAQ
+                Pumpdor<span className="text-brand">a</span> FAQ
               </h1>
               <p className="text-muted text-xs mt-0.5">Everything you need to know</p>
             </div>
