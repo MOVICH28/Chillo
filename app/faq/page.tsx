@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Navbar from "@/components/Navbar";
 
 interface FAQItem {
   question: string;
@@ -211,7 +212,8 @@ export default function FAQPage() {
   }
 
   return (
-    <div className="min-h-screen bg-base pt-14">
+    <div className="min-h-screen bg-base pt-16">
+      <Navbar rounds={[]} />
       <div className="max-w-3xl mx-auto px-4 py-10">
 
         {/* Header */}

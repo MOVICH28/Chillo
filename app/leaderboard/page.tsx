@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useWallet } from "@/components/WalletProvider";
 import { useLiveData } from "@/lib/useLiveData";
+import Navbar from "@/components/Navbar";
 
 interface LeaderboardEntry {
   walletAddress: string;
@@ -72,7 +73,8 @@ export default function LeaderboardPage() {
     solPrice ? ` ($${(sol * solPrice).toFixed(2)})` : "";
 
   return (
-    <div className="min-h-screen bg-base pt-14">
+    <div className="min-h-screen bg-base pt-16">
+      <Navbar rounds={[]} />
       <div className="max-w-5xl mx-auto px-4 py-8">
 
         {/* Header */}

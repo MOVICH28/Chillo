@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useWallet } from "@/components/WalletProvider";
 import { useSolBalance } from "@/lib/useSolBalance";
 import { useLiveData } from "@/lib/useLiveData";
+import Navbar from "@/components/Navbar";
 
 interface BetWithRound {
   id: string;
@@ -187,6 +188,7 @@ export default function ProfilePage() {
   if (!mounted || !connected || !publicKey) {
     return (
       <div className="min-h-screen bg-base flex flex-col items-center justify-center gap-4">
+        <Navbar rounds={[]} />
         <p className="text-white text-lg font-semibold">Connect your wallet to view your profile</p>
         <button
           onClick={connect}
@@ -200,7 +202,8 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-base pt-14">
+    <div className="min-h-screen bg-base pt-16">
+      <Navbar rounds={[]} />
       <div className="max-w-4xl mx-auto px-4 py-8">
 
         {/* Header */}
