@@ -21,9 +21,9 @@ const FAQ_SECTIONS: FAQSection[] = [
     icon: "💡",
     items: [
       {
-        question: "What is Chillo?",
+        question: "What is Pumpdora?",
         answer:
-          "Chillo is a decentralized prediction market on the Solana blockchain. You bet SOL on YES or NO outcomes for crypto-related questions — like whether Bitcoin will hit a price target or whether Solana will outperform. Winners share the entire pool; the platform takes a small 5% fee.",
+          "Pumpdora is a decentralized prediction market on the Solana blockchain. You bet SOL on YES or NO outcomes for crypto-related questions — like whether Bitcoin will hit a price target or whether Solana will outperform. Winners share the entire pool; the platform takes a small 5% fee.",
       },
       {
         question: "How do I place a bet?",
@@ -50,7 +50,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "When do rounds end?",
         answer:
-          "Each round has an end time shown on the market card. After the end time passes, no new bets are accepted. Chillo then checks the real-world result and resolves the round automatically, sending payouts to winners.",
+          "Each round has an end time shown on the market card. After the end time passes, no new bets are accepted. Pumpdora then checks the real-world result and resolves the round automatically, sending payouts to winners.",
       },
     ],
   },
@@ -78,7 +78,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "What is the platform fee?",
         answer:
-          "Chillo takes a 5% fee from the total pool at resolution. This fee is only taken when there is a genuine contest between YES and NO sides. If everyone bet on the same side, 0% fee is charged and all bets are fully refunded.",
+          "Pumpdora takes a 5% fee from the total pool at resolution. This fee is only taken when there is a genuine contest between YES and NO sides. If everyone bet on the same side, 0% fee is charged and all bets are fully refunded.",
       },
       {
         question: "What happens if everyone bets on one side?",
@@ -96,7 +96,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "What if a round cannot be resolved?",
         answer:
-          "If Chillo cannot confirm the result (for example, a data source is temporarily unavailable), the round is held open and retried the following day. Rounds are never resolved without confirmed real-world data. In the rare event of a permanent data failure, all bets will be fully refunded.",
+          "If Pumpdora cannot confirm the result (for example, a data source is temporarily unavailable), the round is held open and retried the following day. Rounds are never resolved without confirmed real-world data. In the rare event of a permanent data failure, all bets will be fully refunded.",
       },
     ],
   },
@@ -108,7 +108,7 @@ const FAQ_SECTIONS: FAQSection[] = [
         question: "Which wallets are supported?",
         answer: (
           <div className="space-y-2 text-muted">
-            <p>Chillo supports any Solana wallet that injects a standard wallet adapter. Tested and recommended:</p>
+            <p>Pumpdora supports any Solana wallet that injects a standard wallet adapter. Tested and recommended:</p>
             <ul className="list-disc list-inside space-y-1 ml-2">
               <li><span className="text-white">Phantom</span> — most popular, available at phantom.app</li>
               <li><span className="text-white">Backpack</span> — available at backpack.app</li>
@@ -120,13 +120,13 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "Is my wallet safe?",
         answer:
-          "Chillo never asks for your private key or seed phrase. All interactions are standard Solana transactions that you sign in your own wallet. We only read your public key (wallet address) to look up your bets and balance. You are always in control of your funds.",
+          "Pumpdora never asks for your private key or seed phrase. All interactions are standard Solana transactions that you sign in your own wallet. We only read your public key (wallet address) to look up your bets and balance. You are always in control of your funds.",
       },
       {
-        question: "What network does Chillo use?",
+        question: "What network does Pumpdora use?",
         answer: (
           <div className="space-y-2 text-muted">
-            <p>Chillo currently runs on <span className="text-yellow-400 font-semibold">Solana Devnet</span> — a test network where SOL has no real-world value. This means:</p>
+            <p>Pumpdora currently runs on <span className="text-yellow-400 font-semibold">Solana Devnet</span> — a test network where SOL has no real-world value. This means:</p>
             <ul className="list-disc list-inside space-y-1 ml-2">
               <li>You cannot lose real money</li>
               <li>You can get free devnet SOL from the <a href="https://faucet.solana.com" target="_blank" rel="noreferrer" className="text-brand hover:underline">Solana faucet</a></li>
@@ -139,7 +139,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "How are transactions verified?",
         answer:
-          "After you send SOL, Chillo automatically looks up your transaction on the Solana blockchain and confirms: the payment went through without errors, it was sent recently (within 5 minutes), it came from your wallet, and the amount matches your bet. Your bet is only registered after all checks pass — this protects everyone from fake or duplicate bets.",
+          "After you send SOL, Pumpdora automatically looks up your transaction on the Solana blockchain and confirms: the payment went through without errors, it was sent recently (within 5 minutes), it came from your wallet, and the amount matches your bet. Your bet is only registered after all checks pass — this protects everyone from fake or duplicate bets.",
       },
     ],
   },
@@ -270,7 +270,7 @@ export default function FAQPage() {
         <p className="text-center text-muted text-xs mt-10">
           Still have questions?{" "}
           <a
-            href="https://github.com/MOVICH28/Chillo/issues"
+            href="https://github.com/MOVICH28/Pumpdora/issues"
             target="_blank"
             rel="noreferrer"
             className="text-brand hover:underline"

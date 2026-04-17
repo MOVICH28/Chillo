@@ -15,8 +15,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Chillo — Solana Prediction Markets",
-  description: "Bet on pump.fun tokens, crypto prices, and real-world events on Solana devnet with Chillo.",
+  title: "Pumpdora — Solana Prediction Markets",
+  description: "Bet on pump.fun tokens, crypto prices, and real-world events on Solana devnet with Pumpdora.",
 };
 
 export default function RootLayout({

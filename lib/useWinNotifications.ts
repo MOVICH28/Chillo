@@ -12,7 +12,7 @@ interface BetWithRound {
   round: { question: string; status: string } | null;
 }
 
-const LS_KEY = "chillo_seen_wins";
+const LS_KEY = "pumpdora_seen_wins";
 
 function getSeenWins(): Set<string> {
   try {

@@ -18,7 +18,7 @@ function RefCapture() {
   const searchParams = useSearchParams();
   useEffect(() => {
     const ref = searchParams.get("ref");
-    if (ref) localStorage.setItem("chillo_ref", ref);
+    if (ref) localStorage.setItem("pumpdora_ref", ref);
   }, [searchParams]);
   return null;
 }
@@ -35,7 +35,7 @@ export default function Home() {
   // Register referral once wallet connects, if we have a stored ref code
   useEffect(() => {
     if (!connected || !publicKey) return;
-    const ref = localStorage.getItem("chillo_ref");
+    const ref = localStorage.getItem("pumpdora_ref");
     if (!ref || ref === publicKey) return;
 
     fetch("/api/referral", {
@@ -43,7 +43,7 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ referrerAddress: ref, referredAddress: publicKey }),
     }).then(() => {
-      localStorage.removeItem("chillo_ref");
+      localStorage.removeItem("pumpdora_ref");
     }).catch(() => {});
   }, [connected, publicKey]);
 
@@ -242,7 +242,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-surface-3 py-4 px-6 flex items-center justify-between text-[11px] text-muted">
-        <span>Chillo © 2025 · Solana devnet</span>
+        <span>Pumpdora © 2025 · Solana devnet</span>
         <span className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse-slow" />
           All markets are simulated on devnet

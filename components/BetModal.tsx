@@ -287,7 +287,7 @@ export default function BetModal({ round, side, outcome, onClose, onSuccess, sol
           )}
 
           <p className="text-[10px] text-muted text-center mt-3">
-            Chillo · Solana devnet · Real SOL transactions
+            Pumpdora · Solana devnet · Real SOL transactions
           </p>
         </div>
       </div>

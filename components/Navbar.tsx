@@ -47,10 +47,10 @@ export default function Navbar({ rounds }: NavbarProps) {
       {/* Logo */}
       <div className="flex items-center gap-2 mr-4">
         <div className="w-7 h-7 bg-brand rounded-md flex items-center justify-center text-black font-bold text-xs">
-          C
+          P
         </div>
         <span className="font-bold text-white text-lg tracking-tight">
-          Chill<span className="text-brand">o</span>
+          Pumpdor<span className="text-brand">a</span>
         </span>
       </div>
 
