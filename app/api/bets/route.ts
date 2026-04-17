@@ -128,7 +128,12 @@ export async function GET(req: NextRequest) {
         return {
           ...b,
           createdAt: b.createdAt.toISOString(),
-          round: round ? { question: round.question, status: round.status } : null,
+          round: round ? {
+          question:       round.question,
+          status:         round.status,
+          winningOutcome: round.winningOutcome,
+          outcomes:       round.outcomes ?? null,
+        } : null,
         };
       }),
     );

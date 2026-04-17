@@ -676,6 +676,19 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
             )}
           </h2>
 
+          {round.status === "resolved" && round.winningOutcome && (() => {
+            const wc = OUTCOME_COLORS[round.winningOutcome];
+            const wLabel = round.outcomes?.find(o => o.id === round.winningOutcome)?.label;
+            return (
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border mb-3 text-xs ${wc.bg} ${wc.text} ${wc.border}`}>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${wc.dot}`} />
+                <span className="font-semibold">Winning outcome:</span>
+                <span className="font-bold">{round.winningOutcome}</span>
+                {wLabel && <span className="opacity-80">· {wLabel}</span>}
+              </div>
+            );
+          })()}
+
           {recentBets.length === 0 ? (
             <p className="text-white/20 text-xs text-center py-6">No bets placed yet — be the first!</p>
           ) : (

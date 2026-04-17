@@ -21,7 +21,7 @@ interface BetWithRound {
   result: string | null;
   payout: number | null;
   paid: boolean;
-  round: { question: string; status: string } | null;
+  round: { question: string; status: string; winningOutcome: string | null; outcomes: { id: string; label: string }[] | null } | null;
 }
 
 interface ReferralStats {
@@ -29,6 +29,15 @@ interface ReferralStats {
   totalEarned: number;
   referrals: { referredAddress: string; createdAt: string }[];
 }
+
+const OUTCOME_COLORS: Record<string, { text: string; bg: string; border: string }> = {
+  A: { text: "text-red-400",    bg: "bg-red-500/10",    border: "border-red-500/30" },
+  B: { text: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/30" },
+  C: { text: "text-yellow-400", bg: "bg-yellow-500/10", border: "border-yellow-500/30" },
+  D: { text: "text-green-400",  bg: "bg-green-500/10",  border: "border-green-500/30" },
+  E: { text: "text-sky-400",    bg: "bg-sky-500/10",    border: "border-sky-500/30" },
+  F: { text: "text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/30" },
+};
 
 function resultLabel(bet: BetWithRound): { label: string; color: string } {
   if (bet.result === "refund") return { label: "REFUND", color: "text-gray-400" };
@@ -493,9 +502,9 @@ export default function ProfilePage() {
                 <thead>
                   <tr className="text-[10px] uppercase tracking-widest text-muted border-b border-surface-3">
                     <th className="text-left px-4 py-2.5">Market</th>
-                    <th className="text-center px-3 py-2.5">Side</th>
+                    <th className="text-center px-3 py-2.5">Bet</th>
+                    <th className="text-center px-3 py-2.5">Result</th>
                     <th className="text-right px-3 py-2.5">Amount</th>
-                    <th className="text-right px-3 py-2.5">Odds</th>
                     <th className="text-right px-3 py-2.5">Est. Payout</th>
                     <th className="text-center px-3 py-2.5">Status</th>
                     <th className="text-right px-4 py-2.5">Date</th>
@@ -513,21 +522,60 @@ export default function ProfilePage() {
                         <td className="px-4 py-3 text-muted text-xs">
                           {bet.round?.question ?? bet.roundId}
                         </td>
+                        {/* Bet outcome */}
                         <td className="px-3 py-3 text-center">
-                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                            bet.side === "yes" ? "bg-yes/10 text-yes" : "bg-no/10 text-no"
-                          }`}>
-                            {bet.side.toUpperCase()}
-                          </span>
+                          {(() => {
+                            const c = OUTCOME_COLORS[bet.side];
+                            const outcomeLabel = bet.round?.outcomes?.find(o => o.id === bet.side)?.label;
+                            if (c && outcomeLabel) {
+                              return (
+                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${c.bg} ${c.text} border ${c.border} max-w-[130px] truncate`}>
+                                  <span className="font-bold">{bet.side}</span>
+                                  <span className="opacity-70 truncate">· {outcomeLabel}</span>
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                bet.side === "yes" ? "bg-yes/10 text-yes" : "bg-no/10 text-no"
+                              }`}>
+                                {bet.side.toUpperCase()}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                        {/* Winning outcome */}
+                        <td className="px-3 py-3 text-center">
+                          {bet.round?.status === "resolved" && bet.round.winningOutcome ? (
+                            (() => {
+                              const wc = OUTCOME_COLORS[bet.round.winningOutcome];
+                              const wLabel = bet.round.outcomes?.find(o => o.id === bet.round!.winningOutcome)?.label;
+                              const won = bet.side === bet.round.winningOutcome;
+                              return (
+                                <div className="flex flex-col items-center gap-0.5">
+                                  {wc && wLabel ? (
+                                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${wc.bg} ${wc.text} border ${wc.border} max-w-[130px] truncate`}>
+                                      <span className="font-bold">{bet.round.winningOutcome}</span>
+                                      <span className="opacity-70 truncate">· {wLabel}</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-muted">{bet.round.winningOutcome}</span>
+                                  )}
+                                  <span className={`text-[10px] font-semibold ${won ? "text-[#22c55e]" : "text-red-400"}`}>
+                                    {won ? "✓ Won" : "✗ Lost"}
+                                  </span>
+                                </div>
+                              );
+                            })()
+                          ) : (
+                            <span className="text-white/20 text-[10px]">Pending</span>
+                          )}
                         </td>
                         <td className="px-3 py-3 text-right font-mono text-white text-xs">
                           {bet.amount.toFixed(3)} SOL
                           {solPrice && (
                             <div className="text-muted text-[10px]">{usd(bet.amount)}</div>
                           )}
-                        </td>
-                        <td className="px-3 py-3 text-right font-mono text-muted text-xs">
-                          {bet.odds.toFixed(2)}x
                         </td>
                         <td className="px-3 py-3 text-right font-mono text-xs">
                           {isWin && bet.payout != null ? (
