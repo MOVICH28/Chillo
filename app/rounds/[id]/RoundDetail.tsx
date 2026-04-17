@@ -585,6 +585,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
               {/* Outcome list */}
               <div className="space-y-1.5">
                 {outcomes.map(o => {
+                  const c           = OUTCOME_COLORS[o.id];
                   const isSelected  = selected?.id === o.id;
                   const isWinner    = round.winningOutcome === o.id;
                   const multiplier  = o.pool > 0 && totalPool > 0
@@ -598,16 +599,19 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                         disabled={disabled}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-left
                           ${isSelected
-                            ? "bg-[#22c55e]/10 border-[#22c55e]/30 ring-1 ring-inset ring-[#22c55e]/20"
+                            ? `${c.bg} ${c.border} ring-1 ring-inset ${c.border}`
                             : isWinner
-                              ? "bg-[#22c55e]/10 border-[#22c55e]/30"
+                              ? `${c.bg} ${c.border}`
                               : disabled
                                 ? "bg-white/[0.02] border-white/5 opacity-50 cursor-not-allowed"
-                                : "bg-[#22c55e]/10 border-[#22c55e]/20 hover:border-[#22c55e]/30 hover:bg-[#22c55e]/[0.15] cursor-pointer"
+                                : `${c.bg} ${c.border} hover:opacity-90 cursor-pointer`
                           }`}
                       >
+                        {/* Dot */}
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${c.dot}`} />
+
                         {/* Label */}
-                        <span className="flex-1 text-xs text-white truncate">
+                        <span className={`flex-1 text-xs ${isSelected || isWinner ? c.text : "text-white/80"} truncate`}>
                           {o.label}
                           {isWinner && <span className="ml-1 text-[10px]">✓</span>}
                         </span>
@@ -618,7 +622,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                         </span>
 
                         {/* Multiplier */}
-                        <span className="text-xs font-mono font-bold shrink-0 w-10 text-right text-[#22c55e]">
+                        <span className={`text-xs font-mono font-bold shrink-0 w-10 text-right ${c.text}`}>
                           {multiplier !== null ? `${multiplier.toFixed(2)}x` : "--x"}
                         </span>
                       </button>
