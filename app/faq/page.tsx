@@ -57,10 +57,9 @@ const FAQ_SECTIONS: FAQSection[] = [
         question: "How much can I win?",
         answer: (
           <div className="space-y-2 text-muted">
-            <p>It depends on how many people bet on the same range as you. If few people picked your range but you were right — you win big. If many people picked your range — you share the pot with more people.</p>
-            <code className="block bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-brand font-mono text-xs">
-              payout = (your bet / total bets on winning range) × 95% of total pool
-            </code>
+            <p>Your winnings depend on two things: how many people bet on the same range as you, and how much total SOL was bet on losing ranges. Here is how it works — all bets from losing ranges go into the prize pool and get distributed to winners. If you bet on the correct range, you receive your original bet back plus a share of the losers pool proportional to your stake.</p>
+            <p><span className="text-white font-semibold">Example:</span> total pool is 100 SOL, winning range collected 20 SOL, you bet 10 SOL on the winning range — you get (10/20) × 95 SOL = <span className="text-brand font-semibold">47.5 SOL</span>.</p>
+            <p>The fewer people on your range and the more people on wrong ranges, the bigger your reward.</p>
           </div>
         ),
       },
@@ -73,11 +72,6 @@ const FAQ_SECTIONS: FAQSection[] = [
         question: "When do I receive my winnings?",
         answer:
           "Winnings are sent automatically to your wallet right after the round resolves — usually within seconds. You can track your bet status in your Profile page.",
-      },
-      {
-        question: "What if nobody bets on the winning range?",
-        answer:
-          "If no one picks the correct range, all bets are refunded to everyone — no fee charged.",
       },
     ],
   },
@@ -92,7 +86,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "Can I bet on multiple ranges in one round?",
         answer:
-          "No, you can only place one bet per round per token (BTC or SOL). Choose your range carefully!",
+          "Yes! You can bet on as many ranges as you want in a single round. You can also place multiple bets on the same range to increase your stake. The more you bet on the correct range, the bigger your share of the prize pool.",
       },
     ],
   },
