@@ -611,7 +611,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                         <span className={`w-2 h-2 rounded-full shrink-0 ${c.dot}`} />
 
                         {/* Label */}
-                        <span className={`flex-1 text-xs ${isSelected || isWinner ? c.text : "text-white/80"} truncate`}>
+                        <span className={`flex-1 text-sm font-medium ${isSelected || isWinner ? c.text : "text-white/80"} truncate`}>
                           {o.label}
                           {isWinner && <span className="ml-1 text-[10px]">✓</span>}
                         </span>

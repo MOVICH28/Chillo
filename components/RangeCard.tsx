@@ -248,7 +248,7 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${c.bg} ${c.text} border ${c.border}`}>
                     {o.id}
                   </span>
-                  <span className="text-[10px] text-white leading-tight">{o.label}</span>
+                  <span className="text-xs font-semibold text-white leading-tight">{o.label}</span>
                 </div>
 
                 <div className="h-1 rounded-full bg-surface-3 overflow-hidden w-full">
