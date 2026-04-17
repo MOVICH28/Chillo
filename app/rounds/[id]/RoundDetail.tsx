@@ -107,7 +107,7 @@ function LiveChart({
 
   if (history.length < 2) {
     return (
-      <div className="h-[400px] flex flex-col items-center justify-center gap-3 bg-[#0f0f1a] rounded-xl border border-white/5">
+      <div className="h-[400px] flex flex-col items-center justify-center gap-3 bg-surface-2 rounded-xl border border-white/5">
         <svg className="animate-spin w-5 h-5 text-white/20" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
@@ -143,7 +143,7 @@ function LiveChart({
   const data = history.map(p => ({ t: p.time, price: p.price }));
 
   return (
-    <div className="h-[400px] w-full select-none bg-[#0f0f1a] rounded-xl border border-white/5 overflow-hidden">
+    <div className="h-[400px] w-full select-none bg-surface-2 rounded-xl border border-white/5 overflow-hidden">
       {/* Status indicator */}
       <div className="flex items-center gap-1.5 px-4 pt-3 pb-0">
         <span className={`w-1.5 h-1.5 rounded-full ${status === "live" ? "bg-[#22c55e]" : "bg-white/20"}`} />
@@ -487,7 +487,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
     : null;
 
   return (
-    <div className="min-h-screen bg-[#13141a] text-white pt-16">
+    <div className="min-h-screen bg-base text-white pt-16">
       <div className="max-w-6xl mx-auto px-4 py-6">
 
         {/* Two-column layout */}
@@ -562,7 +562,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                 <PoolBar outcomes={outcomes} totalPool={totalPool} />
               </>
             ) : (
-              <div className="h-[400px] flex items-center justify-center bg-[#0f0f1a] rounded-xl border border-white/5">
+              <div className="h-[400px] flex items-center justify-center bg-surface-2 rounded-xl border border-white/5">
                 <span className="text-white/20 text-sm">No chart available</span>
               </div>
             )}
