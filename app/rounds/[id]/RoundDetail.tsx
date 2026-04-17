@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   LineChart, Line, XAxis, YAxis, ReferenceArea, ReferenceLine,
@@ -682,17 +682,42 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
             <div className="divide-y divide-white/5">
               {recentBets.map(bet => {
                 const c = OUTCOME_COLORS[bet.side] ?? { text: "text-white/30", bg: "bg-white/5", border: "border-white/10", dot: "bg-white/20", hex: "#fff" };
-                const ago = Math.round((Date.now() - new Date(bet.createdAt).getTime()) / 60000);
+                const outcomeLabel = round.outcomes?.find(o => o.id === bet.side)?.label ?? bet.side;
+                const ageMins = Math.round((Date.now() - new Date(bet.createdAt).getTime()) / 60000);
+                const agoStr  = ageMins === 0 ? "just now" : `${ageMins}m ago`;
+
+                let resultNode: React.ReactNode;
+                if (round.status === "resolved") {
+                  if (bet.side === round.winningOutcome) {
+                    resultNode = <span className="text-[#22c55e] font-semibold text-[10px] shrink-0">✓ Won</span>;
+                  } else {
+                    resultNode = <span className="text-red-400 font-semibold text-[10px] shrink-0">✗ Lost</span>;
+                  }
+                } else {
+                  resultNode = <span className="text-white/20 text-[10px] shrink-0">Pending</span>;
+                }
+
                 return (
-                  <div key={bet.id} className="flex items-center gap-3 py-2.5 text-xs">
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${c.bg} ${c.text} border ${c.border} shrink-0`}>
-                      {bet.side}
+                  <div key={bet.id} className="flex items-center gap-2 py-2.5 text-xs flex-wrap">
+                    {/* Wallet */}
+                    <span className="text-white/30 font-mono shrink-0">{shortAddr(bet.walletAddress)}</span>
+
+                    {/* Outcome badge */}
+                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${c.bg} ${c.text} border ${c.border} shrink-0 max-w-[140px] truncate`}>
+                      <span className="font-bold">{bet.side}</span>
+                      <span className="opacity-70 truncate">· {outcomeLabel}</span>
                     </span>
-                    <span className="text-white/30 font-mono">{shortAddr(bet.walletAddress)}</span>
+
                     <span className="flex-1" />
-                    <span className="text-white font-mono">{bet.amount.toFixed(2)} SOL</span>
-                    <span className="text-white/20 font-mono">{bet.odds.toFixed(2)}x</span>
-                    <span className="text-white/20 w-14 text-right shrink-0">{ago === 0 ? "just now" : `${ago}m ago`}</span>
+
+                    {/* Amount */}
+                    <span className="text-white font-mono shrink-0">{bet.amount.toFixed(2)} SOL</span>
+
+                    {/* Win/loss */}
+                    {resultNode}
+
+                    {/* Time */}
+                    <span className="text-white/20 w-14 text-right shrink-0">{agoStr}</span>
                   </div>
                 );
               })}
