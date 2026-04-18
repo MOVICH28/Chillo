@@ -66,25 +66,7 @@ export default function Home() {
     return () => clearInterval(id);
   }, [fetchRounds]);
 
-  const [activeSection, setActiveSection] = useState("categories");
-
-  useEffect(() => {
-    const sections = ["categories", "markets", "stats"];
-    const observers: IntersectionObserver[] = [];
-    sections.forEach((id) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      const obs = new IntersectionObserver(
-        ([entry]) => { if (entry.isIntersecting) setActiveSection(id); },
-        { rootMargin: "-40% 0px -55% 0px" }
-      );
-      obs.observe(el);
-      observers.push(obs);
-    });
-    return () => observers.forEach((o) => o.disconnect());
-  }, []);
-
-  const openRounds     = rounds.filter((r) => r.status !== "resolved");
+const openRounds     = rounds.filter((r) => r.status !== "resolved");
   const resolvedRounds = rounds.filter((r) => r.status === "resolved").slice(0, 20);
 
   const filtered =
@@ -107,30 +89,7 @@ export default function Home() {
         <LiveTicker liveData={liveData} />
       </div>
 
-      {/* Sub-navigation */}
-      <div className="sticky top-14 z-40 bg-surface border-b border-surface-3">
-        <div className="max-w-[1400px] mx-auto px-4 flex items-center gap-6 h-10">
-          {[
-            { id: "categories", label: "Categories" },
-            { id: "markets",    label: "All Markets" },
-            { id: "stats",      label: "Today's Stats" },
-          ].map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" })}
-              className={`text-xs font-medium transition-colors pb-0.5 border-b-2 ${
-                activeSection === id
-                  ? "text-brand border-brand"
-                  : "text-muted border-transparent hover:text-white"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Main layout */}
+{/* Main layout */}
       <div id="categories" className="flex flex-1 max-w-[1400px] mx-auto w-full px-4 py-6 gap-6">
         {/* Sidebar */}
         <div className="hidden lg:block">
