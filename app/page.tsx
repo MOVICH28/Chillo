@@ -97,7 +97,7 @@ const openRounds     = rounds.filter((r) => r.status !== "resolved");
         </div>
 
         {/* Main content */}
-        <main id="markets" className="flex-1 min-w-0">
+        <main id="markets" className="flex-1 min-w-0 overflow-y-auto max-h-[calc(100vh-56px)]">
           {/* Page header */}
           <div className="flex items-center justify-between mb-5">
             <div>
