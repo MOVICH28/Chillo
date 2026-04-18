@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
 /* ── Theme: dark (default) ─────────────────────────────────────────────────── */
 :root {
   /* RGB channels — used as rgb(var(--color-x) / alpha) in Tailwind */

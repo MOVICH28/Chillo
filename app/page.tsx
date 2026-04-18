@@ -92,12 +92,12 @@ const openRounds     = rounds.filter((r) => r.status !== "resolved");
 {/* Main layout */}
       <div className="flex flex-row gap-6 max-w-[1400px] mx-auto w-full px-4 h-[calc(100vh-56px)]">
         {/* Sidebar */}
-        <div id="categories" className="hidden lg:block w-64 shrink-0 overflow-y-auto py-6">
+        <div id="categories" className="hidden lg:block w-64 shrink-0 overflow-y-auto py-6 no-scrollbar">
           <Sidebar active={category} onSelect={setCategory} counts={counts} />
         </div>
 
         {/* Main content */}
-        <main id="markets" className="flex-1 overflow-y-auto py-6">
+        <main id="markets" className="flex-1 overflow-y-auto py-6 no-scrollbar">
           {/* Page header */}
           <div className="flex items-center justify-between mb-5">
             <div>
@@ -223,7 +223,7 @@ const openRounds     = rounds.filter((r) => r.status !== "resolved");
         </main>
 
         {/* Right panel */}
-        <div className="hidden xl:block w-72 shrink-0 overflow-y-auto py-6">
+        <div className="hidden xl:block w-72 shrink-0 overflow-y-auto py-6 no-scrollbar">
           <RightPanel rounds={rounds} />
         </div>
       </div>
