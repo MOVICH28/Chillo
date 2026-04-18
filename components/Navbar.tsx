@@ -47,7 +47,7 @@ export default function Navbar({ rounds }: NavbarProps) {
     <nav className="fixed top-0 left-0 right-0 z-50 h-14 bg-surface border-b border-surface-3 flex items-center px-4 gap-4">
       {/* Logo */}
       <div className="flex items-center gap-2 mr-4">
-        <Image src="/logo.png" alt="Pumpdora" width={180} height={52} style={{objectFit: 'contain'}} />
+        <Image src="/logo.png" alt="Pumpdora" width={220} height={64} style={{objectFit: 'contain'}} />
       </div>
 
       {/* Live indicator */}
