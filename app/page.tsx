@@ -90,9 +90,9 @@ const openRounds     = rounds.filter((r) => r.status !== "resolved");
       </div>
 
 {/* Main layout */}
-      <div id="categories" className="flex flex-1 max-w-[1400px] mx-auto w-full px-4 py-6 gap-6">
+      <div className="flex flex-1 max-w-[1400px] mx-auto w-full px-4 py-6 gap-6">
         {/* Sidebar */}
-        <div className="hidden lg:block">
+        <div id="categories" className="hidden lg:block w-64 shrink-0 sticky top-14 self-start max-h-[calc(100vh-56px)] overflow-y-auto">
           <Sidebar active={category} onSelect={setCategory} counts={counts} />
         </div>
 
