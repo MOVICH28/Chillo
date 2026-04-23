@@ -11,7 +11,6 @@ import RightPanel from "@/components/RightPanel";
 import BetModal from "@/components/BetModal";
 import { Round, Outcome } from "@/lib/types";
 import { useLiveData } from "@/lib/useLiveData";
-import { useWallet } from "@/components/WalletProvider";
 
 // Isolated component so useSearchParams has its own Suspense boundary
 function RefCapture() {
@@ -30,22 +29,6 @@ export default function Home() {
   const [betTarget, setBetTarget] = useState<{ round: Round; side: string; outcome?: Outcome } | null>(null);
   const [completedOpen, setCompletedOpen] = useState(false);
   const { data: liveData } = useLiveData();
-  const { publicKey, connected } = useWallet();
-
-  // Register referral once wallet connects, if we have a stored ref code
-  useEffect(() => {
-    if (!connected || !publicKey) return;
-    const ref = localStorage.getItem("pumpdora_ref");
-    if (!ref || ref === publicKey) return;
-
-    fetch("/api/referral", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ referrerAddress: ref, referredAddress: publicKey }),
-    }).then(() => {
-      localStorage.removeItem("pumpdora_ref");
-    }).catch(() => {});
-  }, [connected, publicKey]);
 
   const fetchRounds = useCallback(async () => {
     try {

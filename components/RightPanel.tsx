@@ -59,10 +59,10 @@ export default function RightPanel({ rounds }: RightPanelProps) {
       <div className="bg-surface rounded-xl border border-surface-3 p-4">
         <p className="text-[10px] uppercase tracking-widest text-muted mb-3">Today&apos;s Stats</p>
         <div className="space-y-2.5">
-          <Stat label="Total Pool" value={`${totalPool.toFixed(1)} SOL`} highlight />
+          <Stat label="Total Pool" value={`${totalPool.toFixed(1)} DORA`} highlight />
           <Stat label="Active Markets" value={openRounds.toString()} />
           <Stat label="Total Bets" value={totalBets.toString()} />
-          <Stat label="Avg Pool" value={`${openRounds ? (totalPool / openRounds).toFixed(1) : "0"} SOL`} />
+          <Stat label="Avg Pool" value={`${openRounds ? (totalPool / openRounds).toFixed(1) : "0"} DORA`} />
         </div>
       </div>
 
@@ -95,7 +95,7 @@ export default function RightPanel({ rounds }: RightPanelProps) {
                   >
                     {bet.side.toUpperCase()}
                   </span>
-                  <span className="text-xs font-mono text-white">{bet.amount} SOL</span>
+                  <span className="text-xs font-mono text-white">{bet.amount} DORA</span>
                 </div>
                 <p className="text-[10px] text-muted truncate">{bet.round?.question ?? bet.roundId}</p>
               </div>

@@ -4,8 +4,6 @@ export const dynamic = "force-dynamic";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useWallet } from "@/components/WalletProvider";
-import { useLiveData } from "@/lib/useLiveData";
 import Navbar from "@/components/Navbar";
 
 interface LeaderboardEntry {
@@ -30,10 +28,6 @@ function shortAddress(addr: string) {
 }
 
 export default function LeaderboardPage() {
-  const { publicKey, connected } = useWallet();
-  const { data: liveData } = useLiveData();
-  const solPrice = liveData.sol?.price ?? null;
-
   const [rows, setRows] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -68,9 +62,6 @@ export default function LeaderboardPage() {
     const id = setInterval(fetchLeaderboard, 30_000);
     return () => clearInterval(id);
   }, [fetchLeaderboard]);
-
-  const usd = (sol: number) =>
-    solPrice ? ` ($${(sol * solPrice).toFixed(2)})` : "";
 
   return (
     <div className="min-h-screen bg-base pt-16">
@@ -119,7 +110,7 @@ export default function LeaderboardPage() {
                   {rows.map((row, idx) => {
                     const rank = idx + 1;
                     const rankStyle = RANK_STYLES[rank];
-                    const isCurrentUser = connected && publicKey === row.walletAddress;
+                    const isCurrentUser = false;
                     const displayName = usernameMap[row.walletAddress] || shortAddress(row.walletAddress);
                     const profitPositive = row.profit >= 0;
 
@@ -197,20 +188,14 @@ export default function LeaderboardPage() {
 
                         {/* Total wagered */}
                         <td className="px-3 py-3 text-right font-mono text-xs text-muted">
-                          {row.totalWagered.toFixed(3)} SOL
-                          {solPrice && <div className="text-[10px]">{usd(row.totalWagered).replace(" (", "").replace(")", "")}</div>}
+                          {row.totalWagered.toFixed(0)} DORA
                         </td>
 
                         {/* Profit */}
                         <td className="px-4 py-3 text-right">
                           <span className={`font-mono font-bold text-sm ${profitPositive ? "text-yes" : "text-no"}`}>
-                            {profitPositive ? "+" : ""}{row.profit.toFixed(3)} SOL
+                            {profitPositive ? "+" : ""}{row.profit.toFixed(0)} DORA
                           </span>
-                          {solPrice && (
-                            <div className={`text-[10px] font-mono ${profitPositive ? "text-yes/70" : "text-no/70"}`}>
-                              {profitPositive ? "+" : ""}${(row.profit * solPrice).toFixed(2)}
-                            </div>
-                          )}
                         </td>
                       </tr>
                     );
@@ -221,12 +206,6 @@ export default function LeaderboardPage() {
           )}
         </div>
 
-        {/* Current user not in top 50 */}
-        {!loading && connected && publicKey && !rows.find(r => r.walletAddress === publicKey) && (
-          <p className="text-center text-muted text-xs mt-4">
-            Your wallet is not in the top 50 yet. Place more bets to climb the ranks!
-          </p>
-        )}
 
       </div>
     </div>

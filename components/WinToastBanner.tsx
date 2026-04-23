@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useWallet } from "@/components/WalletProvider";
+import { useAuth } from "@/lib/useAuth";
 import { useWinNotifications, WinToast } from "@/lib/useWinNotifications";
 
 export default function WinToastBanner() {
-  const { publicKey, connected } = useWallet();
+  const { user } = useAuth();
   const [toasts, setToasts] = useState<WinToast[]>([]);
 
   const handleWin = (toast: WinToast) => {
@@ -15,7 +15,7 @@ export default function WinToastBanner() {
     }, 5000);
   };
 
-  useWinNotifications(connected ? publicKey : null, handleWin);
+  useWinNotifications(user ? `dora:${user.id}` : null, handleWin);
 
   if (toasts.length === 0) return null;
 

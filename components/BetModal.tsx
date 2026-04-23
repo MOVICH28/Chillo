@@ -1,15 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Connection,
-  PublicKey,
-  Transaction,
-  SystemProgram,
-  LAMPORTS_PER_SOL,
-  TransactionInstruction,
-} from "@solana/web3.js";
-import { useWallet } from "@/components/WalletProvider";
+import { useAuth } from "@/lib/useAuth";
 import { Round, Outcome } from "@/lib/types";
 
 interface BetModalProps {
@@ -20,32 +12,26 @@ interface BetModalProps {
   onSuccess: () => void;
 }
 
-const PRESETS = ["0.05", "0.1", "0.5", "1"];
-const PLATFORM_WALLET = "GsvhgEARAKjYX2oFRzgKpWU7XufuGPtVeN58M983prtb";
-const RPC = "https://api.devnet.solana.com";
-const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+const PRESETS = ["50", "100", "250", "500"];
 
-type TxStatus = "idle" | "approving" | "confirming" | "registering" | "success" | "error";
+type TxStatus = "idle" | "placing" | "success" | "error";
 
 const STATUS_MESSAGES: Record<TxStatus, string> = {
   idle: "",
-  approving: "Waiting for approval in Phantom...",
-  confirming: "Transaction submitted, confirming on-chain...",
-  registering: "Confirmed! Registering your bet...",
+  placing: "Placing your bet…",
   success: "Bet placed successfully!",
   error: "",
 };
 
 export default function BetModal({ round, side, outcome, onClose, onSuccess }: BetModalProps) {
-  const { publicKey, connected, connect } = useWallet();
-  const [amount, setAmount] = useState("0.1");
+  const { user, getToken, refreshUser } = useAuth();
+  const [amount, setAmount] = useState("100");
   const [txStatus, setTxStatus] = useState<TxStatus>("idle");
   const [error, setError] = useState("");
 
   const isRange = !!outcome;
   const isYes   = side === "yes";
 
-  // For range rounds: compute estimated odds from outcome pool vs total pool
   const rangeOdds = isRange && outcome && round.totalPool > 0 && outcome.pool > 0
     ? Math.max(1.05, (round.totalPool * 0.95) / outcome.pool)
     : null;
@@ -57,79 +43,42 @@ export default function BetModal({ round, side, outcome, onClose, onSuccess }: B
   const payout = numAmount * odds;
   const profit = payout - numAmount;
 
-  const busy = txStatus !== "idle" && txStatus !== "error";
+  const busy = txStatus === "placing";
 
   async function handleBet() {
-    if (!connected || !publicKey) { await connect(); return; }
+    if (!user) { setError("Login to place a bet"); return; }
     if (numAmount <= 0) { setError("Enter a valid amount"); return; }
+    if (numAmount > user.doraBalance) { setError("Insufficient DORA balance"); return; }
 
     setError("");
-    setTxStatus("approving");
+    setTxStatus("placing");
 
     try {
-      const connection = new Connection(RPC, "confirmed");
-      const fromPubkey = new PublicKey(publicKey);
-      const toPubkey = new PublicKey(PLATFORM_WALLET);
-
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-
-      const memo = JSON.stringify({ roundId: round.id, side, walletAddress: publicKey });
-      const transaction = new Transaction({
-        recentBlockhash: blockhash,
-        feePayer: fromPubkey,
-      });
-
-      transaction.add(
-        SystemProgram.transfer({
-          fromPubkey,
-          toPubkey,
-          lamports: Math.round(numAmount * LAMPORTS_PER_SOL),
-        }),
-        new TransactionInstruction({
-          keys: [{ pubkey: fromPubkey, isSigner: true, isWritable: false }],
-          programId: MEMO_PROGRAM_ID,
-          data: Buffer.from(memo, "utf-8"),
-        })
-      );
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const solana = (window as any).solana;
-      const { signature } = await solana.signAndSendTransaction(transaction);
-
-      setTxStatus("confirming");
-
-      await connection.confirmTransaction(
-        { signature, blockhash, lastValidBlockHeight },
-        "confirmed"
-      );
-
-      setTxStatus("registering");
-
+      const token = getToken();
       const res = await fetch("/api/bets", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
-          walletAddress: publicKey,
+          currency: "DORA",
           roundId: round.id,
           side,
           amount: numAmount,
-          txHash: signature,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to register bet");
+      if (!res.ok) throw new Error(data.error ?? "Failed to place bet");
 
       setTxStatus("success");
+      await refreshUser();
       window.dispatchEvent(new CustomEvent("betPlaced"));
       onSuccess();
       setTimeout(onClose, 1800);
     } catch (e: unknown) {
       setTxStatus("error");
-      const msg = e instanceof Error ? e.message : "Something went wrong";
-      // Phantom user rejection is verbose — simplify it
-      setError(msg.includes("rejected") || msg.includes("User rejected")
-        ? "Transaction rejected in Phantom."
-        : msg);
+      setError(e instanceof Error ? e.message : "Something went wrong");
     }
   }
 
@@ -175,19 +124,27 @@ export default function BetModal({ round, side, outcome, onClose, onSuccess }: B
             </p>
           </div>
 
+          {/* Balance */}
+          {user && (
+            <div className="flex items-center justify-between text-xs text-muted mb-3">
+              <span>Your balance</span>
+              <span className="text-brand font-mono font-semibold">{Math.floor(user.doraBalance).toLocaleString()} DORA</span>
+            </div>
+          )}
+
           {/* Amount input */}
           <div className="mb-3">
             <label className="text-xs text-muted mb-1.5 block">Amount (DORA)</label>
             <div className="flex items-center gap-2 bg-surface-3 rounded-xl px-4 py-3 border border-surface-3 focus-within:border-brand/40">
               <input
                 type="number"
-                min="0.01"
-                step="0.01"
+                min="1"
+                step="1"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 disabled={busy}
                 className="flex-1 bg-transparent text-white font-mono outline-none text-sm disabled:opacity-50"
-                placeholder="0.00"
+                placeholder="0"
               />
               <span className="text-muted text-xs">DORA</span>
             </div>
@@ -215,9 +172,7 @@ export default function BetModal({ round, side, outcome, onClose, onSuccess }: B
             <p className="text-[10px] text-muted uppercase tracking-wider font-medium mb-2">Payout calculator</p>
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted">Stake</span>
-              <span className="text-white font-mono">
-                {numAmount.toFixed(3)} DORA
-              </span>
+              <span className="text-white font-mono">{numAmount.toFixed(0)} DORA</span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted">Current odds</span>
@@ -225,19 +180,17 @@ export default function BetModal({ round, side, outcome, onClose, onSuccess }: B
             </div>
             <div className="border-t border-surface-3 pt-2 flex items-center justify-between text-sm">
               <span className="text-muted font-medium">Est. payout</span>
-              <span className="text-white font-mono font-bold">
-                {payout.toFixed(3)} DORA
-              </span>
+              <span className="text-white font-mono font-bold">{payout.toFixed(0)} DORA</span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted">Profit if win</span>
               <span className={`font-mono font-semibold ${profit >= 0 ? "text-yes" : "text-no"}`}>
-                {profit >= 0 ? "+" : ""}{profit.toFixed(3)} DORA
+                {profit >= 0 ? "+" : ""}{profit.toFixed(0)} DORA
               </span>
             </div>
           </div>
 
-          {/* Transaction status */}
+          {/* Status */}
           {txStatus !== "idle" && txStatus !== "error" && (
             <div className={`flex items-center gap-2 rounded-xl px-3 py-2.5 mb-4 text-xs
               ${txStatus === "success"
@@ -257,13 +210,10 @@ export default function BetModal({ round, side, outcome, onClose, onSuccess }: B
           {error && <p className="text-no text-xs mb-3 text-center">{error}</p>}
 
           {/* CTA */}
-          {!connected ? (
-            <button
-              onClick={connect}
-              className="w-full py-3 rounded-xl font-bold text-black bg-brand hover:bg-brand-dim transition-colors flex items-center justify-center gap-2"
-            >
-              Connect Phantom to Bet
-            </button>
+          {!user ? (
+            <p className="text-center text-muted text-sm py-2">
+              <button onClick={onClose} className="text-brand hover:underline">Login</button> to place a bet
+            </p>
           ) : (
             <button
               onClick={handleBet}
@@ -277,15 +227,15 @@ export default function BetModal({ round, side, outcome, onClose, onSuccess }: B
                 }`}
             >
               {busy
-                ? txStatus === "success" ? "Done!" : "Processing..."
+                ? "Processing..."
                 : isRange
-                  ? `Bet ${outcome?.id} · ${numAmount.toFixed(2)} DORA`
-                  : `Bet ${isYes ? "YES" : "NO"} · ${numAmount.toFixed(2)} DORA`}
+                  ? `Bet ${outcome?.id} · ${numAmount.toFixed(0)} DORA`
+                  : `Bet ${isYes ? "YES" : "NO"} · ${numAmount.toFixed(0)} DORA`}
             </button>
           )}
 
           <p className="text-[10px] text-muted text-center mt-3">
-            Pumpdora · DORA virtual currency · No real SOL needed
+            Pumpdora · DORA virtual currency · No real money needed
           </p>
         </div>
       </div>

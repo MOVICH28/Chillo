@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
-import SolanaWalletProvider from "@/components/WalletProvider";
 import { AuthProvider } from "@/lib/useAuth";
 
 const geistSans = localFont({
@@ -16,8 +15,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Pumpdora — Solana Prediction Markets",
-  description: "Bet on pump.fun tokens, crypto prices, and real-world events on Solana devnet with Pumpdora.",
+  title: "Pumpdora — Prediction Markets",
+  description: "Bet on crypto prices and real-world events with Pumpdora using DORA virtual currency.",
 };
 
 export default function RootLayout({
@@ -33,7 +32,7 @@ export default function RootLayout({
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-base`}>
         <AuthProvider>
-          <SolanaWalletProvider>{children}</SolanaWalletProvider>
+          {children}
         </AuthProvider>
       </body>
     </html>

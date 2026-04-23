@@ -54,9 +54,9 @@ export default function Sidebar({ active, onSelect, counts }: SidebarProps) {
       <div className="mt-4 mx-3 p-3 rounded-lg bg-surface-2 border border-surface-3">
         <p className="text-[10px] uppercase tracking-widest text-muted mb-2">How It Works</p>
         <ol className="text-xs text-muted space-y-1.5 list-decimal list-inside">
-          <li>Connect Phantom wallet</li>
+          <li>Login or Register</li>
           <li>Pick YES or NO</li>
-          <li>Set your SOL amount</li>
+          <li>Set your DORA amount</li>
           <li>Collect winnings!</li>
         </ol>
       </div>

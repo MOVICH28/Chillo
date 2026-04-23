@@ -36,7 +36,7 @@ function fireNotification(bet: BetWithRound) {
   if (Notification.permission !== "granted") return;
   const question = bet.round?.question?.slice(0, 50) ?? bet.roundId;
   new Notification("🎉 You won!", {
-    body: `You won ${bet.payout?.toFixed(4) ?? "?"} SOL on "${question}"`,
+    body: `You won ${bet.payout?.toFixed(4) ?? "?"} DORA on"${question}"`,
     icon: "/favicon.ico",
   });
 }
@@ -85,7 +85,7 @@ export function useWinNotifications(
               const question = bet.round?.question?.slice(0, 50) ?? bet.roundId;
               onWin({
                 id: bet.id,
-                message: `🎉 You won ${bet.payout?.toFixed(4) ?? "?"} SOL on "${question}"!`,
+                message: `🎉 You won ${bet.payout?.toFixed(4) ?? "?"} DORA on"${question}"!`,
               });
             }
           }

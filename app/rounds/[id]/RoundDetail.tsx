@@ -6,13 +6,9 @@ import {
   LineChart, Line, XAxis, YAxis, ReferenceArea, ReferenceLine,
   ResponsiveContainer, Tooltip,
 } from "recharts";
-import {
-  Connection, PublicKey, Transaction, SystemProgram,
-  LAMPORTS_PER_SOL, TransactionInstruction,
-} from "@solana/web3.js";
 import { Outcome } from "@/lib/types";
 import { useBinancePrice } from "@/lib/useBinancePrice";
-import { useWallet } from "@/components/WalletProvider";
+import { useAuth } from "@/lib/useAuth";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -58,14 +54,9 @@ const OUTCOME_COLORS: Record<string, { bg: string; border: string; text: string;
   F: { bg: "bg-purple-500/10", border: "border-purple-500/40", text: "text-purple-400", dot: "bg-purple-400", hex: "#c084fc" },
 };
 
-const PLATFORM_WALLET = "GsvhgEARAKjYX2oFRzgKpWU7XufuGPtVeN58M983prtb";
-const RPC = "https://api.devnet.solana.com";
-const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
-
-type TxStatus = "idle" | "approving" | "confirming" | "registering" | "success" | "error";
+type TxStatus = "idle" | "placing" | "success" | "error";
 const STATUS_MESSAGES: Record<TxStatus, string> = {
-  idle: "", approving: "Waiting for approval…", confirming: "Confirming on-chain…",
-  registering: "Registering bet…", success: "Bet placed!", error: "",
+  idle: "", placing: "Placing your bet…", success: "Bet placed!", error: "",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -307,58 +298,44 @@ function BetPanel({
   onSuccess: () => void;
   onCancel: () => void;
 }) {
-  const { publicKey, connected, connect } = useWallet();
-  const [amount, setAmount]   = useState("0.1");
+  const { user, getToken, refreshUser } = useAuth();
+  const [amount, setAmount]   = useState("100");
   const [txStatus, setTxStatus] = useState<TxStatus>("idle");
   const [error, setError]     = useState("");
 
-  const PRESETS = ["0.05", "0.1", "0.5", "1"];
+  const PRESETS = ["50", "100", "250", "500"];
   const numAmount = parseFloat(amount) || 0;
   const multiplier = outcome.pool > 0 && round.totalPool > 0
     ? Math.max(1.05, (round.totalPool * 0.95) / outcome.pool)
     : 2;
   const payout = numAmount * multiplier;
-  const busy   = txStatus !== "idle" && txStatus !== "error";
+  const busy   = txStatus === "placing";
 
   async function handleBet() {
-    if (!connected || !publicKey) { await connect(); return; }
+    if (!user) { setError("Login to place a bet"); return; }
     if (numAmount <= 0) { setError("Enter a valid amount"); return; }
+    if (numAmount > user.doraBalance) { setError("Insufficient DORA balance"); return; }
     setError("");
-    setTxStatus("approving");
+    setTxStatus("placing");
     try {
-      const connection = new Connection(RPC, "confirmed");
-      const fromPubkey = new PublicKey(publicKey);
-      const toPubkey   = new PublicKey(PLATFORM_WALLET);
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      const memo = JSON.stringify({ roundId: round.id, side: outcome.id, walletAddress: publicKey });
-      const tx = new Transaction({ recentBlockhash: blockhash, feePayer: fromPubkey });
-      tx.add(
-        SystemProgram.transfer({ fromPubkey, toPubkey, lamports: Math.round(numAmount * LAMPORTS_PER_SOL) }),
-        new TransactionInstruction({
-          keys: [{ pubkey: fromPubkey, isSigner: true, isWritable: false }],
-          programId: MEMO_PROGRAM_ID,
-          data: Buffer.from(memo, "utf-8"),
-        })
-      );
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { signature } = await (window as any).solana.signAndSendTransaction(tx);
-      setTxStatus("confirming");
-      await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
-      setTxStatus("registering");
-      const res  = await fetch("/api/bets", {
+      const token = getToken();
+      const res = await fetch("/api/bets", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress: publicKey, roundId: round.id, side: outcome.id, amount: numAmount, txHash: signature }),
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ currency: "DORA", roundId: round.id, side: outcome.id, amount: numAmount }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to register bet");
+      if (!res.ok) throw new Error(data.error ?? "Failed to place bet");
       setTxStatus("success");
+      await refreshUser();
       window.dispatchEvent(new CustomEvent("betPlaced"));
       setTimeout(onSuccess, 1500);
     } catch (e: unknown) {
       setTxStatus("error");
-      const msg = e instanceof Error ? e.message : "Something went wrong";
-      setError(msg.includes("rejected") || msg.includes("User rejected") ? "Transaction rejected." : msg);
+      setError(e instanceof Error ? e.message : "Something went wrong");
     }
   }
 
@@ -416,15 +393,12 @@ function BetPanel({
       {error && <p className="text-red-400 text-xs mb-2 px-0.5">{error}</p>}
 
       {/* CTA */}
-      {!connected ? (
-        <button onClick={connect}
-          className="w-full py-2.5 rounded-lg bg-[#22c55e] text-black font-bold text-sm hover:bg-[#16a34a] transition-colors">
-          Connect Wallet to Bet
-        </button>
+      {!user ? (
+        <p className="text-center text-white/40 text-xs py-2">Login to place a bet</p>
       ) : (
         <button onClick={handleBet} disabled={busy || numAmount <= 0}
           className="w-full py-2.5 rounded-lg bg-[#22c55e] text-black font-bold text-sm hover:bg-[#16a34a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-          {busy ? (txStatus === "success" ? "Done!" : "Processing…") : `Place Bet · ${numAmount.toFixed(2)} DORA`}
+          {busy ? "Processing…" : `Place Bet · ${numAmount.toFixed(0)} DORA`}
         </button>
       )}
 

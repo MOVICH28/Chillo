@@ -23,7 +23,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "What is Pumpdora?",
         answer:
-          "Pumpdora is a prediction platform on Solana where you predict the price of BTC or SOL in the next 15 minutes. Pick the right price range — win a share of the prize pool!",
+          "Pumpdora is a prediction platform where you predict the price of BTC or SOL in the next 15 minutes using DORA virtual currency. Pick the right price range — win a share of the prize pool!",
       },
       {
         question: "How does a round work?",
@@ -40,7 +40,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "Are there two separate rounds — BTC and SOL?",
         answer:
-          "Yes! There is always one active BTC round and one active SOL round running simultaneously. You can bet on both at the same time.",
+          "Yes! There is always one active BTC round and one active SOL price round running simultaneously. You can bet on both at the same time.",
       },
       {
         question: "How are results determined?",
@@ -57,8 +57,8 @@ const FAQ_SECTIONS: FAQSection[] = [
         question: "How much can I win?",
         answer: (
           <div className="space-y-2 text-muted">
-            <p>Your winnings depend on two things: how many people bet on the same range as you, and how much total SOL was bet on losing ranges. Here is how it works — all bets from losing ranges go into the prize pool and get distributed to winners. If you bet on the correct range, you receive your original bet back plus a share of the losers pool proportional to your stake.</p>
-            <p><span className="text-white font-semibold">Example:</span> total pool is 100 SOL, winning range collected 20 SOL, you bet 10 SOL on the winning range — you get (10/20) × 95 SOL = <span className="text-brand font-semibold">47.5 SOL</span>.</p>
+            <p>Your winnings depend on two things: how many people bet on the same range as you, and how much total DORA was bet on losing ranges. Here is how it works — all bets from losing ranges go into the prize pool and get distributed to winners. If you bet on the correct range, you receive your original bet back plus a share of the losers pool proportional to your stake.</p>
+            <p><span className="text-white font-semibold">Example:</span> total pool is 100 DORA, winning range collected 20 DORA, you bet 10 DORA on the winning range — you get (10/20) × 95 DORA = <span className="text-brand font-semibold">47.5 DORA</span>.</p>
             <p>The fewer people on your range and the more people on wrong ranges, the bigger your reward.</p>
           </div>
         ),
@@ -71,7 +71,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: "When do I receive my winnings?",
         answer:
-          "Winnings are sent automatically to your wallet right after the round resolves — usually within seconds. You can track your bet status in your Profile page.",
+          "Winnings are added to your DORA balance automatically right after the round resolves — usually within seconds. You can track your bet status in your Profile page.",
       },
     ],
   },
@@ -81,7 +81,7 @@ const FAQ_SECTIONS: FAQSection[] = [
     items: [
       {
         question: "What is the minimum bet?",
-        answer: "The minimum bet is 0.05 SOL.",
+        answer: "The minimum bet is 1 DORA.",
       },
       {
         question: "Can I bet on multiple ranges in one round?",
@@ -91,26 +91,22 @@ const FAQ_SECTIONS: FAQSection[] = [
     ],
   },
   {
-    title: "Wallet & Security",
+    title: "Account & Security",
     icon: "🔐",
     items: [
       {
-        question: "What wallet do I need?",
+        question: "How do I get started?",
         answer: (
           <div className="space-y-2 text-muted">
-            <p>You need a Phantom or Solflare wallet with some SOL.</p>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-              <li><span className="text-white">Phantom</span> — download free at <a href="https://phantom.app" target="_blank" rel="noreferrer" className="text-brand hover:underline">phantom.app</a> — takes 2 minutes to set up</li>
-              <li><span className="text-white">Solflare</span> — available at <a href="https://solflare.com" target="_blank" rel="noreferrer" className="text-brand hover:underline">solflare.com</a></li>
-            </ul>
-            <p>Make sure to switch your wallet to <span className="text-yellow-400">Devnet</span> and get free devnet SOL from the <a href="https://faucet.solana.com" target="_blank" rel="noreferrer" className="text-brand hover:underline">Solana faucet</a>.</p>
+            <p>Simply click <span className="text-white font-semibold">Login / Register</span> in the top right. Create a free account with a username, email, and password.</p>
+            <p>You start with <span className="text-brand font-semibold">1000 DORA</span> virtual currency — no real money, no wallet needed.</p>
           </div>
         ),
       },
       {
         question: "Is it safe?",
         answer:
-          "Your SOL is held in a platform wallet during the round and sent back automatically when resolved. We never ask for your seed phrase or private keys. All interactions are standard Solana transactions that you sign in your own wallet.",
+          "Pumpdora uses DORA virtual currency — no real money or crypto wallets are involved. Your account is protected by bcrypt-hashed passwords and JWT authentication.",
       },
     ],
   },

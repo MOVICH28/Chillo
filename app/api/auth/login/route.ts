@@ -9,20 +9,31 @@ const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-me";
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password } = await req.json();
+    const { identifier, password } = await req.json();
 
-    if (!email || !password) {
+    if (!identifier || !password) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+    const normalised = identifier.trim().toLowerCase();
+
+    // Find by email or username
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: normalised },
+          { username: normalised },
+        ],
+      },
+    });
+
     if (!user) {
-      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+      return NextResponse.json({ error: "Invalid email/username or password" }, { status: 401 });
     }
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
-      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+      return NextResponse.json({ error: "Invalid email/username or password" }, { status: 401 });
     }
 
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "30d" });
