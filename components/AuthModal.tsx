@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { signIn } from "next-auth/react";
 import { useAuth } from "@/lib/useAuth";
 
 interface AuthModalProps {
@@ -123,19 +124,38 @@ export default function AuthModal({ onClose }: AuthModalProps) {
 
         {/* Tab switcher — only on login/register views */}
         {(view === "login" || view === "register") && (
-          <div className="flex gap-1 p-1 bg-surface-3 rounded-lg mb-5">
-            {(["login", "register"] as const).map(t => (
-              <button
-                key={t}
-                onClick={() => switchView(t)}
-                className={`flex-1 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  view === t ? "bg-brand text-black" : "text-muted hover:text-white"
-                }`}
-              >
-                {t === "login" ? "Login" : "Register"}
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="flex gap-1 p-1 bg-surface-3 rounded-lg mb-4">
+              {(["login", "register"] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => switchView(t)}
+                  className={`flex-1 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    view === t ? "bg-brand text-black" : "text-muted hover:text-white"
+                  }`}
+                >
+                  {t === "login" ? "Login" : "Register"}
+                </button>
+              ))}
+            </div>
+
+            {/* Twitter / X OAuth */}
+            <button
+              onClick={() => signIn("twitter", { callbackUrl: window.location.href })}
+              className="w-full flex items-center justify-center gap-2.5 py-2.5 rounded-lg bg-black hover:bg-zinc-900 border border-zinc-700 text-white text-sm font-semibold transition-colors mb-4"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current shrink-0" xmlns="http://www.w3.org/2000/svg">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+              </svg>
+              Continue with X (Twitter)
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <span className="flex-1 h-px bg-surface-3" />
+              <span className="text-[10px] text-muted uppercase tracking-wider">or</span>
+              <span className="flex-1 h-px bg-surface-3" />
+            </div>
+          </>
         )}
 
         {error && (

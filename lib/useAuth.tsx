@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { signOut as nextAuthSignOut } from "next-auth/react";
 
 export interface AuthUser {
   id: string;
@@ -46,9 +47,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
       fetchMe(token).finally(() => setLoading(false));
-    } else {
-      setLoading(false);
+      return;
     }
+
+    // No DORA token — check if a Twitter/NextAuth session exists and bridge it
+    fetch("/api/auth/twitter-token")
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (data?.token) {
+          localStorage.setItem(TOKEN_KEY, data.token);
+          setUser(data.user);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [fetchMe]);
 
   const login = useCallback(async (identifier: string, password: string) => {
@@ -80,6 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     setUser(null);
+    // Also sign out of NextAuth session (Twitter OAuth)
+    nextAuthSignOut({ redirect: false }).catch(() => {});
   }, []);
 
   const getToken = useCallback(() => localStorage.getItem(TOKEN_KEY), []);

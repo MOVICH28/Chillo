@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/lib/useAuth";
+import SessionProviderWrapper from "@/components/SessionProviderWrapper";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -26,14 +27,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="scroll-smooth">
-      {/* Inject theme before first paint to avoid flash of wrong theme */}
       <head>
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(localStorage.getItem('theme')==='light'){document.documentElement.classList.add('light');}}catch(e){}})();` }} />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-base`}>
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <SessionProviderWrapper>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </SessionProviderWrapper>
       </body>
     </html>
   );
