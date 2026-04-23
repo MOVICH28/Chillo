@@ -332,9 +332,9 @@ export default function RoundCard({ round, onBet, liveData }: RoundCardProps) {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted border-t border-surface-3/50 pt-2.5">
             <span>
               {(round.realPool ?? 0) <= 0 ? (
-                <span className="text-muted">Pool: <span className="font-mono">0 SOL</span> <span className="text-surface-3">(no bets placed)</span></span>
+                <span className="text-muted">Pool: <span className="font-mono">0 DORA</span> <span className="text-surface-3">(no bets placed)</span></span>
               ) : (
-                <>Pool: <span className="text-white font-mono font-semibold">{(round.realPool ?? 0).toFixed(2)} SOL</span></>
+                <>Pool: <span className="text-white font-mono font-semibold">{(round.realPool ?? 0).toFixed(2)} DORA</span></>
               )}
             </span>
             <span className="text-surface-3">·</span>
@@ -406,9 +406,9 @@ export default function RoundCard({ round, onBet, liveData }: RoundCardProps) {
           <span>
             Pool:{" "}
             {(round.realPool ?? 0) <= 0 ? (
-              <span className="font-mono text-muted">0 SOL</span>
+              <span className="font-mono text-muted">0 DORA</span>
             ) : (
-              <span className="text-white font-mono">{(round.realPool ?? 0).toFixed(2)} SOL</span>
+              <span className="text-white font-mono">{(round.realPool ?? 0).toFixed(2)} DORA</span>
             )}
           </span>
           <span>{round.bets?.length ?? 0} bets</span>

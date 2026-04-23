@@ -210,7 +210,7 @@ const openRounds     = rounds.filter((r) => r.status !== "resolved");
             <div>
               <p className="text-white font-semibold text-sm">Earn with referrals</p>
               <p className="text-muted text-xs mt-1 max-w-md">
-                Share your link. Earn <span className="text-brand font-semibold">1% of every bet</span> your referrals place — paid automatically in SOL.
+                Share your link. Earn <span className="text-brand font-semibold">1% of every bet</span> your referrals place — paid automatically in DORA.
               </p>
             </div>
             <a

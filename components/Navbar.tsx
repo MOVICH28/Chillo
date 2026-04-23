@@ -100,6 +100,12 @@ export default function Navbar({ rounds }: NavbarProps) {
               </span>
               <span className="text-xs text-muted font-medium max-w-[80px] truncate">{user.username}</span>
             </div>
+            <Link
+              href="/profile"
+              className="px-2.5 py-1 rounded-md text-xs bg-surface-3 text-muted hover:text-white border border-surface-3 hover:border-surface-2 transition-colors shrink-0"
+            >
+              Profile
+            </Link>
             <button
               onClick={logout}
               className="px-2.5 py-1 rounded-md text-xs text-muted hover:text-white border border-surface-3 hover:border-surface-2 transition-colors shrink-0"

@@ -265,7 +265,7 @@ function PoolBar({ outcomes, totalPool }: { outcomes: Outcome[]; totalPool: numb
     <div className="mt-3 rounded-xl border border-white/5 bg-white/[0.02] p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] text-white/30 uppercase tracking-wider">Pool Distribution</span>
-        <span className="text-xs font-mono text-white/50">{totalPool.toFixed(2)} SOL total</span>
+        <span className="text-xs font-mono text-white/50">{totalPool.toFixed(2)} DORA total</span>
       </div>
       <div className="flex h-2 rounded-full overflow-hidden gap-px">
         {outcomes.map(o => {
@@ -391,13 +391,13 @@ function BetPanel({
           className="flex-1 bg-transparent text-white font-mono text-sm outline-none disabled:opacity-50"
           placeholder="0.00"
         />
-        <span className="text-white/40 text-xs ml-2">SOL</span>
+        <span className="text-white/40 text-xs ml-2">DORA</span>
       </div>
 
       {/* Payout */}
       <div className="flex items-center justify-between text-xs mb-3 px-0.5">
         <span className="text-white/40">If correct:</span>
-        <span className="text-[#22c55e] font-mono font-semibold">~{payout.toFixed(3)} SOL</span>
+        <span className="text-[#22c55e] font-mono font-semibold">~{payout.toFixed(3)} DORA</span>
       </div>
 
       {/* Status */}
@@ -424,7 +424,7 @@ function BetPanel({
       ) : (
         <button onClick={handleBet} disabled={busy || numAmount <= 0}
           className="w-full py-2.5 rounded-lg bg-[#22c55e] text-black font-bold text-sm hover:bg-[#16a34a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-          {busy ? (txStatus === "success" ? "Done!" : "Processing…") : `Place Bet · ${numAmount.toFixed(2)} SOL`}
+          {busy ? (txStatus === "success" ? "Done!" : "Processing…") : `Place Bet · ${numAmount.toFixed(2)} DORA`}
         </button>
       )}
 
@@ -724,7 +724,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                     <span className="flex-1" />
 
                     {/* Amount */}
-                    <span className="text-white font-mono shrink-0">{bet.amount.toFixed(2)} SOL</span>
+                    <span className="text-white font-mono shrink-0">{bet.amount.toFixed(2)} DORA</span>
 
                     {/* Win/loss */}
                     {resultNode}

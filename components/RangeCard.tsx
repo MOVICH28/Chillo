@@ -129,7 +129,7 @@ function ResolvedRangeCard({ round }: { round: Round }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted border-t border-surface-3/50 pt-2.5">
-          <span>Pool: <span className="text-white font-mono">{(round.realPool ?? 0).toFixed(2)} SOL</span></span>
+          <span>Pool: <span className="text-white font-mono">{(round.realPool ?? 0).toFixed(2)} DORA</span></span>
           {resolvedDate && (
             <>
               <span className="text-surface-3">·</span>
@@ -259,7 +259,7 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
                 </div>
 
                 <div className="flex items-center justify-between text-[10px]">
-                  <span className="text-muted font-mono">{o.pool.toFixed(2)} SOL</span>
+                  <span className="text-muted font-mono">{o.pool.toFixed(2)} DORA</span>
                   {multiplier !== null ? (
                     <span className={`font-mono font-bold ${c.text}`}>{multiplier.toFixed(2)}x</span>
                   ) : (
@@ -287,9 +287,9 @@ export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
             <span>
               Pool:{" "}
               {totalPool <= 0 ? (
-                <span className="font-mono text-muted">0 SOL</span>
+                <span className="font-mono text-muted">0 DORA</span>
               ) : (
-                <span className="text-white font-mono">{totalPool.toFixed(2)} SOL</span>
+                <span className="text-white font-mono">{totalPool.toFixed(2)} DORA</span>
               )}
             </span>
             <span className="ml-2 text-[10px]">{outcomes.length} outcomes · parimutuel</span>

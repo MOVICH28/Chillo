@@ -178,7 +178,7 @@ export default function BetModal({ round, side, outcome, onClose, onSuccess, sol
 
           {/* Amount input */}
           <div className="mb-3">
-            <label className="text-xs text-muted mb-1.5 block">Amount (SOL)</label>
+            <label className="text-xs text-muted mb-1.5 block">Amount (DORA)</label>
             <div className="flex items-center gap-2 bg-surface-3 rounded-xl px-4 py-3 border border-surface-3 focus-within:border-brand/40">
               <input
                 type="number"
@@ -190,7 +190,7 @@ export default function BetModal({ round, side, outcome, onClose, onSuccess, sol
                 className="flex-1 bg-transparent text-white font-mono outline-none text-sm disabled:opacity-50"
                 placeholder="0.00"
               />
-              <span className="text-muted text-xs">SOL</span>
+              <span className="text-muted text-xs">DORA</span>
             </div>
           </div>
 
@@ -217,7 +217,7 @@ export default function BetModal({ round, side, outcome, onClose, onSuccess, sol
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted">Stake</span>
               <span className="text-white font-mono">
-                {numAmount.toFixed(3)} SOL<span className="text-muted ml-1">{usd(numAmount)}</span>
+                {numAmount.toFixed(3)} DORA
               </span>
             </div>
             <div className="flex items-center justify-between text-xs">
@@ -227,14 +227,13 @@ export default function BetModal({ round, side, outcome, onClose, onSuccess, sol
             <div className="border-t border-surface-3 pt-2 flex items-center justify-between text-sm">
               <span className="text-muted font-medium">Est. payout</span>
               <span className="text-white font-mono font-bold">
-                {payout.toFixed(3)} SOL<span className="text-muted font-normal ml-1">{usd(payout)}</span>
+                {payout.toFixed(3)} DORA
               </span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted">Profit if win</span>
               <span className={`font-mono font-semibold ${profit >= 0 ? "text-yes" : "text-no"}`}>
-                {profit >= 0 ? "+" : ""}{profit.toFixed(3)} SOL
-                <span className="text-muted font-normal ml-1">{usd(profit)}</span>
+                {profit >= 0 ? "+" : ""}{profit.toFixed(3)} DORA
               </span>
             </div>
           </div>
@@ -281,13 +280,13 @@ export default function BetModal({ round, side, outcome, onClose, onSuccess, sol
               {busy
                 ? txStatus === "success" ? "Done!" : "Processing..."
                 : isRange
-                  ? `Bet ${outcome?.id} · ${numAmount.toFixed(2)} SOL`
-                  : `Bet ${isYes ? "YES" : "NO"} · ${numAmount.toFixed(2)} SOL`}
+                  ? `Bet ${outcome?.id} · ${numAmount.toFixed(2)} DORA`
+                  : `Bet ${isYes ? "YES" : "NO"} · ${numAmount.toFixed(2)} DORA`}
             </button>
           )}
 
           <p className="text-[10px] text-muted text-center mt-3">
-            Pumpdora · Solana devnet · Real SOL transactions
+            Pumpdora · DORA virtual currency · No real SOL needed
           </p>
         </div>
       </div>
