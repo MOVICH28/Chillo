@@ -12,22 +12,19 @@ export async function GET() {
         amount: true,
         payout: true,
         result: true,
+        user: { select: { username: true } },
       },
     });
 
-    // Group by wallet
     const map = new Map<string, {
-      totalWins: number;
-      totalLosses: number;
-      totalBets: number;
-      totalWagered: number;
-      totalPayout: number;
+      totalWins: number; totalLosses: number; totalBets: number;
+      totalWagered: number; totalPayout: number; username: string | null;
     }>();
 
     for (const bet of bets) {
       const entry = map.get(bet.walletAddress) ?? {
         totalWins: 0, totalLosses: 0, totalBets: 0,
-        totalWagered: 0, totalPayout: 0,
+        totalWagered: 0, totalPayout: 0, username: bet.user?.username ?? null,
       };
 
       entry.totalBets += 1;
@@ -47,22 +44,22 @@ export async function GET() {
 
     const rows = Array.from(map.entries()).map(([walletAddress, s]) => {
       const resolved = s.totalWins + s.totalLosses;
-      const winRate = resolved > 0 ? (s.totalWins / resolved) * 100 : 0;
-      const profit = s.totalPayout - s.totalWagered;
+      const winRate  = resolved > 0 ? (s.totalWins / resolved) * 100 : 0;
+      const profit   = s.totalPayout - s.totalWagered;
       return {
         walletAddress,
+        username: s.username,
         totalWins: s.totalWins,
         totalLosses: s.totalLosses,
         totalBets: s.totalBets,
         totalWagered: parseFloat(s.totalWagered.toFixed(4)),
-        totalPayout: parseFloat(s.totalPayout.toFixed(4)),
-        profit: parseFloat(profit.toFixed(4)),
-        winRate: parseFloat(winRate.toFixed(1)),
+        totalPayout:  parseFloat(s.totalPayout.toFixed(4)),
+        profit:       parseFloat(profit.toFixed(4)),
+        winRate:      parseFloat(winRate.toFixed(1)),
       };
     });
 
     rows.sort((a, b) => b.profit - a.profit);
-
     return NextResponse.json(rows.slice(0, 50));
   } catch (err) {
     console.error("[GET /api/leaderboard]", err);

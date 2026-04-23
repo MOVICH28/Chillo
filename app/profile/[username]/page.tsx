@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { Outcome } from "@/lib/types";
+import TradingHistoryChart from "@/components/TradingHistoryChart";
 
 export const dynamic = "force-dynamic";
 
@@ -128,6 +129,17 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
             </div>
           ))}
         </div>
+
+        {/* Trading History Chart */}
+        <TradingHistoryChart bets={bets.map(b => ({
+          id: b.id,
+          side: b.side,
+          amount: b.amount,
+          result: b.result,
+          payout: b.payout,
+          createdAt: new Date(b.createdAt).toISOString(),
+          roundQuestion: b.round?.question ?? null,
+        }))} />
 
         {/* Bet history */}
         <div className="bg-surface border border-surface-3 rounded-xl overflow-hidden">

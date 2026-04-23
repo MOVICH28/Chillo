@@ -8,6 +8,7 @@ import Navbar from "@/components/Navbar";
 
 interface LeaderboardEntry {
   walletAddress: string;
+  username: string | null;
   totalWins: number;
   totalLosses: number;
   totalBets: number;
@@ -156,16 +157,20 @@ export default function LeaderboardPage() {
                               })()}
                             </div>
                             <div>
-                              <span className={`font-semibold ${isCurrentUser ? "text-brand" : rank <= 3 ? rankStyle.text : "text-white"}`}>
-                                {displayName}
-                              </span>
+                              {row.username ? (
+                                <Link
+                                  href={`/profile/${row.username}`}
+                                  className={`font-semibold hover:text-[#22c55e] hover:underline transition-colors ${isCurrentUser ? "text-brand" : rank <= 3 ? rankStyle.text : "text-white"}`}
+                                >
+                                  {row.username}
+                                </Link>
+                              ) : (
+                                <span className={`font-semibold ${isCurrentUser ? "text-brand" : rank <= 3 ? rankStyle.text : "text-white"}`}>
+                                  {displayName}
+                                </span>
+                              )}
                               {isCurrentUser && (
                                 <span className="ml-1.5 text-[10px] text-brand/70">(you)</span>
-                              )}
-                              {usernameMap[row.walletAddress] && (
-                                <div className="text-[10px] text-muted font-mono">
-                                  {shortAddress(row.walletAddress)}
-                                </div>
                               )}
                             </div>
                           </div>
