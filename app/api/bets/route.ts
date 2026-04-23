@@ -199,7 +199,7 @@ export async function GET(req: NextRequest) {
   const wallet  = req.nextUrl.searchParams.get("wallet");
   const roundId = req.nextUrl.searchParams.get("roundId");
 
-  if (wallet && !isValidSolanaAddress(wallet)) {
+  if (wallet && !wallet.startsWith("dora:") && !isValidSolanaAddress(wallet)) {
     return NextResponse.json({ error: "Invalid wallet address" }, { status: 400 });
   }
 
