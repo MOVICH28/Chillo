@@ -115,7 +115,7 @@ export default function AuthModal({ onClose }: AuthModalProps) {
     >
       <div className="bg-surface border border-surface-3 rounded-xl w-full max-w-sm mx-4 p-6">
         <div className="flex justify-center mb-4">
-          <img src="/logo.png" alt="Pumpdora" style={{height: '40px', objectFit: 'contain'}} />
+          <img src="/logo.png" alt="Pumpdora" style={{height: '240px', objectFit: 'contain'}} />
         </div>
 
         <div className="flex items-center justify-between mb-5">
