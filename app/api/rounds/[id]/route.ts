@@ -16,6 +16,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       where: { roundId: id },
       orderBy: { createdAt: "desc" },
       take: 20,
+      include: { user: { select: { username: true } } },
     }),
   ]);
 
@@ -42,6 +43,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     recentBets: bets.map(b => ({
       id:            b.id,
       walletAddress: b.walletAddress,
+      username:      b.user?.username ?? null,
       side:          b.side,
       amount:        b.amount,
       odds:          b.odds,

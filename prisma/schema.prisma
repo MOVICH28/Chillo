@@ -28,13 +28,23 @@ model Round {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  username      String   @unique
-  email         String   @unique
+  id            String    @id @default(cuid())
+  username      String    @unique
+  email         String    @unique
   passwordHash  String
-  doraBalance   Float    @default(1000)
-  createdAt     DateTime @default(now())
+  doraBalance   Float     @default(1000)
+  createdAt     DateTime  @default(now())
   bets          Bet[]
+  comments      Comment[]
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  roundId   String
+  userId    String
+  text      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model Bet {
