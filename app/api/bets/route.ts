@@ -26,7 +26,7 @@ function isValidSignature(sig: string): boolean {
   return SIG_RE.test(sig);
 }
 
-// ── Rate limiting (in-memory, per wallet or userId) ──────────────────────────
+// ── Rate limiting ─────────────────────────────────────────────────────────────
 
 const rateLimitMap = new Map<string, number[]>();
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
@@ -114,13 +114,11 @@ async function verifyTransaction(
   return { valid: false, reason: "transaction not found after retries" };
 }
 
-// ── Shared pool update logic ──────────────────────────────────────────────────
+// ── Pool update helper (returns locked-in odds) ───────────────────────────────
 
-async function computeOddsAndUpdatePool(
-  round: Awaited<ReturnType<typeof prisma.round.findUnique>> & object,
-  side: string,
-  amount: number,
-): Promise<{ odds: number; poolOps: Parameters<typeof prisma.$transaction>[0] }> {
+type RoundRow = NonNullable<Awaited<ReturnType<typeof prisma.round.findUnique>>>;
+
+async function updatePoolAndGetOdds(round: RoundRow, side: string, amount: number): Promise<number> {
   const isRange = round.outcomes !== null;
 
   if (isRange) {
@@ -130,53 +128,69 @@ async function computeOddsAndUpdatePool(
     );
     const outcomePool = updatedOutcomes.find(o => o.id === side)!.pool;
     const newTotalPool = updatedOutcomes.reduce((s, o) => s + o.pool, 0);
-    const odds = parseFloat(Math.max(1.05, (newTotalPool * 0.95) / Math.max(outcomePool, 0.001)).toFixed(2));
-
-    return {
-      odds,
-      poolOps: [
-        prisma.round.update({
-          where: { id: round.id },
-          data: { totalPool: newTotalPool, outcomes: updatedOutcomes as unknown as Prisma.InputJsonValue },
-        }),
-        prisma.roundPool.upsert({
-          where: { roundId: round.id },
-          create: { roundId: round.id, yesPool: 0, noPool: 0, totalPool: newTotalPool },
-          update: { totalPool: { increment: amount } },
-        }),
-      ],
-    };
-  } else {
-    const baseYes = round.yesPool;
-    const baseNo  = round.noPool;
-
-    const poolAfter = {
-      yesPool:   (side === "yes" ? amount : 0) + baseYes,
-      noPool:    (side === "no"  ? amount : 0) + baseNo,
-      totalPool: amount + baseYes + baseNo,
-    };
-
     const odds = parseFloat(
-      (side === "yes"
-        ? poolAfter.totalPool / Math.max(poolAfter.yesPool, 0.001)
-        : poolAfter.totalPool / Math.max(poolAfter.noPool, 0.001)
-      ).toFixed(2),
+      Math.max(1.05, (newTotalPool * 0.95) / Math.max(outcomePool, 0.001)).toFixed(2),
     );
 
-    return {
-      odds,
-      poolOps: [
-        prisma.roundPool.upsert({
-          where: { roundId: round.id },
-          create: { roundId: round.id, ...poolAfter },
-          update:
-            side === "yes"
-              ? { yesPool: { increment: amount }, totalPool: { increment: amount } }
-              : { noPool: { increment: amount }, totalPool: { increment: amount } },
-        }),
-      ],
-    };
+    await prisma.$transaction([
+      prisma.round.update({
+        where: { id: round.id },
+        data: { totalPool: newTotalPool, outcomes: updatedOutcomes as unknown as Prisma.InputJsonValue },
+      }),
+      prisma.roundPool.upsert({
+        where: { roundId: round.id },
+        create: { roundId: round.id, yesPool: 0, noPool: 0, totalPool: newTotalPool },
+        update: { totalPool: { increment: amount } },
+      }),
+    ]);
+
+    return odds;
   }
+
+  // Yes/No round
+  const newYesPool   = round.yesPool + (side === "yes" ? amount : 0);
+  const newNoPool    = round.noPool  + (side === "no"  ? amount : 0);
+  const newTotalPool = round.totalPool + amount;
+
+  const odds = parseFloat(
+    (side === "yes"
+      ? newTotalPool / Math.max(newYesPool, 0.001)
+      : newTotalPool / Math.max(newNoPool, 0.001)
+    ).toFixed(2),
+  );
+
+  await prisma.roundPool.upsert({
+    where: { roundId: round.id },
+    create: { roundId: round.id, yesPool: newYesPool, noPool: newNoPool, totalPool: newTotalPool },
+    update:
+      side === "yes"
+        ? { yesPool: { increment: amount }, totalPool: { increment: amount } }
+        : { noPool: { increment: amount }, totalPool: { increment: amount } },
+  });
+
+  return odds;
+}
+
+// ── Shared round/side validation ──────────────────────────────────────────────
+
+function validateRoundAndSide(round: RoundRow, side: string): string | null {
+  if (round.status !== "open") return "Round is not open for betting";
+  if (new Date() > round.endsAt) return "Round has ended";
+
+  const isRange = round.outcomes !== null;
+  if (isRange) {
+    const outcomes = round.outcomes as unknown as Outcome[];
+    if (!outcomes.map(o => o.id).includes(side)) {
+      return `Invalid outcome — must be one of ${outcomes.map(o => o.id).join(", ")}`;
+    }
+    if (round.bettingClosesAt && new Date() > round.bettingClosesAt) {
+      return "Betting is closed for this round";
+    }
+  } else {
+    if (side !== "yes" && side !== "no") return "side must be 'yes' or 'no'";
+  }
+
+  return null;
 }
 
 // ── GET ───────────────────────────────────────────────────────────────────────
@@ -261,29 +275,16 @@ export async function POST(req: NextRequest) {
 
       const round = await prisma.round.findUnique({ where: { id: roundId } });
       if (!round) return NextResponse.json({ error: "Round not found" }, { status: 404 });
-      if (round.status !== "open") return NextResponse.json({ error: "Round is not open for betting" }, { status: 400 });
-      if (new Date() > round.endsAt) return NextResponse.json({ error: "Round has ended" }, { status: 400 });
 
-      const isRange = round.outcomes !== null;
-      if (isRange) {
-        const outcomes = round.outcomes as unknown as Outcome[];
-        if (!outcomes.map(o => o.id).includes(side)) {
-          return NextResponse.json({ error: `Invalid outcome — must be one of ${outcomes.map(o => o.id).join(", ")}` }, { status: 400 });
-        }
-        if (round.bettingClosesAt && new Date() > round.bettingClosesAt) {
-          return NextResponse.json({ error: "Betting is closed for this round" }, { status: 400 });
-        }
-      } else {
-        if (side !== "yes" && side !== "no") {
-          return NextResponse.json({ error: "side must be 'yes' or 'no'" }, { status: 400 });
-        }
-      }
+      const validationError = validateRoundAndSide(round, side);
+      if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
-      const { odds, poolOps } = await computeOddsAndUpdatePool(round, side, amount);
+      const odds = await updatePoolAndGetOdds(round, side, amount);
 
       const walletAddress = `dora:${userId}`;
       const txHash = `dora_${randomUUID()}`;
 
+      // Atomically deduct balance and record the bet
       const [, bet] = await prisma.$transaction([
         prisma.user.update({
           where: { id: userId },
@@ -292,7 +293,6 @@ export async function POST(req: NextRequest) {
         prisma.bet.create({
           data: { walletAddress, roundId, side, amount, odds, txHash, status: "verified", userId, currency: "DORA" },
         }),
-        ...poolOps,
       ]);
 
       return NextResponse.json({ ...bet, createdAt: bet.createdAt.toISOString() }, { status: 201 });
@@ -323,23 +323,9 @@ export async function POST(req: NextRequest) {
 
     const round = await prisma.round.findUnique({ where: { id: roundId } });
     if (!round) return NextResponse.json({ error: "Round not found" }, { status: 404 });
-    if (round.status !== "open") return NextResponse.json({ error: "Round is not open for betting" }, { status: 400 });
-    if (new Date() > round.endsAt) return NextResponse.json({ error: "Round has ended" }, { status: 400 });
 
-    const isRange = round.outcomes !== null;
-    if (isRange) {
-      const outcomes = round.outcomes as unknown as Outcome[];
-      if (!outcomes.map(o => o.id).includes(side)) {
-        return NextResponse.json({ error: `Invalid outcome — must be one of ${outcomes.map(o => o.id).join(", ")}` }, { status: 400 });
-      }
-      if (round.bettingClosesAt && new Date() > round.bettingClosesAt) {
-        return NextResponse.json({ error: "Betting is closed for this round" }, { status: 400 });
-      }
-    } else {
-      if (side !== "yes" && side !== "no") {
-        return NextResponse.json({ error: "side must be 'yes' or 'no'" }, { status: 400 });
-      }
-    }
+    const validationError = validateRoundAndSide(round, side);
+    if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
     let verifyResult: { valid: boolean; reason?: string } = { valid: false, reason: "not attempted" };
     try {
@@ -353,9 +339,7 @@ export async function POST(req: NextRequest) {
       console.warn(`[POST /api/bets] tx unverified: ${verifyResult.reason}`);
     }
 
-    const { odds, poolOps } = await computeOddsAndUpdatePool(round, side, amount);
-
-    await prisma.$transaction(poolOps);
+    const odds = await updatePoolAndGetOdds(round, side, amount);
 
     const bet = await prisma.bet.create({
       data: { walletAddress, roundId, side, amount, odds, txHash, status, currency: "SOL" },
