@@ -1,0 +1,42 @@
+import { NextRequest, NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
+
+const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-me";
+
+export async function POST(req: NextRequest) {
+  try {
+    const { username, email, password } = await req.json();
+
+    if (!username || !email || !password) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+    if (typeof username !== "string" || username.length < 2 || username.length > 30) {
+      return NextResponse.json({ error: "Username must be 2–30 characters" }, { status: 400 });
+    }
+    if (typeof password !== "string" || password.length < 6) {
+      return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const user = await prisma.user.create({
+      data: { username: username.trim(), email: email.toLowerCase().trim(), passwordHash },
+    });
+
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "30d" });
+
+    return NextResponse.json(
+      { token, user: { id: user.id, username: user.username, email: user.email, doraBalance: user.doraBalance } },
+      { status: 201 },
+    );
+  } catch (error: unknown) {
+    if (error && typeof error === "object" && "code" in error && (error as { code: string }).code === "P2002") {
+      return NextResponse.json({ error: "Username or email already taken" }, { status: 409 });
+    }
+    return NextResponse.json({ error: "Registration failed" }, { status: 500 });
+  }
+}

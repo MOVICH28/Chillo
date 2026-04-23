@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { Prisma } from "@prisma/client";
+import { randomUUID } from "crypto";
+import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma";
 import { Outcome } from "@/lib/types";
 
@@ -8,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 const PLATFORM_WALLET = "GsvhgEARAKjYX2oFRzgKpWU7XufuGPtVeN58M983prtb";
 const RPC = "https://api.devnet.solana.com";
+const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-me";
 
 // ── Validation helpers ────────────────────────────────────────────────────────
 
@@ -23,26 +26,39 @@ function isValidSignature(sig: string): boolean {
   return SIG_RE.test(sig);
 }
 
-// ── Rate limiting (in-memory, per wallet) ────────────────────────────────────
+// ── Rate limiting (in-memory, per wallet or userId) ──────────────────────────
 
 const rateLimitMap = new Map<string, number[]>();
-const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-const RATE_LIMIT_MAX       = 10;              // max bets per wallet per hour
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const RATE_LIMIT_MAX       = 10;
 
-function checkRateLimit(wallet: string): boolean {
+function checkRateLimit(key: string): boolean {
   const now = Date.now();
-  const timestamps = (rateLimitMap.get(wallet) ?? []).filter(
+  const timestamps = (rateLimitMap.get(key) ?? []).filter(
     t => now - t < RATE_LIMIT_WINDOW_MS,
   );
   if (timestamps.length >= RATE_LIMIT_MAX) return false;
   timestamps.push(now);
-  rateLimitMap.set(wallet, timestamps);
+  rateLimitMap.set(key, timestamps);
   return true;
+}
+
+// ── JWT helper ────────────────────────────────────────────────────────────────
+
+function getUserIdFromRequest(req: NextRequest): string | null {
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  try {
+    const payload = jwt.verify(authHeader.slice(7), JWT_SECRET) as { userId: string };
+    return payload.userId;
+  } catch {
+    return null;
+  }
 }
 
 // ── Transaction verification ──────────────────────────────────────────────────
 
-const TX_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
+const TX_MAX_AGE_MS = 5 * 60 * 1000;
 
 async function verifyTransaction(
   txHash: string,
@@ -98,6 +114,71 @@ async function verifyTransaction(
   return { valid: false, reason: "transaction not found after retries" };
 }
 
+// ── Shared pool update logic ──────────────────────────────────────────────────
+
+async function computeOddsAndUpdatePool(
+  round: Awaited<ReturnType<typeof prisma.round.findUnique>> & object,
+  side: string,
+  amount: number,
+): Promise<{ odds: number; poolOps: Parameters<typeof prisma.$transaction>[0] }> {
+  const isRange = round.outcomes !== null;
+
+  if (isRange) {
+    const outcomes = round.outcomes as unknown as Outcome[];
+    const updatedOutcomes = outcomes.map(o =>
+      o.id === side ? { ...o, pool: o.pool + amount } : o,
+    );
+    const outcomePool = updatedOutcomes.find(o => o.id === side)!.pool;
+    const newTotalPool = updatedOutcomes.reduce((s, o) => s + o.pool, 0);
+    const odds = parseFloat(Math.max(1.05, (newTotalPool * 0.95) / Math.max(outcomePool, 0.001)).toFixed(2));
+
+    return {
+      odds,
+      poolOps: [
+        prisma.round.update({
+          where: { id: round.id },
+          data: { totalPool: newTotalPool, outcomes: updatedOutcomes as unknown as Prisma.InputJsonValue },
+        }),
+        prisma.roundPool.upsert({
+          where: { roundId: round.id },
+          create: { roundId: round.id, yesPool: 0, noPool: 0, totalPool: newTotalPool },
+          update: { totalPool: { increment: amount } },
+        }),
+      ],
+    };
+  } else {
+    const baseYes = round.yesPool;
+    const baseNo  = round.noPool;
+
+    const poolAfter = {
+      yesPool:   (side === "yes" ? amount : 0) + baseYes,
+      noPool:    (side === "no"  ? amount : 0) + baseNo,
+      totalPool: amount + baseYes + baseNo,
+    };
+
+    const odds = parseFloat(
+      (side === "yes"
+        ? poolAfter.totalPool / Math.max(poolAfter.yesPool, 0.001)
+        : poolAfter.totalPool / Math.max(poolAfter.noPool, 0.001)
+      ).toFixed(2),
+    );
+
+    return {
+      odds,
+      poolOps: [
+        prisma.roundPool.upsert({
+          where: { roundId: round.id },
+          create: { roundId: round.id, ...poolAfter },
+          update:
+            side === "yes"
+              ? { yesPool: { increment: amount }, totalPool: { increment: amount } }
+              : { noPool: { increment: amount }, totalPool: { increment: amount } },
+        }),
+      ],
+    };
+  }
+}
+
 // ── GET ───────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -129,11 +210,11 @@ export async function GET(req: NextRequest) {
           ...b,
           createdAt: b.createdAt.toISOString(),
           round: round ? {
-          question:       round.question,
-          status:         round.status,
-          winningOutcome: round.winningOutcome,
-          outcomes:       round.outcomes ?? null,
-        } : null,
+            question:       round.question,
+            status:         round.status,
+            winningOutcome: round.winningOutcome,
+            outcomes:       round.outcomes ?? null,
+          } : null,
         };
       }),
     );
@@ -147,9 +228,79 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const currency = (body.currency as string) ?? "SOL";
+    const userId = getUserIdFromRequest(req);
+
+    // ── DORA bet flow ─────────────────────────────────────────────────────────
+    if (currency === "DORA") {
+      if (!userId) {
+        return NextResponse.json({ error: "Authentication required for DORA bets" }, { status: 401 });
+      }
+
+      const { roundId, side, amount } = body;
+
+      if (!roundId || !side || !amount) {
+        return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+      }
+      const VALID_SIDES = ["yes", "no", "A", "B", "C", "D", "E", "F"];
+      if (!VALID_SIDES.includes(side)) {
+        return NextResponse.json({ error: "Invalid side value" }, { status: 400 });
+      }
+      if (typeof amount !== "number" || !isFinite(amount) || amount <= 0 || amount > 10000) {
+        return NextResponse.json({ error: "amount must be a positive number" }, { status: 400 });
+      }
+      if (!checkRateLimit(`dora:${userId}`)) {
+        return NextResponse.json({ error: "Rate limit exceeded: max 10 bets per hour" }, { status: 429 });
+      }
+
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+      if (user.doraBalance < amount) {
+        return NextResponse.json({ error: "Insufficient DORA balance" }, { status: 400 });
+      }
+
+      const round = await prisma.round.findUnique({ where: { id: roundId } });
+      if (!round) return NextResponse.json({ error: "Round not found" }, { status: 404 });
+      if (round.status !== "open") return NextResponse.json({ error: "Round is not open for betting" }, { status: 400 });
+      if (new Date() > round.endsAt) return NextResponse.json({ error: "Round has ended" }, { status: 400 });
+
+      const isRange = round.outcomes !== null;
+      if (isRange) {
+        const outcomes = round.outcomes as unknown as Outcome[];
+        if (!outcomes.map(o => o.id).includes(side)) {
+          return NextResponse.json({ error: `Invalid outcome — must be one of ${outcomes.map(o => o.id).join(", ")}` }, { status: 400 });
+        }
+        if (round.bettingClosesAt && new Date() > round.bettingClosesAt) {
+          return NextResponse.json({ error: "Betting is closed for this round" }, { status: 400 });
+        }
+      } else {
+        if (side !== "yes" && side !== "no") {
+          return NextResponse.json({ error: "side must be 'yes' or 'no'" }, { status: 400 });
+        }
+      }
+
+      const { odds, poolOps } = await computeOddsAndUpdatePool(round, side, amount);
+
+      const walletAddress = `dora:${userId}`;
+      const txHash = `dora_${randomUUID()}`;
+
+      const [, bet] = await prisma.$transaction([
+        prisma.user.update({
+          where: { id: userId },
+          data: { doraBalance: { decrement: amount } },
+        }),
+        prisma.bet.create({
+          data: { walletAddress, roundId, side, amount, odds, txHash, status: "verified", userId, currency: "DORA" },
+        }),
+        ...poolOps,
+      ]);
+
+      return NextResponse.json({ ...bet, createdAt: bet.createdAt.toISOString() }, { status: 201 });
+    }
+
+    // ── SOL bet flow ──────────────────────────────────────────────────────────
     const { walletAddress, roundId, side, amount, txHash } = body;
 
-    // ── Input validation ──────────────────────────────────────────────────────
     if (!walletAddress || !roundId || !side || !amount || !txHash) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
@@ -166,47 +317,30 @@ export async function POST(req: NextRequest) {
     if (!isValidSignature(txHash)) {
       return NextResponse.json({ error: "Invalid transaction signature format" }, { status: 400 });
     }
-
-    // ── Rate limiting ─────────────────────────────────────────────────────────
     if (!checkRateLimit(walletAddress)) {
-      return NextResponse.json(
-        { error: "Rate limit exceeded: max 10 bets per hour" },
-        { status: 429 },
-      );
+      return NextResponse.json({ error: "Rate limit exceeded: max 10 bets per hour" }, { status: 429 });
     }
 
-    // ── Round validation ──────────────────────────────────────────────────────
     const round = await prisma.round.findUnique({ where: { id: roundId } });
-    if (!round) {
-      return NextResponse.json({ error: "Round not found" }, { status: 404 });
-    }
-    if (round.status !== "open") {
-      return NextResponse.json({ error: "Round is not open for betting" }, { status: 400 });
-    }
-    if (new Date() > round.endsAt) {
-      return NextResponse.json({ error: "Round has ended" }, { status: 400 });
-    }
+    if (!round) return NextResponse.json({ error: "Round not found" }, { status: 404 });
+    if (round.status !== "open") return NextResponse.json({ error: "Round is not open for betting" }, { status: 400 });
+    if (new Date() > round.endsAt) return NextResponse.json({ error: "Round has ended" }, { status: 400 });
 
     const isRange = round.outcomes !== null;
-
     if (isRange) {
-      // Range round: validate side is a valid outcome id, check bettingClosesAt
       const outcomes = round.outcomes as unknown as Outcome[];
-      const outcomeIds = outcomes.map(o => o.id);
-      if (!outcomeIds.includes(side)) {
-        return NextResponse.json({ error: `Invalid outcome — must be one of ${outcomeIds.join(", ")}` }, { status: 400 });
+      if (!outcomes.map(o => o.id).includes(side)) {
+        return NextResponse.json({ error: `Invalid outcome — must be one of ${outcomes.map(o => o.id).join(", ")}` }, { status: 400 });
       }
       if (round.bettingClosesAt && new Date() > round.bettingClosesAt) {
         return NextResponse.json({ error: "Betting is closed for this round" }, { status: 400 });
       }
     } else {
-      // Yes/No round
       if (side !== "yes" && side !== "no") {
         return NextResponse.json({ error: "side must be 'yes' or 'no'" }, { status: 400 });
       }
     }
 
-    // ── On-chain verification ─────────────────────────────────────────────────
     let verifyResult: { valid: boolean; reason?: string } = { valid: false, reason: "not attempted" };
     try {
       verifyResult = await verifyTransaction(txHash, amount, walletAddress);
@@ -219,63 +353,12 @@ export async function POST(req: NextRequest) {
       console.warn(`[POST /api/bets] tx unverified: ${verifyResult.reason}`);
     }
 
-    let odds: number;
+    const { odds, poolOps } = await computeOddsAndUpdatePool(round, side, amount);
 
-    if (isRange) {
-      // ── Range round: update outcome pool in outcomes JSON ───────────────────
-      const outcomes = round.outcomes as unknown as Outcome[];
-      const updatedOutcomes = outcomes.map(o =>
-        o.id === side ? { ...o, pool: o.pool + amount } : o,
-      );
-      const outcomePool = updatedOutcomes.find(o => o.id === side)!.pool;
-
-      // Compute new totalPool
-      const newTotalPool = updatedOutcomes.reduce((s, o) => s + o.pool, 0);
-
-      // Odds: totalPool / this outcome's pool
-      odds = parseFloat(Math.max(1.05, (newTotalPool * 0.95) / Math.max(outcomePool, 0.001)).toFixed(2));
-
-      // Update outcomes JSON on the Round and sync totalPool on RoundPool
-      await prisma.$transaction([
-        prisma.round.update({
-          where: { id: roundId },
-          data: { totalPool: newTotalPool, outcomes: updatedOutcomes as unknown as Prisma.InputJsonValue },
-        }),
-        prisma.roundPool.upsert({
-          where: { roundId },
-          create: { roundId, yesPool: 0, noPool: 0, totalPool: newTotalPool },
-          update: { totalPool: { increment: amount } },
-        }),
-      ]);
-    } else {
-      // ── Yes/No round: original pool logic ─────────────────────────────────
-      const baseYes = round.yesPool;
-      const baseNo  = round.noPool;
-
-      const pool = await prisma.roundPool.upsert({
-        where: { roundId },
-        create: {
-          roundId,
-          yesPool:   (side === "yes" ? amount : 0) + baseYes,
-          noPool:    (side === "no"  ? amount : 0) + baseNo,
-          totalPool: amount + baseYes + baseNo,
-        },
-        update:
-          side === "yes"
-            ? { yesPool: { increment: amount }, totalPool: { increment: amount } }
-            : { noPool: { increment: amount }, totalPool: { increment: amount } },
-      });
-
-      odds = parseFloat(
-        (side === "yes"
-          ? pool.totalPool / Math.max(pool.yesPool, 0.001)
-          : pool.totalPool / Math.max(pool.noPool, 0.001)
-        ).toFixed(2),
-      );
-    }
+    await prisma.$transaction(poolOps);
 
     const bet = await prisma.bet.create({
-      data: { walletAddress, roundId, side, amount, odds, txHash, status },
+      data: { walletAddress, roundId, side, amount, odds, txHash, status, currency: "SOL" },
     });
 
     return NextResponse.json({ ...bet, createdAt: bet.createdAt.toISOString() }, { status: 201 });

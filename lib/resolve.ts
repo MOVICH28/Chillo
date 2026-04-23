@@ -125,6 +125,26 @@ export async function resolveRound(
     const refundResults: RefundResult[] = [];
 
     for (const bet of allBets) {
+      const isDoraBet = bet.walletAddress.startsWith("dora:");
+      if (isDoraBet) {
+        const userId = bet.walletAddress.slice(5);
+        try {
+          await prisma.user.update({
+            where: { id: userId },
+            data: { doraBalance: { increment: bet.amount } },
+          });
+          await prisma.bet.update({
+            where: { id: bet.id },
+            data: { result: "refund", payout: bet.amount, paid: true },
+          });
+          refundResults.push({ betId: bet.id, wallet: bet.walletAddress, refund: bet.amount, txHash: "dora_refund" });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          refundResults.push({ betId: bet.id, wallet: bet.walletAddress, refund: bet.amount, txHash: null, error: msg });
+        }
+        continue;
+      }
+
       const lamports = Math.floor(bet.amount * LAMPORTS_PER_SOL);
       if (lamports <= 0) {
         refundResults.push({ betId: bet.id, wallet: bet.walletAddress, refund: 0, txHash: null, error: "amount too small" });
@@ -214,6 +234,28 @@ export async function resolveRound(
 
   for (const bet of winningBets) {
     const payoutSol = (bet.amount / winningStake) * payoutPool;
+    const isDoraBet = bet.walletAddress.startsWith("dora:");
+
+    if (isDoraBet) {
+      const userId = bet.walletAddress.slice(5);
+      try {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { doraBalance: { increment: payoutSol } },
+        });
+        await prisma.bet.update({
+          where: { id: bet.id },
+          data: { result: winner, payout: payoutSol, paid: true },
+        });
+        results.push({ betId: bet.id, wallet: bet.walletAddress, payout: payoutSol, txHash: "dora_payout" });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[resolve] DORA payout failed for bet ${bet.id}:`, msg);
+        results.push({ betId: bet.id, wallet: bet.walletAddress, payout: payoutSol, txHash: null, error: msg });
+      }
+      continue;
+    }
+
     const lamports = Math.floor(payoutSol * LAMPORTS_PER_SOL);
 
     if (lamports <= 0) {

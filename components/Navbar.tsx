@@ -4,10 +4,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useWallet } from "@/components/WalletProvider";
+import { useAuth } from "@/lib/useAuth";
 import { useSolBalance } from "@/lib/useSolBalance";
 import { Round } from "@/lib/types";
 import WinToastBanner from "@/components/WinToastBanner";
 import ThemeToggle from "@/components/ThemeToggle";
+import AuthModal from "@/components/AuthModal";
 
 interface NavbarProps {
   rounds: Round[];
@@ -15,9 +17,11 @@ interface NavbarProps {
 
 export default function Navbar({ rounds }: NavbarProps) {
   const { publicKey, disconnect, connected, connect } = useWallet();
+  const { user, logout } = useAuth();
   const balance = useSolBalance(connected ? publicKey : null);
   const [avatar, setAvatar] = useState("");
   const [username, setUsername] = useState("");
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
     if (!publicKey) { setAvatar(""); setUsername(""); return; }
@@ -25,7 +29,6 @@ export default function Navbar({ rounds }: NavbarProps) {
     setUsername(localStorage.getItem(`username_${publicKey}`) ?? "");
   }, [publicKey]);
 
-  // Re-read when username is saved on the profile page
   useEffect(() => {
     function onUsernameChanged() {
       if (!publicKey) return;
@@ -83,10 +86,34 @@ export default function Navbar({ rounds }: NavbarProps) {
       {/* Theme toggle */}
       <ThemeToggle />
 
+      {/* DORA auth section */}
+      {user ? (
+        <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-1.5">
+            <span className="px-2 py-0.5 rounded-full bg-brand/10 border border-brand/20 text-brand text-xs font-mono font-semibold">
+              DORA: {user.doraBalance.toFixed(0)}
+            </span>
+            <span className="text-xs text-muted font-medium">{user.username}</span>
+          </div>
+          <button
+            onClick={logout}
+            className="px-3 py-1.5 rounded-lg text-xs bg-surface-3 text-muted hover:text-white hover:bg-surface-2 border border-surface-3 transition-colors"
+          >
+            Logout
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowAuthModal(true)}
+          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-brand/30 text-brand hover:bg-brand/10 transition-colors"
+        >
+          Login / Register
+        </button>
+      )}
+
       {/* Wallet button */}
       {connected && publicKey ? (
         <div className="flex items-center gap-2">
-          {/* Avatar */}
           <div className="w-8 h-8 rounded-full overflow-hidden border border-surface-3 shrink-0">
             {avatar ? (
               <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
@@ -127,6 +154,8 @@ export default function Navbar({ rounds }: NavbarProps) {
         </button>
       )}
     </nav>
+
+    {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
     </>
   );
 }

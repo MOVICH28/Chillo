@@ -27,6 +27,16 @@ model Round {
   roundNumber     Int?      // sequential round number, null for old rounds
 }
 
+model User {
+  id            String   @id @default(cuid())
+  username      String   @unique
+  email         String   @unique
+  passwordHash  String
+  doraBalance   Float    @default(1000)
+  createdAt     DateTime @default(now())
+  bets          Bet[]
+}
+
 model Bet {
   id            String   @id @default(cuid())
   roundId       String
@@ -40,6 +50,9 @@ model Bet {
   payout        Float?   // SOL amount sent to winner
   paid          Boolean  @default(false)
   createdAt     DateTime @default(now())
+  userId        String?
+  currency      String   @default("SOL") // "SOL" | "DORA"
+  user          User?    @relation(fields: [userId], references: [id])
 }
 
 model Referral {
