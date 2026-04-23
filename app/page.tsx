@@ -236,7 +236,6 @@ const openRounds     = rounds.filter((r) => r.status !== "resolved");
           outcome={betTarget.outcome}
           onClose={() => setBetTarget(null)}
           onSuccess={fetchRounds}
-          solPrice={liveData.sol?.price}
         />
       )}
 

@@ -18,7 +18,6 @@ interface BetModalProps {
   outcome?: Outcome;  // set for range rounds
   onClose: () => void;
   onSuccess: () => void;
-  solPrice?: number;
 }
 
 const PRESETS = ["0.05", "0.1", "0.5", "1"];
@@ -37,7 +36,7 @@ const STATUS_MESSAGES: Record<TxStatus, string> = {
   error: "",
 };
 
-export default function BetModal({ round, side, outcome, onClose, onSuccess, solPrice }: BetModalProps) {
+export default function BetModal({ round, side, outcome, onClose, onSuccess }: BetModalProps) {
   const { publicKey, connected, connect } = useWallet();
   const [amount, setAmount] = useState("0.1");
   const [txStatus, setTxStatus] = useState<TxStatus>("idle");
@@ -57,7 +56,7 @@ export default function BetModal({ round, side, outcome, onClose, onSuccess, sol
   const numAmount = parseFloat(amount) || 0;
   const payout = numAmount * odds;
   const profit = payout - numAmount;
-  const usd = (sol: number) => solPrice ? ` (~$${(sol * solPrice).toFixed(2)})` : "";
+
   const busy = txStatus !== "idle" && txStatus !== "error";
 
   async function handleBet() {
