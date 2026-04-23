@@ -1,34 +1,35 @@
 import type { AuthOptions } from "next-auth";
-import TwitterProvider from "next-auth/providers/twitter";
+import GoogleProvider from "next-auth/providers/google";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
 export const authOptions: AuthOptions = {
   providers: [
-    TwitterProvider({
-      clientId: process.env.TWITTER_CLIENT_ID!,
-      clientSecret: process.env.TWITTER_CLIENT_SECRET!,
-      version: "2.0",
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
   session: { strategy: "jwt" },
   secret: process.env.JWT_SECRET,
   callbacks: {
     async signIn({ user, account, profile }) {
-      if (account?.provider !== "twitter") return true;
+      if (account?.provider !== "google") return true;
 
-      const twitterId = account.providerAccountId;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const twitterUsername = (profile as any)?.data?.username as string | undefined;
-      const email = `twitter_${twitterId}@pumpdora.com`;
+      const email = (profile as any)?.email as string | undefined;
+      if (!email) return false;
 
       let dbUser = await prisma.user.findUnique({ where: { email } });
 
       if (!dbUser) {
-        // Build a unique username: prefer @handle, fall back to twitter_<id>
-        const baseUsername = twitterUsername ?? `twitter_${twitterId}`;
-        // Ensure uniqueness
-        let username = baseUsername;
+        // Derive a base username from the Google name or email prefix
+        const rawName = (profile as any)?.name as string | undefined;
+        const baseUsername = rawName
+          ? rawName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "")
+          : email.split("@")[0].toLowerCase().replace(/[^a-z0-9_]/g, "");
+
+        let username = baseUsername || "user";
         let suffix = 1;
         while (await prisma.user.findUnique({ where: { username } })) {
           username = `${baseUsername}_${suffix++}`;
@@ -44,13 +45,11 @@ export const authOptions: AuthOptions = {
         });
       }
 
-      // Attach our DB id — flows into token.sub via jwt callback
       user.id = dbUser.id;
       return true;
     },
 
     async jwt({ token, user }) {
-      // On sign-in, user object is present; persist our DB id
       if (user?.id) token.sub = user.id;
       return token;
     },

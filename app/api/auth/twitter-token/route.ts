@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-me";
 
-// Bridge: exchange a NextAuth session (Twitter OAuth) for a DORA JWT
+// Bridge: exchange a NextAuth session (Google OAuth) for a DORA JWT
 export async function GET() {
   const session = await getServerSession(authOptions);
 
