@@ -40,12 +40,8 @@ export default function Navbar({ rounds }: NavbarProps) {
   }, [publicKey]);
 
   const totalPool = rounds.reduce((sum, r) => sum + r.totalPool, 0);
-  const shortKey = publicKey
-    ? `${publicKey.slice(0, 4)}...${publicKey.slice(-4)}`
-    : null;
-  const doraFormatted = user
-    ? Math.floor(user.doraBalance).toLocaleString("en-US")
-    : "0";
+  const shortKey = publicKey ? `${publicKey.slice(0, 4)}...${publicKey.slice(-4)}` : null;
+  const doraFormatted = user ? Math.floor(user.doraBalance).toLocaleString("en-US") : "0";
 
   return (
     <>
@@ -82,7 +78,7 @@ export default function Navbar({ rounds }: NavbarProps) {
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Right side controls */}
+      {/* Right side */}
       <div className="flex items-center gap-2">
 
         {/* Network badge */}
@@ -93,83 +89,81 @@ export default function Navbar({ rounds }: NavbarProps) {
         {/* Theme toggle */}
         <ThemeToggle />
 
-        {/* ── DORA section ─────────────────────────────────────────── */}
+        {/* ── DORA user logged in: show balance + username + logout only ── */}
         {user ? (
           <>
+            <span className="hidden sm:block w-px h-5 bg-surface-3 shrink-0" />
             <div className="hidden sm:flex items-center gap-2">
-              {/* DORA balance pill */}
-              <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-brand/10 border border-brand/20 text-brand text-xs font-mono font-semibold whitespace-nowrap">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand/10 border border-brand/20 text-brand text-xs font-mono font-semibold whitespace-nowrap">
                 <span className="w-1.5 h-1.5 rounded-full bg-brand shrink-0" />
                 {doraFormatted} DORA
               </span>
-              {/* Username */}
               <span className="text-xs text-muted font-medium max-w-[80px] truncate">{user.username}</span>
             </div>
             <button
               onClick={logout}
               className="px-2.5 py-1 rounded-md text-xs text-muted hover:text-white border border-surface-3 hover:border-surface-2 transition-colors shrink-0"
-              title="Logout"
             >
               Logout
             </button>
           </>
         ) : (
-          <button
-            onClick={() => setShowAuthModal(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-brand/40 text-brand hover:bg-brand/10 transition-colors shrink-0"
-          >
-            Login / Register
-          </button>
-        )}
-
-        {/* Divider between DORA and wallet */}
-        <span className="hidden sm:block w-px h-5 bg-surface-3 shrink-0" />
-
-        {/* ── Wallet section ────────────────────────────────────────── */}
-        {connected && publicKey ? (
-          <div className="flex items-center gap-2">
-            {/* Avatar */}
-            <div className="w-7 h-7 rounded-full overflow-hidden border border-surface-3 shrink-0">
-              {avatar ? (
-                <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full bg-brand/20 flex items-center justify-center text-brand font-bold text-[10px] select-none">
-                  {publicKey.slice(0, 2).toUpperCase()}
-                </div>
-              )}
-            </div>
-            {/* Wallet info */}
-            <div className="hidden md:flex items-center gap-1.5 text-xs font-mono">
-              <span className={username ? "text-white font-semibold" : "text-muted"}>
-                {username || shortKey}
-              </span>
-              {balance !== null && (
-                <>
-                  <span className="text-surface-3">·</span>
-                  <span className="text-muted">{balance.toFixed(2)} SOL</span>
-                </>
-              )}
-            </div>
-            <Link
-              href="/profile"
-              className="px-2.5 py-1 rounded-md text-xs bg-surface-3 text-muted hover:text-white border border-surface-3 hover:border-surface-2 transition-colors shrink-0"
-            >
-              Profile
-            </Link>
+          /* ── Not logged in via DORA: show login + wallet section ── */
+          <>
             <button
-              onClick={() => disconnect()}
-              className="px-2.5 py-1 rounded-md text-xs text-muted hover:text-white border border-surface-3 hover:border-surface-2 transition-colors shrink-0"
+              onClick={() => setShowAuthModal(true)}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-brand/40 text-brand hover:bg-brand/10 transition-colors shrink-0"
             >
-              Disconnect
+              Login / Register
             </button>
-          </div>
-        ) : (
-          <button
-            onClick={connect}
-            className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-brand hover:bg-brand-dim text-black transition-colors shrink-0"
-          >
-            Connect Wallet
-          </button>
+
+            <span className="hidden sm:block w-px h-5 bg-surface-3 shrink-0" />
+
+            {/* Wallet section */}
+            {connected && publicKey ? (
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-full overflow-hidden border border-surface-3 shrink-0">
+                  {avatar ? (
+                    <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-brand/20 flex items-center justify-center text-brand font-bold text-[10px] select-none">
+                      {publicKey.slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div className="hidden md:flex items-center gap-1.5 text-xs font-mono">
+                  <span className={username ? "text-white font-semibold" : "text-muted"}>
+                    {username || shortKey}
+                  </span>
+                  {balance !== null && (
+                    <>
+                      <span className="text-surface-3">·</span>
+                      <span className="text-muted">{balance.toFixed(2)} SOL</span>
+                    </>
+                  )}
+                </div>
+                <Link
+                  href="/profile"
+                  className="px-2.5 py-1 rounded-md text-xs bg-surface-3 text-muted hover:text-white border border-surface-3 hover:border-surface-2 transition-colors shrink-0"
+                >
+                  Profile
+                </Link>
+                <button
+                  onClick={() => disconnect()}
+                  className="px-2.5 py-1 rounded-md text-xs text-muted hover:text-white border border-surface-3 hover:border-surface-2 transition-colors shrink-0"
+                >
+                  Disconnect
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={connect}
+                className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-brand hover:bg-brand-dim text-black transition-colors shrink-0"
+              >
+                Connect Wallet
+              </button>
+            )}
+          </>
         )}
       </div>
     </nav>

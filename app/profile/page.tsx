@@ -527,8 +527,8 @@ export default function ProfilePage() {
           );
         })()}
 
-        {/* ── Wallet card (SOL mode) ──────────────────────────────────── */}
-        {connected && publicKey && (() => {
+        {/* ── Wallet card (SOL mode, only when no DORA user) ─────────── */}
+        {connected && publicKey && !user && (() => {
           const { wins, resolved, wagered, winRate } = betStats(walletBets);
           return (
             <>
