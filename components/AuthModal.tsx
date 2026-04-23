@@ -10,6 +10,19 @@ interface AuthModalProps {
 
 type View = "login" | "register" | "forgot" | "reset" | "done";
 
+const EyeOpen = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+  </svg>
+);
+
+const EyeOff = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 4.411m0 0L21 21" />
+  </svg>
+);
+
 export default function AuthModal({ onClose }: AuthModalProps) {
   const { login, register } = useAuth();
   const [view, setView] = useState<View>("login");
@@ -19,18 +32,23 @@ export default function AuthModal({ onClose }: AuthModalProps) {
   // Login
   const [loginIdentifier, setLoginIdentifier] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Register
   const [regUsername, setRegUsername] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regConfirm, setRegConfirm] = useState("");
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showRegConfirm, setShowRegConfirm] = useState(false);
 
   // Forgot / Reset
   const [fpEmail, setFpEmail] = useState("");
   const [resetCode, setResetCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
 
   function switchView(v: View) { setView(v); setError(""); }
 
@@ -107,6 +125,7 @@ export default function AuthModal({ onClose }: AuthModalProps) {
   }
 
   const inputCls = "w-full px-3 py-2 rounded-lg bg-surface-3 border border-surface-3 text-white text-sm placeholder:text-muted focus:outline-none focus:border-brand transition-colors";
+  const eyeBtnCls = "absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60";
 
   return (
     <div
@@ -114,7 +133,7 @@ export default function AuthModal({ onClose }: AuthModalProps) {
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="bg-surface border border-surface-3 rounded-xl w-full max-w-sm mx-4 p-6">
-<div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="text-white font-semibold text-lg leading-tight">Play with DORA</h2>
             <p className="text-muted text-xs mt-0.5">Virtual currency — no real money needed</p>
@@ -178,14 +197,19 @@ export default function AuthModal({ onClose }: AuthModalProps) {
               required
               className={inputCls}
             />
-            <input
-              type="password"
-              placeholder="Password"
-              value={loginPassword}
-              onChange={e => setLoginPassword(e.target.value)}
-              required
-              className={inputCls}
-            />
+            <div className="relative">
+              <input
+                type={showLoginPassword ? "text" : "password"}
+                placeholder="Password"
+                value={loginPassword}
+                onChange={e => setLoginPassword(e.target.value)}
+                required
+                className={inputCls}
+              />
+              <button type="button" onClick={() => setShowLoginPassword(!showLoginPassword)} className={eyeBtnCls}>
+                {showLoginPassword ? <EyeOff /> : <EyeOpen />}
+              </button>
+            </div>
             <button
               type="submit"
               disabled={submitting}
@@ -208,8 +232,32 @@ export default function AuthModal({ onClose }: AuthModalProps) {
           <form onSubmit={handleRegister} className="flex flex-col gap-3">
             <input type="text" placeholder="Username" value={regUsername} onChange={e => setRegUsername(e.target.value)} required className={inputCls} />
             <input type="email" placeholder="Email" value={regEmail} onChange={e => setRegEmail(e.target.value)} required className={inputCls} />
-            <input type="password" placeholder="Password" value={regPassword} onChange={e => setRegPassword(e.target.value)} required className={inputCls} />
-            <input type="password" placeholder="Confirm Password" value={regConfirm} onChange={e => setRegConfirm(e.target.value)} required className={inputCls} />
+            <div className="relative">
+              <input
+                type={showRegPassword ? "text" : "password"}
+                placeholder="Password"
+                value={regPassword}
+                onChange={e => setRegPassword(e.target.value)}
+                required
+                className={inputCls}
+              />
+              <button type="button" onClick={() => setShowRegPassword(!showRegPassword)} className={eyeBtnCls}>
+                {showRegPassword ? <EyeOff /> : <EyeOpen />}
+              </button>
+            </div>
+            <div className="relative">
+              <input
+                type={showRegConfirm ? "text" : "password"}
+                placeholder="Confirm Password"
+                value={regConfirm}
+                onChange={e => setRegConfirm(e.target.value)}
+                required
+                className={inputCls}
+              />
+              <button type="button" onClick={() => setShowRegConfirm(!showRegConfirm)} className={eyeBtnCls}>
+                {showRegConfirm ? <EyeOff /> : <EyeOpen />}
+              </button>
+            </div>
             <button
               type="submit"
               disabled={submitting}
@@ -258,22 +306,32 @@ export default function AuthModal({ onClose }: AuthModalProps) {
               inputMode="numeric"
               className={`${inputCls} tracking-widest text-center font-mono text-lg`}
             />
-            <input
-              type="password"
-              placeholder="New password"
-              value={newPassword}
-              onChange={e => setNewPassword(e.target.value)}
-              required
-              className={inputCls}
-            />
-            <input
-              type="password"
-              placeholder="Confirm new password"
-              value={confirmNewPassword}
-              onChange={e => setConfirmNewPassword(e.target.value)}
-              required
-              className={inputCls}
-            />
+            <div className="relative">
+              <input
+                type={showNewPassword ? "text" : "password"}
+                placeholder="New password"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                required
+                className={inputCls}
+              />
+              <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className={eyeBtnCls}>
+                {showNewPassword ? <EyeOff /> : <EyeOpen />}
+              </button>
+            </div>
+            <div className="relative">
+              <input
+                type={showConfirmNewPassword ? "text" : "password"}
+                placeholder="Confirm new password"
+                value={confirmNewPassword}
+                onChange={e => setConfirmNewPassword(e.target.value)}
+                required
+                className={inputCls}
+              />
+              <button type="button" onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)} className={eyeBtnCls}>
+                {showConfirmNewPassword ? <EyeOff /> : <EyeOpen />}
+              </button>
+            </div>
             <button
               type="submit"
               disabled={submitting}
