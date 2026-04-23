@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
@@ -41,6 +42,12 @@ function BetBar(props: any) {
 }
 
 export default function TradingHistoryChart({ bets }: { bets: TradingHistoryBet[] }) {
+  const [animated, setAnimated] = useState(true);
+  useEffect(() => {
+    const timer = setTimeout(() => setAnimated(false), 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
   const resolved = bets.filter(b => b.result !== null && b.result !== "refund");
   if (resolved.length === 0) return null;
 
@@ -86,17 +93,17 @@ export default function TradingHistoryChart({ bets }: { bets: TradingHistoryBet[
         ))}
       </div>
 
-      <ResponsiveContainer width="100%" height={220}>
-        <ComposedChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+      <ResponsiveContainer width="100%" height={320}>
+        <ComposedChart data={data} margin={{ top: 10, right: 20, bottom: 20, left: 20 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
           <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#4b5563" }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fontSize: 10, fill: "#4b5563" }} axisLine={false} tickLine={false} width={52}
-            tickFormatter={v => `${v >= 0 ? "+" : ""}${v.toFixed(0)}`} />
+          <YAxis tick={{ fontSize: 10, fill: "#4b5563" }} axisLine={false} tickLine={false} width={60}
+            tickFormatter={v => `${v >= 0 ? "+" : ""}${v.toFixed(0)}`} allowDataOverflow={false} />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
           <Legend formatter={v => <span style={{ color: "#6b7280", fontSize: 11 }}>{v}</span>} />
-          <Bar dataKey="profit" name="Bet P&L" isAnimationActive={false} shape={<BetBar />} />
+          <Bar dataKey="profit" name="Bet P&L" isAnimationActive={animated} shape={<BetBar />} />
           <Line type="monotone" dataKey="pnl" name="Cumulative P&L" stroke="#6366f1"
-            strokeWidth={2} dot={false} isAnimationActive={false} />
+            strokeWidth={2} dot={false} isAnimationActive={animated} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>
