@@ -29,9 +29,9 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
         where: { currency: "DORA" },
         orderBy: { createdAt: "desc" },
         take: 50,
-        include: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          round: { select: { question: true, status: true, winningOutcome: true, outcomes: true } } as any,
+        select: {
+          id: true, side: true, amount: true, odds: true,
+          result: true, payout: true, createdAt: true, roundId: true,
         },
       },
     },
@@ -39,17 +39,36 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
 
   if (!user) notFound();
 
-  const bets = user.bets as Array<{
-    id: string; side: string; amount: number; odds: number; result: string | null;
-    payout: number | null; createdAt: Date; currency: string;
-    round: { question: string; status: string; winningOutcome: string | null; outcomes: Outcome[] | null } | null;
-  }>;
+  // Fetch rounds for the bets
+  const roundIds = Array.from(new Set(user.bets.map(b => b.roundId)));
+  const rounds = roundIds.length > 0
+    ? await prisma.round.findMany({
+        where: { id: { in: roundIds } },
+        select: { id: true, question: true, status: true, winningOutcome: true, outcomes: true },
+      })
+    : [];
+  const roundMap = new Map(rounds.map(r => [r.id, r]));
 
-  const resolved  = bets.filter(b => b.result !== null && b.result !== "refund");
-  const wins      = resolved.filter(b => b.result === b.side);
-  const wagered   = bets.reduce((s, b) => s + b.amount, 0);
-  const winRate   = resolved.length > 0 ? ((wins.length / resolved.length) * 100).toFixed(0) : "0";
-  const netPnl    = bets.reduce((s, b) => {
+  type BetRow = typeof user.bets[number] & {
+    round: { question: string; status: string; winningOutcome: string | null; outcomes: Outcome[] | null } | null;
+  };
+
+  const bets: BetRow[] = user.bets.map(b => {
+    const r = roundMap.get(b.roundId);
+    return {
+      ...b,
+      round: r
+        ? { question: r.question, status: r.status, winningOutcome: r.winningOutcome,
+            outcomes: (r.outcomes as unknown as Outcome[] | null) }
+        : null,
+    };
+  });
+
+  const resolved = bets.filter(b => b.result !== null && b.result !== "refund");
+  const wins     = resolved.filter(b => b.result === b.side);
+  const wagered  = bets.reduce((s, b) => s + b.amount, 0);
+  const winRate  = resolved.length > 0 ? ((wins.length / resolved.length) * 100).toFixed(0) : "0";
+  const netPnl   = bets.reduce((s, b) => {
     if (b.result === "refund") return s;
     if (b.result !== null && b.result === b.side) return s + ((b.payout ?? 0) - b.amount);
     if (b.result !== null) return s - b.amount;
@@ -137,7 +156,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
                     const resultColor = isWin ? "text-green-400" : isLoss ? "text-red-400" : "text-muted";
                     const resultLabel = isWin ? "WIN" : isLoss ? "LOSS" : bet.result === "refund" ? "REFUND" : "Pending";
                     const c = OUTCOME_COLORS[bet.side];
-                    const outcomeLabel = (bet.round?.outcomes as Outcome[] | null)?.find(o => o.id === bet.side)?.label;
+                    const outcomeLabel = bet.round?.outcomes?.find(o => o.id === bet.side)?.label;
 
                     return (
                       <tr key={bet.id} className="border-b border-surface-3/50 hover:bg-surface-2/50 transition-colors">
