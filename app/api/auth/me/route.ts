@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
       username: user.username,
       email: user.email,
       doraBalance: user.doraBalance,
+      avatarUrl: user.avatarUrl ?? null,
     });
   } catch {
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });

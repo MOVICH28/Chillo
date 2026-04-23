@@ -2,11 +2,12 @@
 
 export const dynamic = "force-dynamic";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/useAuth";
 import Navbar from "@/components/Navbar";
 import AuthModal from "@/components/AuthModal";
+import Avatar from "@/components/Avatar";
 
 import {
   PieChart, Pie, Cell,
@@ -74,11 +75,15 @@ function PieTooltip({ active, payload, bets }: any) {
 }
 
 export default function ProfilePage() {
-  const { user, refreshUser } = useAuth();
+  const { user, getToken, refreshUser } = useAuth();
   const [mounted, setMounted] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [doraBets, setDoraBets] = useState<BetWithRound[]>([]);
   const [betsLoading, setBetsLoading] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [followStats, setFollowStats] = useState({ followersCount: 0, followingCount: 0 });
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -98,6 +103,38 @@ export default function ProfilePage() {
     const id = setInterval(() => { fetchDoraBets(); refreshUser(); }, 10000);
     return () => clearInterval(id);
   }, [user, fetchDoraBets, refreshUser]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetch(`/api/user/stats?userId=${user.id}`)
+      .then(r => r.json())
+      .then(d => setFollowStats(d))
+      .catch(() => {});
+  }, [user]);
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const token = getToken();
+      const res = await fetch("/api/user/avatar", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      setAvatarPreview(data.avatarUrl);
+      await refreshUser();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   // ── Not logged in gate ────────────────────────────────────────────────────
   if (!mounted || !user) {
@@ -429,9 +466,23 @@ export default function ProfilePage() {
             <>
               <div className="bg-surface border border-brand/20 rounded-xl p-5 mb-6">
                 <div className="flex flex-wrap items-center gap-5">
-                  {/* Avatar: first letter of username */}
-                  <div className="w-16 h-16 rounded-full bg-brand/20 border-2 border-brand/30 flex items-center justify-center text-brand font-bold text-2xl select-none shrink-0">
-                    {user.username.slice(0, 1).toUpperCase()}
+                  {/* Clickable avatar with upload */}
+                  <div className="relative shrink-0 group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                    <Avatar username={user.username} avatarUrl={avatarPreview ?? user.avatarUrl} size={64} />
+                    <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      {uploading ? (
+                        <svg className="animate-spin w-5 h-5 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+                        </svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                      )}
+                    </div>
+                    <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
                   </div>
 
                   {/* User info */}
@@ -440,7 +491,11 @@ export default function ProfilePage() {
                       <span className="text-white font-bold text-xl">{user.username}</span>
                       <span className="px-1.5 py-0.5 rounded text-[10px] bg-brand/10 border border-brand/20 text-brand font-medium">DORA</span>
                     </div>
-                    <p className="text-muted text-xs">{user.email}</p>
+                    <p className="text-muted text-xs mb-2">{user.email}</p>
+                    <div className="flex items-center gap-4 text-xs">
+                      <span className="text-muted"><span className="text-white font-semibold">{followStats.followersCount}</span> followers</span>
+                      <span className="text-muted"><span className="text-white font-semibold">{followStats.followingCount}</span> following</span>
+                    </div>
                   </div>
 
                   {/* DORA balance */}

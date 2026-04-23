@@ -4,6 +4,8 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { Outcome } from "@/lib/types";
 import TradingHistoryChart from "@/components/TradingHistoryChart";
+import Avatar from "@/components/Avatar";
+import FollowButton from "@/components/FollowButton";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
       id: true,
       username: true,
       doraBalance: true,
+      avatarUrl: true,
       createdAt: true,
       bets: {
         where: { currency: "DORA" },
@@ -90,9 +93,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
         {/* Profile card */}
         <div className="bg-surface border border-surface-3 rounded-xl p-5 mb-6">
           <div className="flex flex-wrap items-center gap-5">
-            <div className="w-16 h-16 rounded-full bg-brand/20 border-2 border-brand/30 flex items-center justify-center text-brand font-bold text-2xl select-none shrink-0">
-              {user.username.slice(0, 1).toUpperCase()}
-            </div>
+            <Avatar username={user.username} avatarUrl={user.avatarUrl} size={64} className="shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-white font-bold text-xl">{user.username}</span>
@@ -100,17 +101,20 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
               </div>
               <p className="text-muted text-xs">Member since {joinDate}</p>
             </div>
-            <div className="shrink-0 text-right">
-              <p className="text-[10px] uppercase tracking-widest text-muted mb-1">DORA Balance</p>
-              <p className="text-brand font-mono font-bold text-2xl">
-                {Math.floor(user.doraBalance).toLocaleString("en-US")}
-                <span className="text-sm font-normal ml-1">DORA</span>
-              </p>
-              {netPnl !== 0 && (
-                <p className={`text-xs font-mono mt-0.5 ${netPnl > 0 ? "text-green-400" : "text-red-400"}`}>
-                  {netPnl > 0 ? "+" : ""}{netPnl.toFixed(2)} P&L
+            <div className="shrink-0 text-right flex flex-col items-end gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-muted mb-1">DORA Balance</p>
+                <p className="text-brand font-mono font-bold text-2xl">
+                  {Math.floor(user.doraBalance).toLocaleString("en-US")}
+                  <span className="text-sm font-normal ml-1">DORA</span>
                 </p>
-              )}
+                {netPnl !== 0 && (
+                  <p className={`text-xs font-mono mt-0.5 ${netPnl > 0 ? "text-green-400" : "text-red-400"}`}>
+                    {netPnl > 0 ? "+" : ""}{netPnl.toFixed(2)} P&L
+                  </p>
+                )}
+              </div>
+              <FollowButton targetUserId={user.id} targetUsername={user.username} />
             </div>
           </div>
         </div>

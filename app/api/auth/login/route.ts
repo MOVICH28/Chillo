@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       token,
-      user: { id: user.id, username: user.username, email: user.email, doraBalance: user.doraBalance },
+      user: { id: user.id, username: user.username, email: user.email, doraBalance: user.doraBalance, avatarUrl: user.avatarUrl ?? null },
     });
   } catch {
     return NextResponse.json({ error: "Login failed" }, { status: 500 });

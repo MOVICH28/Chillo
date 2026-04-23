@@ -12,19 +12,21 @@ export async function GET() {
         amount: true,
         payout: true,
         result: true,
-        user: { select: { username: true } },
+        user: { select: { username: true, avatarUrl: true } },
       },
     });
 
     const map = new Map<string, {
       totalWins: number; totalLosses: number; totalBets: number;
-      totalWagered: number; totalPayout: number; username: string | null;
+      totalWagered: number; totalPayout: number; username: string | null; avatarUrl: string | null;
     }>();
 
     for (const bet of bets) {
       const entry = map.get(bet.walletAddress) ?? {
         totalWins: 0, totalLosses: 0, totalBets: 0,
-        totalWagered: 0, totalPayout: 0, username: bet.user?.username ?? null,
+        totalWagered: 0, totalPayout: 0,
+        username: bet.user?.username ?? null,
+        avatarUrl: bet.user?.avatarUrl ?? null,
       };
 
       entry.totalBets += 1;
@@ -49,6 +51,7 @@ export async function GET() {
       return {
         walletAddress,
         username: s.username,
+        avatarUrl: s.avatarUrl,
         totalWins: s.totalWins,
         totalLosses: s.totalLosses,
         totalBets: s.totalBets,

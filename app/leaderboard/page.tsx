@@ -5,10 +5,12 @@ export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import Avatar from "@/components/Avatar";
 
 interface LeaderboardEntry {
   walletAddress: string;
   username: string | null;
+  avatarUrl: string | null;
   totalWins: number;
   totalLosses: number;
   totalBets: number;
@@ -141,21 +143,15 @@ export default function LeaderboardPage() {
                         {/* Player */}
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            {/* Mini avatar / initials */}
-                            <div className="w-7 h-7 rounded-full overflow-hidden border border-surface-3 shrink-0 flex items-center justify-center bg-brand/20">
-                              {(() => {
-                                const storedAvatar = typeof window !== "undefined"
-                                  ? localStorage.getItem(`avatar_${row.walletAddress}`)
-                                  : null;
-                                return storedAvatar ? (
-                                  <img src={storedAvatar} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                  <span className="text-brand font-bold text-[10px] select-none">
-                                    {row.walletAddress.slice(0, 2).toUpperCase()}
-                                  </span>
-                                );
-                              })()}
-                            </div>
+                            {row.username ? (
+                              <Avatar username={row.username} avatarUrl={row.avatarUrl} size={28} className="shrink-0" />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full border border-surface-3 shrink-0 flex items-center justify-center bg-white/5">
+                                <span className="text-white/30 font-bold text-[10px] select-none">
+                                  {row.walletAddress.slice(0, 2).toUpperCase()}
+                                </span>
+                              </div>
+                            )}
                             <div>
                               {row.username ? (
                                 <Link

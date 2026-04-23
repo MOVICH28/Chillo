@@ -16,7 +16,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       where: { roundId: id },
       orderBy: { createdAt: "desc" },
       take: 20,
-      include: { user: { select: { username: true } } },
+      include: { user: { select: { username: true, avatarUrl: true } } },
     }),
   ]);
 
@@ -44,6 +44,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       id:            b.id,
       walletAddress: b.walletAddress,
       username:      b.user?.username ?? null,
+      avatarUrl:     b.user?.avatarUrl ?? null,
       side:          b.side,
       amount:        b.amount,
       odds:          b.odds,

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import Avatar from "@/components/Avatar";
 import {
   LineChart, Line, XAxis, YAxis, ReferenceArea, ReferenceLine,
   ResponsiveContainer, Tooltip,
@@ -38,6 +39,7 @@ interface RecentBet {
   id: string;
   walletAddress: string;
   username: string | null;
+  avatarUrl: string | null;
   side: string;
   amount: number;
   odds: number;
@@ -370,9 +372,9 @@ function RecentBetsPanel({ round, recentBets }: { round: RoundData; recentBets: 
             return (
               <div key={bet.id} className="flex items-center gap-2 py-2 text-xs flex-wrap">
                 {bet.username ? (
-                  <Link href={`/profile/${bet.username}`}
-                    className="text-white/50 font-mono shrink-0 hover:text-[#22c55e] hover:underline transition-colors">
-                    @{bet.username}
+                  <Link href={`/profile/${bet.username}`} className="flex items-center gap-1.5 shrink-0 group">
+                    <Avatar username={bet.username} avatarUrl={bet.avatarUrl} size={20} />
+                    <span className="text-white/50 font-mono group-hover:text-[#22c55e] group-hover:underline transition-colors">@{bet.username}</span>
                   </Link>
                 ) : (
                   <span className="text-white/30 font-mono shrink-0">{shortAddr(bet.walletAddress)}</span>
@@ -482,9 +484,7 @@ function CommentsSection({ roundId }: { roundId: string }) {
         <div className="divide-y divide-white/5">
           {comments.map(c => (
             <div key={c.id} className="py-3 flex gap-2.5">
-              <div className="w-7 h-7 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white/50 font-bold text-xs shrink-0">
-                {c.username.slice(0, 1).toUpperCase()}
-              </div>
+              <Avatar username={c.username} size={28} className="shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2 mb-0.5">
                   <Link href={`/profile/${c.username}`}
