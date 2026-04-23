@@ -329,7 +329,7 @@ function BetPanel({ round, outcome, onSuccess, onCancel }: {
 
 function RecentBetsPanel({ round, recentBets }: { round: RoundData; recentBets: RecentBet[] }) {
   return (
-    <div className="mt-4 bg-white/[0.02] rounded-xl border border-white/5 p-4">
+    <div>
       <h2 className="text-sm font-semibold text-white mb-3">
         Recent Bets
         {recentBets.length > 0 && (
@@ -692,28 +692,10 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                 })}
               </div>
 
-              {totalPool > 0 && (
-                <div className="mt-4 pt-4 border-t border-white/5 space-y-1.5">
-                  <p className="text-[10px] text-white/20 uppercase tracking-wider mb-2">Current Odds</p>
-                  {outcomes.map(o => {
-                    const pct = (o.pool / totalPool) * 100;
-                    const c   = OUTCOME_COLORS[o.id];
-                    return (
-                      <div key={o.id} className="flex items-center gap-2">
-                        <span className={`text-[10px] font-bold w-4 ${c.text}`}>{o.id}</span>
-                        <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full transition-all duration-500 ${c.dot}`} style={{ width: `${pct}%` }} />
-                        </div>
-                        <span className="text-[10px] font-mono text-white/30 w-9 text-right">{pct.toFixed(1)}%</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <div className="mt-4 pt-4 border-t border-white/5">
+                <RecentBetsPanel round={round} recentBets={recentBets} />
+              </div>
             </div>
-
-            {/* Recent Bets — below bet panel in right column */}
-            <RecentBetsPanel round={round} recentBets={recentBets} />
           </div>
         </div>
 
