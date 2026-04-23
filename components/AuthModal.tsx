@@ -114,6 +114,10 @@ export default function AuthModal({ onClose }: AuthModalProps) {
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="bg-surface border border-surface-3 rounded-xl w-full max-w-sm mx-4 p-6">
+        <div className="flex justify-center mb-4">
+          <img src="/logo.png" alt="Pumpdora" style={{height: '40px', objectFit: 'contain'}} />
+        </div>
+
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="text-white font-semibold text-lg leading-tight">Play with DORA</h2>
