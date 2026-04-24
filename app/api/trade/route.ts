@@ -4,6 +4,23 @@ import { prisma } from "@/lib/prisma";
 import { costToBuy, getAllPrices, PLATFORM_FEE } from "@/lib/lmsr";
 import { Outcome } from "@/lib/types";
 
+// Binary search: find how many shares you get for exactly doraAmount (including 1% fee).
+function sharesForDora(
+  currentShares: Record<string, number>,
+  outcome: string,
+  doraAmount: number,
+  b: number,
+  activeOutcomes: string[]
+): number {
+  let lo = 0, hi = doraAmount / 0.0001; // generous upper bound
+  for (let i = 0; i < 60; i++) {
+    const mid  = (lo + hi) / 2;
+    const cost = costToBuy(currentShares, outcome, mid, b, activeOutcomes) * (1 + PLATFORM_FEE);
+    if (cost < doraAmount) lo = mid; else hi = mid;
+  }
+  return lo;
+}
+
 export const dynamic = "force-dynamic";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-me";
@@ -49,13 +66,18 @@ export async function POST(req: NextRequest) {
   if (!payload) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { roundId, outcome, type, shares: rawShares } = body;
-  const sharesToTrade = parseFloat(rawShares);
+  const { roundId, outcome, type, doraAmount: rawDora, shares: rawShares } = body;
 
-  if (!roundId || !outcome || !type || !sharesToTrade || sharesToTrade <= 0)
+  if (!roundId || !outcome || !["buy", "sell"].includes(type))
     return NextResponse.json({ error: "Missing or invalid fields" }, { status: 400 });
-  if (!["buy", "sell"].includes(type))
-    return NextResponse.json({ error: "type must be buy or sell" }, { status: 400 });
+
+  // Validate amount fields before fetching round
+  const doraAmount    = type === "buy"  ? parseFloat(rawDora)   : 0;
+  const rawSharesNum  = type === "sell" ? parseFloat(rawShares) : 0;
+  if (type === "buy"  && (!doraAmount  || doraAmount  <= 0))
+    return NextResponse.json({ error: "doraAmount must be positive" }, { status: 400 });
+  if (type === "sell" && (!rawSharesNum || rawSharesNum <= 0))
+    return NextResponse.json({ error: "shares must be positive" }, { status: 400 });
 
   const round = await prisma.round.findUnique({
     where: { id: roundId },
@@ -77,28 +99,32 @@ export async function POST(req: NextRequest) {
   const user = await prisma.user.findUnique({ where: { id: payload.userId } });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  let totalCost: number; // positive = user pays, negative = user receives
+  let sharesToTrade: number;
+  let totalCost: number;
   let rawCost: number;
   let fee: number;
 
   if (type === "buy") {
-    rawCost  = costToBuy(currentShares, outcome, sharesToTrade, b, activeOutcomes);
-    fee      = rawCost * PLATFORM_FEE;
-    totalCost = rawCost + fee;
-    if (user.doraBalance < totalCost)
+    if (user.doraBalance < doraAmount)
       return NextResponse.json({ error: "Insufficient DORA balance" }, { status: 400 });
+    // Compute exact shares for the given DORA spend via binary search
+    sharesToTrade = sharesForDora(currentShares, outcome, doraAmount, b, activeOutcomes);
+    if (sharesToTrade <= 0)
+      return NextResponse.json({ error: "Amount too small" }, { status: 400 });
+    rawCost   = costToBuy(currentShares, outcome, sharesToTrade, b, activeOutcomes);
+    fee       = rawCost * PLATFORM_FEE;
+    totalCost = rawCost + fee; // ≤ doraAmount by construction
   } else {
-    // sell: cost of buying negative shares → negative rawCost
+    sharesToTrade = rawSharesNum;
     const pos = await prisma.position.findUnique({
       where: { userId_roundId_outcome: { userId: payload.userId, roundId, outcome } },
     });
     if (!pos || pos.shares < sharesToTrade)
       return NextResponse.json({ error: "Insufficient shares to sell" }, { status: 400 });
-
-    rawCost  = costToBuy(currentShares, outcome, -sharesToTrade, b, activeOutcomes); // < 0
-    const rawProceeds = -rawCost; // > 0
-    fee      = rawProceeds * PLATFORM_FEE;
-    totalCost = -(rawProceeds - fee); // negative = user receives
+    rawCost           = costToBuy(currentShares, outcome, -sharesToTrade, b, activeOutcomes); // < 0
+    const rawProceeds = -rawCost;
+    fee               = rawProceeds * PLATFORM_FEE;
+    totalCost         = -(rawProceeds - fee); // negative = user receives
   }
 
   const pricePerShare = Math.abs(rawCost) / sharesToTrade;
