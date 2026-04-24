@@ -27,12 +27,13 @@ interface LMSRBetPanelProps {
   bettingClosed:  boolean;
   roundStatus:    string;
   winningOutcome: string | null;
+  initialOutcome?: string | null;
   onTradeSuccess?: () => void;
 }
 
 export default function LMSRBetPanel({
   roundId, outcomes, lmsrB, initialShares,
-  bettingClosed, roundStatus, winningOutcome, onTradeSuccess,
+  bettingClosed, roundStatus, winningOutcome, initialOutcome, onTradeSuccess,
 }: LMSRBetPanelProps) {
   const { user, getToken, refreshUser } = useAuth();
   const activeOutcomes = outcomes.map(o => o.id);
@@ -42,7 +43,7 @@ export default function LMSRBetPanel({
   const [curShares,  setCurShares]  = useState<Record<string, number>>(initialShares);
   const [positions,  setPositions]  = useState<Position[]>([]);
 
-  const [selected,  setSelected]  = useState<string | null>(null);
+  const [selected,  setSelected]  = useState<string | null>(initialOutcome ?? null);
   const [tradeType, setTradeType] = useState<"buy" | "sell">("buy");
   const [doraInput, setDoraInput] = useState("25");
   const [sellPct,   setSellPct]   = useState(100);
@@ -145,6 +146,7 @@ export default function LMSRBetPanel({
       await refreshUser();
       await fetchMarket();
       onTradeSuccess?.();
+      window.dispatchEvent(new CustomEvent("trade-placed"));
       setTimeout(() => { setTxStatus("idle"); setSelected(null); setDoraInput("25"); setSellPct(100); }, 2000);
     } catch (e) {
       setTxStatus("error");

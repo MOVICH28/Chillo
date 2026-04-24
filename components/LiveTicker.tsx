@@ -29,7 +29,11 @@ export default function LiveTicker({ liveData }: LiveTickerProps) {
     }
     fetchTrades();
     const id = setInterval(fetchTrades, 5_000);
-    return () => clearInterval(id);
+    window.addEventListener("trade-placed", fetchTrades);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("trade-placed", fetchTrades);
+    };
   }, []);
 
   // Build one combined item list then duplicate for seamless scroll

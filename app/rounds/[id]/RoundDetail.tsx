@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Avatar from "@/components/Avatar";
 import LMSRBetPanel from "@/components/LMSRBetPanel";
+import { getAllPrices } from "@/lib/lmsr";
 import {
   LineChart, Line, XAxis, YAxis, ReferenceArea, ReferenceLine,
   ResponsiveContainer, Tooltip,
@@ -186,32 +188,33 @@ function LiveChart({ token, priceToBeat }: { token: "bitcoin" | "solana"; priceT
   );
 }
 
-// ── Pool distribution bar ─────────────────────────────────────────────────────
+// ── Pool distribution bar (LMSR probabilities) ───────────────────────────────
 
-function PoolBar({ outcomes, totalPool }: { outcomes: Outcome[]; totalPool: number }) {
-  if (totalPool <= 0) {
+function PoolBar({ outcomes, prices }: { outcomes: Outcome[]; prices: Record<string, number> }) {
+  const hasPrices = outcomes.some(o => prices[o.id] != null);
+  if (!hasPrices) {
     return (
       <div className="mt-3 rounded-xl border border-white/5 bg-white/[0.02] p-4">
-        <p className="text-xs text-white/30 text-center">No bets placed yet</p>
+        <p className="text-xs text-white/30 text-center">No trades yet — be the first!</p>
       </div>
     );
   }
   return (
     <div className="mt-3 rounded-xl border border-white/5 bg-white/[0.02] p-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] text-white/30 uppercase tracking-wider">Pool Distribution</span>
-        <span className="text-xs font-mono text-white/50">{totalPool.toFixed(2)} DORA total</span>
+        <span className="text-[10px] text-white/30 uppercase tracking-wider">Market Probabilities</span>
+        <span className="text-[10px] text-white/20 uppercase tracking-wider">LMSR</span>
       </div>
       <div className="flex h-2 rounded-full overflow-hidden gap-px">
         {outcomes.map(o => {
-          const pct = (o.pool / totalPool) * 100;
+          const pct = (prices[o.id] ?? 0) * 100;
           if (pct < 0.1) return null;
           return <div key={o.id} className={OUTCOME_COLORS[o.id].dot} style={{ width: `${pct}%` }} title={`${o.id}: ${pct.toFixed(1)}%`} />;
         })}
       </div>
       <div className="flex justify-between mt-2">
         {outcomes.map(o => {
-          const pct = (o.pool / totalPool) * 100;
+          const pct = (prices[o.id] ?? 0) * 100;
           const c = OUTCOME_COLORS[o.id];
           return (
             <div key={o.id} className="text-center">
@@ -383,10 +386,18 @@ function CommentsSection({ roundId }: { roundId: string }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function RoundDetail({ initialRound }: { initialRound: RoundData }) {
+  const searchParams    = useSearchParams();
+  const initialOutcome  = searchParams.get("outcome");
+  const betPanelRef     = useRef<HTMLDivElement>(null);
+
   const [round, setRound]               = useState<RoundData>(initialRound);
   const [recentTrades, setRecentTrades] = useState<RecentTrade[]>([]);
   const [copied, setCopied]             = useState(false);
   const [activeTab, setActiveTab]       = useState<"discussion" | "activity">("discussion");
+  const [lmsrPrices, setLmsrPrices]     = useState<Record<string, number>>(() => {
+    const outcomes = (initialRound.outcomes ?? []).map(o => o.id);
+    return getAllPrices(initialRound.shares ?? {}, initialRound.lmsrB, outcomes);
+  });
 
   const resultCountdown  = useCountdown(round.endsAt);
   const bettingCountdown = useCountdown(round.bettingClosesAt ?? round.endsAt);
@@ -407,6 +418,8 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
       const data = await res.json();
       setRound(data);
       setRecentTrades(data.recentTrades ?? []);
+      const activeOutcomes = ((data.outcomes ?? []) as Outcome[]).map((o: Outcome) => o.id);
+      setLmsrPrices(getAllPrices(data.shares ?? {}, data.lmsrB, activeOutcomes));
     } catch { /* ignore */ }
   }, [round.id]);
 
@@ -415,6 +428,13 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
     const id = setInterval(refreshRound, 5_000);
     return () => clearInterval(id);
   }, [refreshRound]);
+
+  // Scroll to bet panel if outcome pre-selected from URL
+  useEffect(() => {
+    if (initialOutcome && betPanelRef.current) {
+      setTimeout(() => betPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
+    }
+  }, [initialOutcome]);
 
   function handleShare() {
     navigator.clipboard.writeText(window.location.href).then(() => {
@@ -502,7 +522,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
             {hasToken && outcomes.length > 0 ? (
               <>
                 <LiveChart token={token} priceToBeat={round.targetPrice} />
-                <PoolBar outcomes={outcomes} totalPool={totalPool} />
+                <PoolBar outcomes={outcomes} prices={lmsrPrices} />
               </>
             ) : (
               <div className="h-[400px] flex items-center justify-center bg-surface-2 rounded-xl border border-white/5">
@@ -516,16 +536,19 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
           <div className="lg:w-[40%] flex flex-col gap-4">
             {/* LMSR Bet Panel */}
             {outcomes.length > 0 && (
-              <LMSRBetPanel
-                roundId={round.id}
-                outcomes={outcomes}
-                lmsrB={round.lmsrB}
-                initialShares={round.shares ?? {}}
-                bettingClosed={bettingClosed}
-                roundStatus={round.status}
-                winningOutcome={round.winningOutcome}
-                onTradeSuccess={refreshRound}
-              />
+              <div ref={betPanelRef}>
+                <LMSRBetPanel
+                  roundId={round.id}
+                  outcomes={outcomes}
+                  lmsrB={round.lmsrB}
+                  initialShares={round.shares ?? {}}
+                  bettingClosed={bettingClosed}
+                  roundStatus={round.status}
+                  winningOutcome={round.winningOutcome}
+                  initialOutcome={initialOutcome}
+                  onTradeSuccess={refreshRound}
+                />
+              </div>
             )}
           </div>
         </div>
