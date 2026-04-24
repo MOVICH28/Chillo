@@ -159,7 +159,7 @@ export default function LMSRBetPanel({
         <span className="text-[10px] text-white/30 uppercase tracking-wider">LMSR · 1% fee</span>
       </div>
       <p className="text-[11px] text-white/30 mb-4">
-        {resolved ? "Market resolved" : bettingClosed ? "Betting closed" : "Buy or sell shares to predict the outcome"}
+        {resolved ? "Market resolved" : bettingClosed ? "Betting closed" : "Spend DORA to predict the outcome"}
       </p>
 
       {resolved && winningOutcome && (
@@ -218,7 +218,7 @@ export default function LMSRBetPanel({
                   {price.toFixed(3)} DORA
                 </span>
                 {pos && pos.shares > 0
-                  ? <span className={`text-[10px] font-mono shrink-0 ${c.text}`}>{pos.shares.toFixed(1)}sh</span>
+                  ? <span className={`text-[10px] font-mono shrink-0 ${c.text}`}>{(pos.shares * pos.avgCost).toFixed(1)} D</span>
                   : <span className="text-[10px] text-white/20 shrink-0 w-6">—</span>}
               </button>
 
@@ -314,12 +314,12 @@ export default function LMSRBetPanel({
                       {doraNum > 0 && approxShares > 0 && (
                         <div className="space-y-1 mb-3 px-0.5">
                           <div className="flex justify-between text-xs">
-                            <span className="text-white/40">You will receive</span>
-                            <span className="font-mono text-white">~{approxShares.toFixed(2)} shares</span>
-                          </div>
-                          <div className="flex justify-between text-xs">
                             <span className="text-white/40">If correct</span>
                             <span className="font-mono text-[#22c55e] font-semibold">~{approxShares.toFixed(2)} DORA</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-white/40">Probability</span>
+                            <span className="font-mono text-white/70">{(spotPrice * 100).toFixed(1)}%</span>
                           </div>
                           <div className="flex justify-between text-xs">
                             <span className="text-white/40">Fee (1%)</span>
@@ -344,24 +344,38 @@ export default function LMSRBetPanel({
                           </div>
 
                           {/* Sell preview */}
-                          <div className="space-y-1 mb-3 px-0.5">
-                            <div className="flex justify-between text-xs">
-                              <span className="text-white/40">Selling</span>
-                              <span className="font-mono text-white">{sharesToSell.toFixed(2)} shares</span>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-white/40">You will receive</span>
-                              <span className="font-mono text-[#22c55e] font-semibold">~{sellProceeds.toFixed(4)} DORA</span>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-white/40">Fee (1%)</span>
-                              <span className="font-mono text-white/50">{sellFee.toFixed(4)} DORA</span>
-                            </div>
-                            <div className="flex justify-between text-xs text-white/20 pt-0.5 border-t border-white/5">
-                              <span>Avg cost</span>
-                              <span className="font-mono">{selPos.avgCost.toFixed(4)} DORA/sh</span>
-                            </div>
-                          </div>
+                          {(() => {
+                            const posInvested     = selPos.shares * selPos.avgCost;
+                            const curPrice        = prices[selected!] ?? getPrice(curShares, selected!, lmsrB, activeOutcomes);
+                            const posCurrentValue = selPos.shares * curPrice;
+                            const posPnl          = posCurrentValue - posInvested;
+                            return (
+                              <div className="space-y-1 mb-3 px-0.5">
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-white/40">Your position</span>
+                                  <span className="font-mono text-white/70">{posInvested.toFixed(2)} DORA</span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-white/40">Current value</span>
+                                  <span className="font-mono text-white/70">{posCurrentValue.toFixed(2)} DORA</span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-white/40">Profit / Loss</span>
+                                  <span className={`font-mono font-semibold ${posPnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
+                                    {posPnl >= 0 ? "+" : ""}{posPnl.toFixed(2)} DORA
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-xs pt-0.5 border-t border-white/5">
+                                  <span className="text-white/40">You will receive</span>
+                                  <span className="font-mono text-[#22c55e] font-semibold">~{sellProceeds.toFixed(4)} DORA</span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-white/40">Fee (1%)</span>
+                                  <span className="font-mono text-white/50">{sellFee.toFixed(4)} DORA</span>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </>
                       ) : (
                         <p className="text-white/30 text-xs mb-3 text-center py-2">No position to sell</p>
@@ -399,7 +413,7 @@ export default function LMSRBetPanel({
                         ${tradeType === "buy" ? "bg-[#22c55e] text-black hover:bg-[#16a34a]" : "bg-red-500 text-white hover:bg-red-600"}`}>
                       {busy ? "Processing…" : tradeType === "buy"
                         ? `Spend ${doraNum} DORA`
-                        : `Sell ${sharesToSell.toFixed(2)} shares`}
+                        : `Receive ~${sellProceeds.toFixed(2)} DORA`}
                     </button>
                   )}
                 </div>
@@ -415,18 +429,34 @@ export default function LMSRBetPanel({
           <h3 className="text-[10px] uppercase tracking-widest text-white/30 mb-2">My Positions</h3>
           <div className="space-y-1.5">
             {positions.map(pos => {
-              const c        = OUTCOME_COLORS[pos.outcome];
-              const curPrice = prices[pos.outcome] ?? 0;
-              const pnl      = (curPrice - pos.avgCost) * pos.shares;
-              const label    = outcomes.find(o => o.id === pos.outcome)?.label ?? pos.outcome;
+              const c            = OUTCOME_COLORS[pos.outcome];
+              const curPrice     = prices[pos.outcome] ?? 0;
+              const invested     = pos.shares * pos.avgCost;
+              const currentValue = pos.shares * curPrice;
+              const pnl          = currentValue - invested;
+              const label        = outcomes.find(o => o.id === pos.outcome)?.label ?? pos.outcome;
               return (
                 <div key={pos.outcome} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs ${c.bg} ${c.border}`}>
                   <span className={`font-bold shrink-0 ${c.text}`}>{pos.outcome}</span>
-                  <span className="flex-1 truncate text-white/50">{label}</span>
-                  <span className="font-mono text-white/70 shrink-0">{pos.shares.toFixed(2)} sh</span>
+                  <span className="flex-1 min-w-0 truncate text-white/40 text-[10px]">{label}</span>
+                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                    <span className="font-mono text-white/60 text-[10px]">{invested.toFixed(2)} in</span>
+                    <span className="font-mono text-white/80 text-[10px]">{currentValue.toFixed(2)} now</span>
+                  </div>
                   <span className={`font-mono font-semibold shrink-0 ${pnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
-                    {pnl >= 0 ? "+" : ""}{pnl.toFixed(3)}
+                    {pnl >= 0 ? "+" : ""}{pnl.toFixed(2)}
                   </span>
+                  {!resolved && !bettingClosed && (
+                    <button
+                      onClick={() => { setSelected(pos.outcome); setTradeType("sell"); setError(""); setTxStatus("idle"); }}
+                      className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-semibold border transition-colors
+                        ${selected === pos.outcome && tradeType === "sell"
+                          ? "bg-red-500/20 text-red-400 border-red-500/40"
+                          : "bg-white/5 text-white/40 border-white/10 hover:text-white/70"}`}
+                    >
+                      Sell
+                    </button>
+                  )}
                 </div>
               );
             })}

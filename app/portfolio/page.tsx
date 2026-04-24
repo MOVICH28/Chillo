@@ -174,10 +174,9 @@ export default function PortfolioPage() {
                       <thead>
                         <tr className="text-[10px] uppercase tracking-widest text-muted border-b border-surface-3/50">
                           <th className="text-left px-4 py-2">Outcome</th>
-                          <th className="text-right px-3 py-2">Shares</th>
-                          <th className="text-right px-3 py-2">Avg Cost</th>
-                          <th className="text-right px-3 py-2">Cur. Price</th>
-                          <th className="text-right px-4 py-2">Unrealized P&L</th>
+                          <th className="text-right px-3 py-2">Invested</th>
+                          <th className="text-right px-3 py-2">Cur. Value</th>
+                          <th className="text-right px-4 py-2">P&L</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -193,11 +192,14 @@ export default function PortfolioPage() {
                                   {isWinner && <span>✓</span>}
                                 </span>
                               </td>
-                              <td className="px-3 py-2.5 text-right font-mono text-white/80">{pos.shares.toFixed(2)}</td>
-                              <td className="px-3 py-2.5 text-right font-mono text-muted">{pos.avgCost.toFixed(4)}</td>
-                              <td className="px-3 py-2.5 text-right font-mono text-white/80">{pos.currentPrice.toFixed(4)}</td>
+                              <td className="px-3 py-2.5 text-right font-mono text-muted">
+                                {(pos.shares * pos.avgCost).toFixed(2)}
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-mono text-white/80">
+                                {pos.currentValue.toFixed(2)}
+                              </td>
                               <td className={`px-4 py-2.5 text-right font-mono font-semibold ${pnlColor}`}>
-                                {pos.unrealizedPnl >= 0 ? "+" : ""}{pos.unrealizedPnl.toFixed(4)}
+                                {pos.unrealizedPnl >= 0 ? "+" : ""}{pos.unrealizedPnl.toFixed(2)}
                               </td>
                             </tr>
                           );
