@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Round, Outcome } from "@/lib/types";
 import { LiveData } from "@/lib/useLiveData";
 import Sparkline from "@/components/Sparkline";
+import { useAuth } from "@/lib/useAuth";
 
 interface RangeCardProps {
   round: Round;
@@ -144,18 +145,43 @@ function ResolvedRangeCard({ round }: { round: Round }) {
 
 // ── Active card ───────────────────────────────────────────────────────────────
 
+const BET_PRESETS = [10, 25, 50, 100];
+
 export default function RangeCard({ round, liveData }: RangeCardProps) {
+  const { user, getToken } = useAuth();
   const resultCountdown  = useCountdown(round.endsAt);
   const bettingCountdown = useCountdown(round.bettingClosesAt ?? round.endsAt);
 
   const outcomes   = round.outcomes ?? [];
-  const totalPool  = round.realPool ?? 0;
   const isEnded    = round.status !== "open";
   const bettingClosed = round.bettingClosesAt
     ? new Date() > new Date(round.bettingClosesAt)
     : isEnded;
 
   const hasChart = round.targetToken === "bitcoin" || round.targetToken === "solana";
+
+  // LMSR prices fetched from /api/trade
+  const [prices, setPrices] = useState<Record<string, number>>({});
+
+  // Inline bet state
+  const [selOutcome, setSelOutcome] = useState<string | null>(null);
+  const [doraInput,  setDoraInput]  = useState("25");
+  const [txStatus,   setTxStatus]   = useState<"idle" | "placing" | "success" | "error">("idle");
+  const [txError,    setTxError]    = useState("");
+
+  const fetchPrices = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/trade?roundId=${round.id}`, { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setPrices(data.prices ?? {});
+      }
+    } catch { /* ignore */ }
+  }, [round.id]);
+
+  useEffect(() => {
+    fetchPrices();
+  }, [fetchPrices]);
 
   if (round.status === "resolved") {
     return <ResolvedRangeCard round={round} />;
@@ -165,10 +191,39 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
   const isSol = round.targetToken === "solana";
   const asset  = isBtc ? liveData?.btc : isSol ? liveData?.sol : undefined;
 
+  async function handleBuy(e: React.FormEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!selOutcome) return;
+    const doraAmt = parseFloat(doraInput);
+    if (!doraAmt || doraAmt <= 0) { setTxError("Enter a valid amount"); return; }
+    if (!user) { setTxError("Login to trade"); return; }
+    setTxStatus("placing");
+    setTxError("");
+    try {
+      const token = getToken();
+      const res = await fetch("/api/trade", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ roundId: round.id, outcome: selOutcome, type: "buy", doraAmount: doraAmt }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Trade failed");
+      setPrices(data.prices ?? prices);
+      setTxStatus("success");
+      setTimeout(() => { setTxStatus("idle"); setSelOutcome(null); setDoraInput("25"); }, 2500);
+    } catch (err) {
+      setTxStatus("error");
+      setTxError(err instanceof Error ? err.message : "Trade failed");
+    }
+  }
+
   return (
-    <Link href={`/rounds/${round.id}`} className="block">
-    <div className="bg-surface rounded-xl border border-surface-3 overflow-hidden flex flex-col hover:border-surface-2 transition-colors group">
-      <div className="p-4 flex-1">
+    <div className="bg-surface rounded-xl border border-surface-3 overflow-hidden flex flex-col hover:border-surface-2 transition-colors">
+      <Link href={`/rounds/${round.id}`} className="block p-4 flex-1">
         {/* Header */}
         <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex items-center gap-1.5">
@@ -199,7 +254,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
         </div>
 
         {/* Question */}
-        <p className="text-white text-sm font-medium leading-snug mb-3 group-hover:text-white/90">
+        <p className="text-white text-sm font-medium leading-snug mb-3">
           {round.question}
         </p>
 
@@ -223,89 +278,135 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
             </div>
           </div>
         )}
+      </Link>
 
-        {/* Outcome grid */}
-        <div className="grid grid-cols-2 gap-2 mb-3">
+      {/* Outcome grid — outside Link so buttons don't navigate */}
+      <div className="px-4 pb-3">
+        <div className="grid grid-cols-2 gap-2 mb-2">
           {outcomes.map((o) => {
-            const c          = OUTCOME_COLORS[o.id];
-            const multiplier = o.pool > 0 && totalPool > 0
-              ? Math.max(1.05, (totalPool * 0.95) / o.pool)
+            const c    = OUTCOME_COLORS[o.id];
+            const pct  = prices[o.id] != null
+              ? (prices[o.id] * 100).toFixed(1)
               : null;
-            const sharePct = totalPool > 0 ? (o.pool / totalPool) * 100 : 0;
+            const isSel = selOutcome === o.id;
 
             return (
               <button
                 key={o.id}
-                onClick={(e) => { e.preventDefault(); }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (bettingClosed) return;
+                  setSelOutcome(isSel ? null : o.id);
+                  setTxStatus("idle");
+                  setTxError("");
+                }}
                 disabled={bettingClosed}
                 className={`relative flex flex-col gap-1 p-2.5 rounded-lg border text-left transition-all
                   ${bettingClosed
                     ? "opacity-40 cursor-not-allowed bg-surface-2 border-surface-3"
-                    : `${c.bg} ${c.border} hover:opacity-90 active:scale-[0.98]`
+                    : isSel
+                      ? `${c.bg} ${c.border} ring-1 ring-inset ${c.border}`
+                      : `${c.bg} ${c.border} hover:opacity-90 active:scale-[0.98]`
                   }`}
               >
                 <div className="flex items-center gap-1.5">
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${c.bg} ${c.text} border ${c.border}`}>
                     {o.id}
                   </span>
-                  <span className="text-xs font-semibold text-white leading-tight">{o.label}</span>
+                  <span className="text-xs font-semibold text-white leading-tight truncate">{o.label}</span>
                 </div>
-
-                <div className="h-1 rounded-full bg-surface-3 overflow-hidden w-full">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${c.dot}`}
-                    style={{ width: `${sharePct}%` }}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between text-[10px]">
-                  <span className="text-muted font-mono">{o.pool.toFixed(2)} DORA</span>
-                  {multiplier !== null ? (
-                    <span className={`font-mono font-bold ${c.text}`}>{multiplier.toFixed(2)}x</span>
+                <div className="flex items-center justify-between text-[10px] mt-0.5">
+                  {pct !== null ? (
+                    <span className={`font-mono font-bold ${c.text}`}>{pct}%</span>
                   ) : (
-                    <span className="text-muted font-mono">--x</span>
+                    <span className="text-muted font-mono">—</span>
                   )}
+                  <span className={`text-[9px] font-semibold ${c.text} opacity-60`}>
+                    {isSel ? "▲ selected" : "tap to bet"}
+                  </span>
                 </div>
               </button>
             );
           })}
         </div>
 
-        {/* Result timer (small, bottom) */}
-        {!bettingClosed && (
-          <div className="flex items-center justify-end text-[10px] text-muted mb-1">
-            Result in <span className="ml-1 font-mono text-white/60">{resultCountdown}</span>
-          </div>
+        {/* Inline bet form */}
+        {selOutcome && !bettingClosed && (
+          <form
+            onSubmit={handleBuy}
+            onClick={e => e.stopPropagation()}
+            className={`mt-1 rounded-lg border p-3 ${OUTCOME_COLORS[selOutcome]?.bg ?? "bg-white/5"} ${OUTCOME_COLORS[selOutcome]?.border ?? "border-white/10"}`}
+          >
+            {/* Presets */}
+            <div className="flex gap-1.5 mb-2">
+              {BET_PRESETS.map(p => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={e => { e.stopPropagation(); setDoraInput(String(p)); }}
+                  className={`flex-1 py-1 rounded text-xs font-mono transition-colors
+                    ${doraInput === String(p)
+                      ? `${OUTCOME_COLORS[selOutcome]?.bg} ${OUTCOME_COLORS[selOutcome]?.text} border ${OUTCOME_COLORS[selOutcome]?.border}`
+                      : "bg-white/5 text-white/40 hover:text-white/70 border border-transparent"}`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            {/* Amount input */}
+            <div className="flex items-center bg-black/30 rounded-lg px-3 py-2 mb-2 border border-white/10 focus-within:border-white/20">
+              <input
+                type="number" min="0.01" step="0.01"
+                value={doraInput}
+                onChange={e => setDoraInput(e.target.value)}
+                onClick={e => e.stopPropagation()}
+                className="flex-1 bg-transparent text-white font-mono text-sm outline-none"
+                placeholder="0.00"
+              />
+              <span className="text-white/40 text-xs ml-2">DORA</span>
+            </div>
+            {/* Status */}
+            {txStatus === "success" && (
+              <p className="text-[#22c55e] text-xs mb-2 flex items-center gap-1">✓ Trade placed!</p>
+            )}
+            {txStatus === "error" && txError && (
+              <p className="text-red-400 text-xs mb-2">{txError}</p>
+            )}
+            {!user && (
+              <p className="text-white/40 text-xs mb-2 text-center">Login to trade</p>
+            )}
+            <button
+              type="submit"
+              disabled={txStatus === "placing" || !user}
+              className="w-full py-2 rounded-lg bg-[#22c55e] text-black font-bold text-sm disabled:opacity-40 hover:bg-[#16a34a] transition-colors"
+            >
+              {txStatus === "placing" ? "Placing…" : `Buy ${selOutcome} · ${doraInput} DORA`}
+            </button>
+          </form>
         )}
-
       </div>
 
       {/* Footer */}
       <div className="px-4 pb-4 border-t border-surface-3/50 pt-3">
         <div className="flex items-center justify-between">
           <div className="text-xs text-muted">
-            <span>
-              Pool:{" "}
-              {totalPool <= 0 ? (
-                <span className="font-mono text-muted">0 DORA</span>
-              ) : (
-                <span className="text-white font-mono">{totalPool.toFixed(2)} DORA</span>
-              )}
-            </span>
-            <span className="ml-2 text-[10px]">{outcomes.length} outcomes · parimutuel</span>
+            <span className="ml-0 text-[10px]">{outcomes.length} outcomes · LMSR</span>
           </div>
-
           {hasChart && (
-            <span className="flex items-center gap-1 text-[10px] text-brand hover:text-brand/80 transition-colors">
+            <Link
+              href={`/rounds/${round.id}`}
+              onClick={e => e.stopPropagation()}
+              className="flex items-center gap-1 text-[10px] text-brand hover:text-brand/80 transition-colors"
+            >
               View Chart
               <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
-            </span>
+            </Link>
           )}
         </div>
       </div>
     </div>
-    </Link>
   );
 }

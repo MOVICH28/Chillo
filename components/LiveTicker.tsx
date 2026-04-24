@@ -32,20 +32,24 @@ export default function LiveTicker({ liveData }: LiveTickerProps) {
     return () => clearInterval(id);
   }, []);
 
-  const priceItems = [
+  // Build one combined item list then duplicate for seamless scroll
+  type TickerItem =
+    | { kind: "price"; label: string; value: string; change: number | null }
+    | { kind: "trade"; trade: RecentTrade };
+
+  const items: TickerItem[] = [
     btc
-      ? { label: "BTC", value: `$${btc.price.toLocaleString("en-US", { maximumFractionDigits: 0 })}`, change: btc.change24h }
-      : { label: "BTC", value: "—", change: null },
+      ? { kind: "price", label: "BTC", value: `$${btc.price.toLocaleString("en-US", { maximumFractionDigits: 0 })}`, change: btc.change24h }
+      : { kind: "price", label: "BTC", value: "—", change: null },
     sol
-      ? { label: "SOL", value: `$${sol.price.toFixed(2)}`, change: sol.change24h }
-      : { label: "SOL", value: "—", change: null },
-    { label: "pump.fun 24h Vol", value: pumpfun ? `$${pumpfun.volume24h}M` : "—", change: null },
-    { label: "Tokens Today",     value: pumpfun ? pumpfun.newTokensToday.toLocaleString() : "—", change: null },
+      ? { kind: "price", label: "SOL", value: `$${sol.price.toFixed(2)}`, change: sol.change24h }
+      : { kind: "price", label: "SOL", value: "—", change: null },
+    { kind: "price", label: "pump.fun 24h Vol", value: pumpfun ? `$${pumpfun.volume24h}M` : "—", change: null },
+    { kind: "price", label: "Tokens Today",     value: pumpfun ? pumpfun.newTokensToday.toLocaleString() : "—", change: null },
+    ...trades.map(t => ({ kind: "trade" as const, trade: t })),
   ];
 
-  // Duplicate for seamless loop
-  const scrollPriceItems = [...priceItems, ...priceItems];
-  const scrollTrades     = trades.length > 0 ? [...trades, ...trades] : [];
+  const scrollItems = [...items, ...items];
 
   return (
     <div className="h-9 bg-surface border-b border-surface-3 overflow-hidden flex items-center">
@@ -55,30 +59,24 @@ export default function LiveTicker({ liveData }: LiveTickerProps) {
       </div>
       <div className="overflow-hidden flex-1">
         <div className="flex gap-8 animate-ticker whitespace-nowrap">
-
-          {/* Price data */}
-          {scrollPriceItems.map((item, i) => (
-            <div key={`p-${i}`} className="flex items-center gap-1.5 text-xs">
-              <span className="text-muted">{item.label}</span>
-              <span className="text-white font-mono font-medium">{item.value}</span>
-              {item.change !== null && (
-                <span className={item.change >= 0 ? "text-yes" : "text-no"}>
-                  {item.change >= 0 ? "▲" : "▼"}{Math.abs(item.change).toFixed(2)}%
-                </span>
-              )}
-            </div>
-          ))}
-
-          {/* Separator */}
-          {scrollTrades.length > 0 && (
-            <span className="text-white/10 text-xs self-center">·</span>
-          )}
-
-          {/* Recent trades */}
-          {scrollTrades.map((t, i) => {
+          {scrollItems.map((item, i) => {
+            if (item.kind === "price") {
+              return (
+                <div key={i} className="flex items-center gap-1.5 text-xs">
+                  <span className="text-muted">{item.label}</span>
+                  <span className="text-white font-mono font-medium">{item.value}</span>
+                  {item.change !== null && (
+                    <span className={item.change >= 0 ? "text-yes" : "text-no"}>
+                      {item.change >= 0 ? "▲" : "▼"}{Math.abs(item.change).toFixed(2)}%
+                    </span>
+                  )}
+                </div>
+              );
+            }
+            const t = item.trade;
             const isBuy = t.type === "buy";
             return (
-              <div key={`t-${i}`} className="flex items-center gap-1.5 text-xs">
+              <div key={i} className="flex items-center gap-1.5 text-xs">
                 <span className="text-white/40 font-mono">{t.username ?? "anon"}</span>
                 <span className={`px-1 py-px rounded text-[10px] font-bold ${isBuy ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-red-500/15 text-red-400"}`}>
                   {isBuy ? "BUY" : "SELL"}
@@ -93,7 +91,6 @@ export default function LiveTicker({ liveData }: LiveTickerProps) {
               </div>
             );
           })}
-
         </div>
       </div>
     </div>
