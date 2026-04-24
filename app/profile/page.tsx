@@ -263,12 +263,6 @@ export default function ProfilePage() {
 
   // ── Shared section components ─────────────────────────────────────────────
   function PerformanceChart({ bets, unit }: { bets: BetWithRound[]; unit: string }) {
-    const [animated, setAnimated] = useState(true);
-    useEffect(() => {
-      const t = setTimeout(() => setAnimated(false), 1500);
-      return () => clearTimeout(t);
-    }, []);
-
     if (bets.length === 0) return null;
     const { resolved, wins } = betStats(bets);
     const refunded = bets.filter(b => b.result === "refund");
@@ -291,7 +285,7 @@ export default function ProfilePage() {
             <p className="text-[10px] uppercase tracking-widest text-muted mb-3">Win Rate</p>
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={75} innerRadius={45}>
+                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={75} innerRadius={45} isAnimationActive={false}>
                   {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                 </Pie>
                 <Tooltip content={<PieTooltip bets={bets} />} />
@@ -318,7 +312,7 @@ export default function ProfilePage() {
                   }}
                   labelFormatter={() => ""}
                 />
-                <Line type="monotone" dataKey="pnl" name="P&L" stroke="#6366f1" strokeWidth={2} dot={{ r: 4 }} isAnimationActive={animated}
+                <Line type="monotone" dataKey="pnl" name="P&L" stroke="#6366f1" strokeWidth={2} dot={{ r: 4 }} isAnimationActive={false}
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   activeDot={(props: any) => {
                     const color = props.payload?.result === "WIN" ? "#22c55e" : props.payload?.result === "LOSS" ? "#ef4444" : "#6b7280";
