@@ -227,7 +227,7 @@ function PoolBar({ outcomes, totalPool }: { outcomes: Outcome[]; totalPool: numb
 
 // ── Recent Trades panel (collapsible) ────────────────────────────────────────
 
-function RecentBetsPanel({ round, recentTrades }: { round: RoundData; recentTrades: RecentTrade[] }) {
+function RecentBetsPanel({ recentTrades }: { round: RoundData; recentTrades: RecentTrade[] }) {
   const [open, setOpen] = useState(false);
 
   return (
