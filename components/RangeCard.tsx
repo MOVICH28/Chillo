@@ -144,7 +144,7 @@ function ResolvedRangeCard({ round }: { round: Round }) {
 
 // ── Active card ───────────────────────────────────────────────────────────────
 
-export default function RangeCard({ round, onBet, liveData }: RangeCardProps) {
+export default function RangeCard({ round, liveData }: RangeCardProps) {
   const resultCountdown  = useCountdown(round.endsAt);
   const bettingCountdown = useCountdown(round.bettingClosesAt ?? round.endsAt);
 
