@@ -28,7 +28,7 @@ export default function LiveTicker({ liveData }: LiveTickerProps) {
       } catch { /* ignore */ }
     }
     fetchTrades();
-    const id = setInterval(fetchTrades, 10_000);
+    const id = setInterval(fetchTrades, 5_000);
     return () => clearInterval(id);
   }, []);
 

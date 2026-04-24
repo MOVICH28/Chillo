@@ -21,6 +21,7 @@ export async function GET() {
       profitLoss: t.profitLoss ?? null,
       roundId:    t.roundId,
       createdAt:  t.createdAt.toISOString(),
-    }))
+    })),
+    { headers: { "Cache-Control": "no-store" } }
   );
 }

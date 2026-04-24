@@ -225,83 +225,56 @@ function PoolBar({ outcomes, totalPool }: { outcomes: Outcome[]; totalPool: numb
   );
 }
 
-// ── Recent Trades panel (collapsible) ────────────────────────────────────────
+// ── Activity tab — trades list ────────────────────────────────────────────────
 
-function RecentBetsPanel({ recentTrades }: { round: RoundData; recentTrades: RecentTrade[] }) {
-  const [open, setOpen] = useState(false);
-
+function ActivityTab({ recentTrades }: { recentTrades: RecentTrade[] }) {
+  if (recentTrades.length === 0) {
+    return <p className="text-white/20 text-xs text-center py-8">No trades yet — be the first!</p>;
+  }
   return (
-    <div className="mt-3 bg-white/[0.02] rounded-xl border border-white/5 overflow-hidden">
-      {/* Collapsible header */}
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/[0.02] transition-colors"
-      >
-        <span className="text-sm font-semibold text-white">
-          Recent Trades
-          {recentTrades.length > 0 && (
-            <span className="text-white/20 font-normal text-xs ml-2">{recentTrades.length}</span>
-          )}
-        </span>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className={`w-4 h-4 text-white/30 transition-transform ${open ? "rotate-180" : ""}`}
-          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+    <div className="divide-y divide-white/5 max-h-[300px] overflow-y-auto">
+      {recentTrades.map(trade => {
+        const c = OUTCOME_COLORS[trade.outcome] ?? { text: "text-white/30", bg: "bg-white/5", border: "border-white/10", dot: "bg-white/20", hex: "#fff" };
+        const isBuy   = trade.type === "buy";
+        const doraAmt = isBuy ? trade.totalCost : -trade.totalCost;
 
-      {open && (
-        <div className="border-t border-white/5 px-4 pb-3">
-          {recentTrades.length === 0 ? (
-            <p className="text-white/20 text-xs text-center py-4">No trades yet — be the first!</p>
-          ) : (
-            <div className="divide-y divide-white/5 max-h-[300px] overflow-y-auto">
-              {recentTrades.map(trade => {
-                const c = OUTCOME_COLORS[trade.outcome] ?? { text: "text-white/30", bg: "bg-white/5", border: "border-white/10", dot: "bg-white/20", hex: "#fff" };
-                const isBuy   = trade.type === "buy";
-                const doraAmt = isBuy ? trade.totalCost : -trade.totalCost;
+        return (
+          <div key={trade.id} className="flex items-center gap-2 py-2 text-xs">
+            {trade.username ? (
+              <Link href={`/profile/${trade.username}`} className="flex items-center gap-1.5 shrink-0 group min-w-0">
+                <Avatar username={trade.username} avatarUrl={trade.avatarUrl} size={20} />
+                <span className="text-white/50 font-mono truncate max-w-[72px] group-hover:text-[#22c55e] transition-colors">
+                  {trade.username}
+                </span>
+              </Link>
+            ) : (
+              <span className="text-white/20 font-mono shrink-0">anon</span>
+            )}
 
-                return (
-                  <div key={trade.id} className="flex items-center gap-2 py-1.5 text-xs">
-                    {/* Avatar + username */}
-                    {trade.username ? (
-                      <Link href={`/profile/${trade.username}`} className="flex items-center gap-1.5 shrink-0 group min-w-0">
-                        <Avatar username={trade.username} avatarUrl={trade.avatarUrl} size={18} />
-                        <span className="text-white/50 font-mono truncate max-w-[64px] group-hover:text-[#22c55e] transition-colors">
-                          {trade.username}
-                        </span>
-                      </Link>
-                    ) : (
-                      <span className="text-white/20 font-mono shrink-0">anon</span>
-                    )}
+            <span className={`px-1.5 py-px rounded text-[10px] font-bold shrink-0
+              ${isBuy ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-red-500/15 text-red-400"}`}>
+              {isBuy ? "BUY" : "SELL"}
+            </span>
 
-                    {/* BUY / SELL */}
-                    <span className={`px-1 py-px rounded text-[10px] font-bold shrink-0
-                      ${isBuy ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-red-500/15 text-red-400"}`}>
-                      {isBuy ? "BUY" : "SELL"}
-                    </span>
+            <span className={`px-1.5 py-px rounded text-[10px] font-bold border shrink-0 ${c.bg} ${c.text} ${c.border}`}>
+              {trade.outcome}
+            </span>
 
-                    {/* Outcome */}
-                    <span className={`px-1.5 py-px rounded text-[10px] font-bold border shrink-0 ${c.bg} ${c.text} ${c.border}`}>
-                      {trade.outcome}
-                    </span>
+            <span className="flex-1" />
 
-                    <span className="flex-1" />
-
-                    {/* Amount */}
-                    <span className="font-mono text-white/80 shrink-0">{doraAmt.toFixed(1)} D</span>
-
-                    {/* Time */}
-                    <span className="text-white/20 shrink-0 w-10 text-right">{timeAgo(trade.createdAt)}</span>
-                  </div>
-                );
-              })}
+            <div className="flex flex-col items-end shrink-0">
+              <span className="font-mono text-white/80">{doraAmt.toFixed(2)} DORA</span>
+              {!isBuy && trade.profitLoss !== null && (
+                <span className={`text-[10px] font-mono font-semibold ${trade.profitLoss >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
+                  {trade.profitLoss >= 0 ? "+" : ""}{trade.profitLoss.toFixed(2)}
+                </span>
+              )}
             </div>
-          )}
-        </div>
-      )}
+
+            <span className="text-white/20 shrink-0 w-12 text-right">{timeAgo(trade.createdAt)}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -350,13 +323,7 @@ function CommentsSection({ roundId }: { roundId: string }) {
   }
 
   return (
-    <div className="mt-6 bg-white/[0.02] rounded-xl border border-white/5 p-4">
-      <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-        Discussion
-        {comments.length > 0 && (
-          <span className="px-1.5 py-0.5 rounded bg-white/10 text-white/40 text-[10px] font-mono">{comments.length}</span>
-        )}
-      </h2>
+    <div>
 
       {user ? (
         <form onSubmit={handlePost} className="mb-4">
@@ -418,7 +385,8 @@ function CommentsSection({ roundId }: { roundId: string }) {
 export default function RoundDetail({ initialRound }: { initialRound: RoundData }) {
   const [round, setRound]               = useState<RoundData>(initialRound);
   const [recentTrades, setRecentTrades] = useState<RecentTrade[]>([]);
-  const [copied, setCopied]         = useState(false);
+  const [copied, setCopied]             = useState(false);
+  const [activeTab, setActiveTab]       = useState<"discussion" | "activity">("discussion");
 
   const resultCountdown  = useCountdown(round.endsAt);
   const bettingCountdown = useCountdown(round.bettingClosesAt ?? round.endsAt);
@@ -542,8 +510,6 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
               </div>
             )}
 
-            {/* Recent Trades — collapsible */}
-            <RecentBetsPanel round={round} recentTrades={recentTrades} />
           </div>
 
           {/* ── RIGHT column (40%) ── */}
@@ -564,28 +530,32 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
           </div>
         </div>
 
-        {/* ── Round Rules (full width) ── */}
-        <div className="mt-6 bg-white/[0.02] rounded-xl border border-white/5 p-4">
-          <h2 className="text-sm font-semibold text-white mb-3">Round Rules</h2>
-          <ul className="space-y-2">
-            {[
-              "Trading closes 5 minutes before the result",
-              "Buy shares in any outcome — prices update automatically via LMSR",
-              "Each winning share pays out exactly 1 DORA at resolution",
-              "Platform fee: 1% on every trade",
-              "Sell your shares any time before trading closes",
-              "Results determined by real-time price data at round end",
-            ].map((rule, i) => (
-              <li key={i} className="flex items-start gap-2.5 text-xs text-white/50">
-                <span className="text-[#22c55e] font-mono shrink-0 mt-0.5">{i + 1}.</span>
-                {rule}
-              </li>
+        {/* ── Discussion / Activity tabs (full width) ── */}
+        <div className="mt-6 bg-white/[0.02] rounded-xl border border-white/5 overflow-hidden">
+          {/* Tab switcher */}
+          <div className="flex border-b border-white/5">
+            {(["discussion", "activity"] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 px-4 py-3 text-sm font-semibold transition-colors
+                  ${activeTab === tab
+                    ? "text-white border-b-2 border-brand -mb-px"
+                    : "text-white/30 hover:text-white/60"}`}
+              >
+                {tab === "discussion" ? "Discussion" : `Activity${recentTrades.length > 0 ? ` (${recentTrades.length})` : ""}`}
+              </button>
             ))}
-          </ul>
-        </div>
+          </div>
 
-        {/* ── Comments (full width) ── */}
-        <CommentsSection roundId={round.id} />
+          <div className="p-4">
+            {activeTab === "discussion" ? (
+              <CommentsSection roundId={round.id} />
+            ) : (
+              <ActivityTab recentTrades={recentTrades} />
+            )}
+          </div>
+        </div>
 
         {/* Back to Markets */}
         <div className="mt-6 pb-2">
