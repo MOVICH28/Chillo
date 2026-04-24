@@ -217,10 +217,10 @@ export default function LMSRBetPanel({
                   <span className={`text-[10px] font-mono font-bold ${c.text}`}>{pct}%</span>
                 </div>
                 <span className="text-[10px] font-mono text-white/40 shrink-0 w-16 text-right">
-                  {price.toFixed(3)} DORA
+                  {price.toFixed(2)} DORA
                 </span>
                 {pos && pos.shares > 0
-                  ? <span className={`text-[10px] font-mono shrink-0 ${c.text}`}>{(pos.shares * pos.avgCost).toFixed(1)} D</span>
+                  ? <span className={`text-[10px] font-mono shrink-0 ${c.text}`}>{(pos.shares * pos.avgCost).toFixed(2)} D</span>
                   : <span className="text-[10px] text-white/20 shrink-0 w-6">—</span>}
               </button>
 
@@ -325,7 +325,7 @@ export default function LMSRBetPanel({
                           </div>
                           <div className="flex justify-between text-xs">
                             <span className="text-white/40">Fee (1%)</span>
-                            <span className="font-mono text-white/50">{buyFee.toFixed(4)} DORA</span>
+                            <span className="font-mono text-white/50">{buyFee.toFixed(2)} DORA</span>
                           </div>
                         </div>
                       )}
@@ -369,11 +369,11 @@ export default function LMSRBetPanel({
                                 </div>
                                 <div className="flex justify-between text-xs pt-0.5 border-t border-white/5">
                                   <span className="text-white/40">You will receive</span>
-                                  <span className="font-mono text-[#22c55e] font-semibold">~{sellProceeds.toFixed(4)} DORA</span>
+                                  <span className="font-mono text-[#22c55e] font-semibold">~{sellProceeds.toFixed(2)} DORA</span>
                                 </div>
                                 <div className="flex justify-between text-xs">
                                   <span className="text-white/40">Fee (1%)</span>
-                                  <span className="font-mono text-white/50">{sellFee.toFixed(4)} DORA</span>
+                                  <span className="font-mono text-white/50">{sellFee.toFixed(2)} DORA</span>
                                 </div>
                               </div>
                             );

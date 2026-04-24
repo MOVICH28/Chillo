@@ -97,7 +97,7 @@ export default function RightPanel({ rounds }: RightPanelProps) {
                   <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${sideClass}`}>
                     {bet.side.toUpperCase()}
                   </span>
-                  <span className="text-xs font-mono text-white">{Number(bet.amount).toFixed(1)} D</span>
+                  <span className="text-xs font-mono text-white">{parseFloat(String(bet.amount)).toFixed(2)} D</span>
                 </div>
                 <p className="text-[10px] text-muted truncate">{bet.round?.question ?? bet.roundId}</p>
               </div>

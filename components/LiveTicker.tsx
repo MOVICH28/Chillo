@@ -86,7 +86,7 @@ export default function LiveTicker({ liveData }: LiveTickerProps) {
                   {isBuy ? "BUY" : "SELL"}
                 </span>
                 <span className="text-white/60 font-mono">{t.outcome}</span>
-                <span className="text-white font-mono">{Math.abs(t.amount).toFixed(1)} D</span>
+                <span className="text-white font-mono">{Math.abs(t.amount).toFixed(2)} D</span>
                 {!isBuy && t.profitLoss !== null && (
                   <span className={`font-mono text-[10px] ${t.profitLoss >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
                     {t.profitLoss >= 0 ? "+" : ""}{t.profitLoss.toFixed(1)}

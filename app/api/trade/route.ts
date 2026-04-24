@@ -134,13 +134,17 @@ export async function POST(req: NextRequest) {
     [outcome]: (currentShares[outcome] ?? 0) + sharesDelta,
   };
 
+  // Round to 2 decimal places before storing
+  totalCost = Math.round(totalCost * 100) / 100;
+  fee       = Math.round(fee * 100) / 100;
+
   await prisma.$transaction(async tx => {
     await tx.round.update({ where: { id: roundId }, data: { shares: newSharesMap } });
 
     if (type === "buy") {
       await tx.user.update({ where: { id: payload.userId }, data: { doraBalance: { decrement: totalCost } } });
     } else {
-      const proceeds = -totalCost; // positive
+      const proceeds = Math.round((-totalCost) * 100) / 100; // positive, rounded
       await tx.user.update({ where: { id: payload.userId }, data: { doraBalance: { increment: proceeds } } });
     }
 
@@ -171,7 +175,7 @@ export async function POST(req: NextRequest) {
     }
 
     const profitLoss = type === "sell" && existing
-      ? (-totalCost) - (existing.avgCost * sharesToTrade)
+      ? Math.round(((-totalCost) - (existing.avgCost * sharesToTrade)) * 100) / 100
       : null;
 
     await tx.trade.create({
