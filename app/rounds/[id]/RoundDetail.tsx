@@ -403,7 +403,6 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
   const bettingCountdown = useCountdown(round.bettingClosesAt ?? round.endsAt);
 
   const outcomes      = round.outcomes ?? [];
-  const totalPool     = round.realPool ?? 0;
   const bettingClosed = round.bettingClosesAt
     ? new Date() > new Date(round.bettingClosesAt)
     : round.status !== "open";
