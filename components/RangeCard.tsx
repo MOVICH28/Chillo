@@ -8,7 +8,7 @@ import Sparkline from "@/components/Sparkline";
 
 interface RangeCardProps {
   round: Round;
-  onBet: (round: Round, outcomeId: string, outcome: Outcome) => void;
+  onBet?: (round: Round, outcomeId: string, outcome: Outcome) => void;
   liveData?: LiveData;
 }
 
