@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/lib/useAuth";
 import { costToBuy, getPrice, PLATFORM_FEE } from "@/lib/lmsr";
 import { Outcome } from "@/lib/types";
@@ -14,8 +14,8 @@ const OUTCOME_COLORS: Record<string, { bg: string; border: string; text: string;
   F: { bg: "bg-purple-500/10", border: "border-purple-500/40", text: "text-purple-400", dot: "bg-purple-400", bar: "bg-purple-400" },
 };
 
-const BUY_PRESETS  = ["10", "25", "50", "100"];
-const SELL_PRESETS = [25, 50, 75, 100]; // % of position
+const DEFAULT_PRESETS = [10, 25, 50, 100];
+const SELL_PRESETS    = [25, 50, 75, 100];
 
 interface Position { outcome: string; shares: number; avgCost: number; }
 
@@ -44,10 +44,40 @@ export default function LMSRBetPanel({
 
   const [selected,  setSelected]  = useState<string | null>(null);
   const [tradeType, setTradeType] = useState<"buy" | "sell">("buy");
-  const [doraInput, setDoraInput] = useState("25");   // buy: DORA amount
-  const [sellPct,   setSellPct]   = useState(100);    // sell: % of position
+  const [doraInput, setDoraInput] = useState("25");
+  const [sellPct,   setSellPct]   = useState(100);
   const [txStatus,  setTxStatus]  = useState<"idle" | "placing" | "success" | "error">("idle");
   const [error,     setError]     = useState("");
+
+  // Editable presets — persisted in localStorage
+  const [presets, setPresets] = useState<number[]>(() => {
+    try {
+      const saved = localStorage.getItem("pumpdora_presets");
+      const parsed = saved ? JSON.parse(saved) : null;
+      if (Array.isArray(parsed) && parsed.length === 4 && parsed.every(n => typeof n === "number"))
+        return parsed;
+    } catch { /* ignore */ }
+    return DEFAULT_PRESETS;
+  });
+  const [editingPreset,  setEditingPreset]  = useState<number | null>(null);
+  const [presetDraft,    setPresetDraft]    = useState("");
+  const presetInputRef = useRef<HTMLInputElement>(null);
+
+  // Focus preset input when it appears
+  useEffect(() => {
+    if (editingPreset !== null) presetInputRef.current?.focus();
+  }, [editingPreset]);
+
+  function savePreset(index: number, raw: string) {
+    const value = parseFloat(raw);
+    if (!isNaN(value) && value >= 1) {
+      const next = [...presets];
+      next[index] = Math.round(value);
+      setPresets(next);
+      localStorage.setItem("pumpdora_presets", JSON.stringify(next));
+    }
+    setEditingPreset(null);
+  }
 
   // Poll prices + positions every 3 s
   const fetchMarket = useCallback(async () => {
@@ -209,25 +239,76 @@ export default function LMSRBetPanel({
 
                   {tradeType === "buy" ? (
                     <>
-                      {/* DORA amount presets */}
+                      {/* Editable presets + MAX */}
                       <div className="flex gap-1.5 mb-2">
-                        {BUY_PRESETS.map(v => (
-                          <button key={v} onClick={() => setDoraInput(v)} disabled={busy}
-                            className={`flex-1 py-1 rounded text-xs font-mono transition-colors disabled:opacity-40
-                              ${doraInput === v ? `${c.bg} ${c.text} border ${c.border}` : "bg-white/5 text-white/40 hover:text-white/70 border border-transparent"}`}>
-                            {v}
-                          </button>
+                        {presets.map((preset, idx) => (
+                          editingPreset === idx ? (
+                            <input
+                              key={idx}
+                              ref={presetInputRef}
+                              type="number"
+                              min="1"
+                              value={presetDraft}
+                              onChange={e => setPresetDraft(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === "Enter") savePreset(idx, presetDraft);
+                                if (e.key === "Escape") setEditingPreset(null);
+                              }}
+                              onBlur={() => savePreset(idx, presetDraft)}
+                              className="flex-1 min-w-0 py-1 rounded text-xs font-mono text-center bg-black/40 text-white border border-white/30 outline-none"
+                            />
+                          ) : (
+                            <button
+                              key={idx}
+                              onClick={() => setDoraInput(String(preset))}
+                              onDoubleClick={() => { setEditingPreset(idx); setPresetDraft(String(preset)); }}
+                              disabled={busy}
+                              title="Double-click to edit"
+                              className={`flex-1 py-1 rounded text-xs font-mono transition-colors disabled:opacity-40
+                                ${doraInput === String(preset)
+                                  ? `${c.bg} ${c.text} border ${c.border}`
+                                  : "bg-white/5 text-white/40 hover:text-white/70 border border-transparent"}`}
+                            >
+                              {preset}
+                            </button>
+                          )
                         ))}
+                        {/* MAX button */}
+                        <button
+                          onClick={() => user && setDoraInput(Math.floor(user.doraBalance).toString())}
+                          disabled={busy || !user}
+                          className="px-2 py-1 rounded text-xs font-mono font-bold border border-[#22c55e]/40 text-[#22c55e] hover:bg-[#22c55e]/10 transition-colors disabled:opacity-30"
+                        >
+                          MAX
+                        </button>
                       </div>
 
-                      {/* DORA input */}
-                      <div className="flex items-center bg-black/30 rounded-lg px-3 py-2 mb-3 border border-white/10 focus-within:border-white/20">
-                        <input type="number" min="0.01" step="0.01" value={doraInput}
-                          onChange={e => setDoraInput(e.target.value)} disabled={busy}
-                          className="flex-1 bg-transparent text-white font-mono text-sm outline-none disabled:opacity-50"
-                          placeholder="0.00" />
-                        <span className="text-white/40 text-xs ml-2">DORA</span>
-                      </div>
+                      {/* DORA input with balance validation */}
+                      {(() => {
+                        const overBalance = user && doraNum > user.doraBalance;
+                        return (
+                          <>
+                            <div className={`flex items-center bg-black/30 rounded-lg px-3 py-2 mb-1 border transition-colors focus-within:border-white/20
+                              ${overBalance ? "border-red-500/60" : "border-white/10"}`}>
+                              <input
+                                type="number" min="0.01" step="0.01" value={doraInput}
+                                onChange={e => setDoraInput(e.target.value)} disabled={busy}
+                                className="flex-1 bg-transparent text-white font-mono text-sm outline-none disabled:opacity-50"
+                                placeholder="0.00"
+                              />
+                              <span className="text-white/40 text-xs ml-2">DORA</span>
+                            </div>
+                            {overBalance && (
+                              <p className="text-red-400 text-[10px] mb-1 px-0.5">Insufficient balance</p>
+                            )}
+                            {user && (
+                              <p className="text-white/20 text-[10px] mb-2 px-0.5">
+                                Balance: {Math.floor(user.doraBalance).toLocaleString()} DORA
+                              </p>
+                            )}
+                          </>
+                        );
+                      })()}
 
                       {/* Buy preview */}
                       {doraNum > 0 && approxShares > 0 && (
@@ -310,7 +391,10 @@ export default function LMSRBetPanel({
                   ) : (
                     <button
                       onClick={handleTrade}
-                      disabled={busy || (tradeType === "buy" ? doraNum <= 0 : sharesToSell <= 0)}
+                      disabled={
+                        busy ||
+                        (tradeType === "buy" ? (doraNum <= 0 || doraNum > (user?.doraBalance ?? 0)) : sharesToSell <= 0)
+                      }
                       className={`w-full py-2.5 rounded-lg font-bold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed
                         ${tradeType === "buy" ? "bg-[#22c55e] text-black hover:bg-[#16a34a]" : "bg-red-500 text-white hover:bg-red-600"}`}>
                       {busy ? "Processing…" : tradeType === "buy"
