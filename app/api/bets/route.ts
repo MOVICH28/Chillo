@@ -196,41 +196,29 @@ function validateRoundAndSide(round: RoundRow, side: string): string | null {
 // ── GET ───────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const wallet  = req.nextUrl.searchParams.get("wallet");
   const roundId = req.nextUrl.searchParams.get("roundId");
 
-  if (wallet && !wallet.startsWith("dora:") && !isValidSolanaAddress(wallet)) {
-    return NextResponse.json({ error: "Invalid wallet address" }, { status: 400 });
-  }
-
   try {
-    const where: Record<string, unknown> = {};
-    if (wallet)  where.walletAddress = wallet;
-    if (roundId) where.roundId = roundId;
-
-    const bets = await prisma.bet.findMany({
-      where: Object.keys(where).length ? where : undefined,
+    const trades = await prisma.trade.findMany({
+      where: roundId ? { roundId } : undefined,
       orderBy: { createdAt: "desc" },
-      take: wallet ? undefined : 50,
+      take: 30,
+      include: {
+        user:  { select: { username: true } },
+        round: { select: { question: true, status: true, winningOutcome: true } },
+      },
     });
-    const roundIds = Array.from(new Set(bets.map(b => b.roundId)));
-    const rounds   = await prisma.round.findMany({ where: { id: { in: roundIds } } });
-    const roundMap = new Map(rounds.map(r => [r.id, r]));
 
     return NextResponse.json(
-      bets.map(b => {
-        const round = roundMap.get(b.roundId);
-        return {
-          ...b,
-          createdAt: b.createdAt.toISOString(),
-          round: round ? {
-            question:       round.question,
-            status:         round.status,
-            winningOutcome: round.winningOutcome,
-            outcomes:       round.outcomes ?? null,
-          } : null,
-        };
-      }),
+      trades.map(t => ({
+        id:            t.id,
+        walletAddress: t.user?.username ?? "anon",
+        side:          t.outcome,
+        amount:        t.totalCost,
+        roundId:       t.roundId,
+        createdAt:     t.createdAt.toISOString(),
+        round:         { question: t.round.question, status: t.round.status },
+      })),
     );
   } catch {
     return NextResponse.json({ error: "Failed to fetch bets" }, { status: 500 });

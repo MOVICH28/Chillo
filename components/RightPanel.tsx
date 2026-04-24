@@ -45,11 +45,11 @@ export default function RightPanel({ rounds }: RightPanelProps) {
         .catch(() => {});
     }
     fetchBets();
-    const id = setInterval(fetchBets, 30000);
-    window.addEventListener("betPlaced", fetchBets);
+    const id = setInterval(fetchBets, 5_000);
+    window.addEventListener("trade-placed", fetchBets);
     return () => {
       clearInterval(id);
-      window.removeEventListener("betPlaced", fetchBets);
+      window.removeEventListener("trade-placed", fetchBets);
     };
   }, []);
 
@@ -77,29 +77,32 @@ export default function RightPanel({ rounds }: RightPanelProps) {
           <p className="text-xs text-muted text-center py-4">No bets yet. Be first!</p>
         ) : (
           <div className="space-y-2.5">
-            {liveBets.map((bet) => (
+            {liveBets.map((bet) => {
+              const isYes = bet.side === "yes";
+              const isNo  = bet.side === "no";
+              const sideClass = isYes
+                ? "bg-yes/10 text-yes"
+                : isNo
+                ? "bg-no/10 text-no"
+                : "bg-brand/10 text-brand";
+              return (
               <div key={bet.id} className="flex flex-col gap-0.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono text-muted">
-                    {bet.walletAddress.slice(0, 4)}...{bet.walletAddress.slice(-4)}
+                  <span className="text-[10px] font-mono text-white/60 truncate max-w-[100px]">
+                    {bet.walletAddress}
                   </span>
                   <span className="text-[10px] text-muted">{timeAgo(bet.createdAt)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span
-                    className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-                      bet.side === "yes"
-                        ? "bg-yes/10 text-yes"
-                        : "bg-no/10 text-no"
-                    }`}
-                  >
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${sideClass}`}>
                     {bet.side.toUpperCase()}
                   </span>
-                  <span className="text-xs font-mono text-white">{bet.amount} DORA</span>
+                  <span className="text-xs font-mono text-white">{Number(bet.amount).toFixed(1)} D</span>
                 </div>
                 <p className="text-[10px] text-muted truncate">{bet.round?.question ?? bet.roundId}</p>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
