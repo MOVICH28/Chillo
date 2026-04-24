@@ -62,7 +62,7 @@ export default function LiveTicker({ liveData }: LiveTickerProps) {
         LIVE
       </div>
       <div className="overflow-hidden flex-1">
-        <div className="flex gap-8 animate-ticker whitespace-nowrap">
+        <div key={trades.length > 0 ? "loaded" : "empty"} className="flex gap-8 animate-ticker whitespace-nowrap">
           {scrollItems.map((item, i) => {
             if (item.kind === "price") {
               return (
@@ -86,7 +86,7 @@ export default function LiveTicker({ liveData }: LiveTickerProps) {
                   {isBuy ? "BUY" : "SELL"}
                 </span>
                 <span className="text-white/60 font-mono">{t.outcome}</span>
-                <span className="text-white font-mono">{t.amount.toFixed(1)} D</span>
+                <span className="text-white font-mono">{Math.abs(t.amount).toFixed(1)} D</span>
                 {!isBuy && t.profitLoss !== null && (
                   <span className={`font-mono text-[10px] ${t.profitLoss >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
                     {t.profitLoss >= 0 ? "+" : ""}{t.profitLoss.toFixed(1)}
