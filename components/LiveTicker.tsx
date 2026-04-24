@@ -28,7 +28,7 @@ export default function LiveTicker({ liveData }: LiveTickerProps) {
       } catch { /* ignore */ }
     }
     fetchTrades();
-    const id = setInterval(fetchTrades, 5_000);
+    const id = setInterval(fetchTrades, 3_000);
     window.addEventListener("trade-placed", fetchTrades);
     return () => {
       clearInterval(id);
@@ -50,7 +50,7 @@ export default function LiveTicker({ liveData }: LiveTickerProps) {
       : { kind: "price", label: "SOL", value: "—", change: null },
     { kind: "price", label: "pump.fun 24h Vol", value: pumpfun ? `$${pumpfun.volume24h}M` : "—", change: null },
     { kind: "price", label: "Tokens Today",     value: pumpfun ? pumpfun.newTokensToday.toLocaleString() : "—", change: null },
-    ...trades.map(t => ({ kind: "trade" as const, trade: t })),
+    ...trades.slice(0, 10).map(t => ({ kind: "trade" as const, trade: t })),
   ];
 
   const scrollItems = [...items, ...items];
