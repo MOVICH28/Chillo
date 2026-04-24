@@ -7,17 +7,19 @@ export async function GET() {
   const trades = await prisma.trade.findMany({
     orderBy: { createdAt: "desc" },
     take: 30,
-    include: { user: { select: { username: true } } },
+    include: { user: { select: { username: true, avatarUrl: true } } },
   });
 
   return NextResponse.json(
     trades.map(t => ({
       id:         t.id,
       username:   t.user?.username ?? null,
-      outcome:    t.outcome,
+      avatarUrl:  t.user?.avatarUrl ?? null,
       type:       t.type,
-      totalCost:  t.totalCost,
+      outcome:    t.outcome,
+      amount:     t.type === "buy" ? t.totalCost : -t.totalCost,
       profitLoss: t.profitLoss ?? null,
+      roundId:    t.roundId,
       createdAt:  t.createdAt.toISOString(),
     }))
   );

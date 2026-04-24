@@ -8,7 +8,7 @@ interface RecentTrade {
   username: string | null;
   outcome: string;
   type: string;
-  totalCost: number;
+  amount: number;
   profitLoss: number | null;
 }
 
@@ -76,8 +76,7 @@ export default function LiveTicker({ liveData }: LiveTickerProps) {
 
           {/* Recent trades */}
           {scrollTrades.map((t, i) => {
-            const isBuy  = t.type === "buy";
-            const amount = isBuy ? t.totalCost : -t.totalCost;
+            const isBuy = t.type === "buy";
             return (
               <div key={`t-${i}`} className="flex items-center gap-1.5 text-xs">
                 <span className="text-white/40 font-mono">{t.username ?? "anon"}</span>
@@ -85,7 +84,7 @@ export default function LiveTicker({ liveData }: LiveTickerProps) {
                   {isBuy ? "BUY" : "SELL"}
                 </span>
                 <span className="text-white/60 font-mono">{t.outcome}</span>
-                <span className="text-white font-mono">{amount.toFixed(1)} D</span>
+                <span className="text-white font-mono">{t.amount.toFixed(1)} D</span>
                 {!isBuy && t.profitLoss !== null && (
                   <span className={`font-mono text-[10px] ${t.profitLoss >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
                     {t.profitLoss >= 0 ? "+" : ""}{t.profitLoss.toFixed(1)}

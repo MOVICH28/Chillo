@@ -225,85 +225,81 @@ function PoolBar({ outcomes, totalPool }: { outcomes: Outcome[]; totalPool: numb
   );
 }
 
-// ── Recent Trades panel ───────────────────────────────────────────────────────
+// ── Recent Trades panel (collapsible) ────────────────────────────────────────
 
 function RecentBetsPanel({ round, recentTrades }: { round: RoundData; recentTrades: RecentTrade[] }) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <div>
-      <h2 className="text-sm font-semibold text-white mb-3">
-        Recent Trades
-        {recentTrades.length > 0 && (
-          <span className="text-white/20 font-normal text-xs ml-2">{recentTrades.length} shown</span>
-        )}
-      </h2>
+    <div className="mt-3 bg-white/[0.02] rounded-xl border border-white/5 overflow-hidden">
+      {/* Collapsible header */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/[0.02] transition-colors"
+      >
+        <span className="text-sm font-semibold text-white">
+          Recent Trades
+          {recentTrades.length > 0 && (
+            <span className="text-white/20 font-normal text-xs ml-2">{recentTrades.length}</span>
+          )}
+        </span>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className={`w-4 h-4 text-white/30 transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
 
-      {round.status === "resolved" && round.winningOutcome && (() => {
-        const wc = OUTCOME_COLORS[round.winningOutcome];
-        const wLabel = round.outcomes?.find(o => o.id === round.winningOutcome)?.label;
-        return (
-          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border mb-3 text-xs ${wc.bg} ${wc.text} ${wc.border}`}>
-            <span className={`w-2 h-2 rounded-full shrink-0 ${wc.dot}`} />
-            <span className="font-semibold">Winning outcome:</span>
-            <span className="font-bold">{round.winningOutcome}</span>
-            {wLabel && <span className="opacity-80">· {wLabel}</span>}
-          </div>
-        );
-      })()}
+      {open && (
+        <div className="border-t border-white/5 px-4 pb-3">
+          {recentTrades.length === 0 ? (
+            <p className="text-white/20 text-xs text-center py-4">No trades yet — be the first!</p>
+          ) : (
+            <div className="divide-y divide-white/5 max-h-[300px] overflow-y-auto">
+              {recentTrades.map(trade => {
+                const c = OUTCOME_COLORS[trade.outcome] ?? { text: "text-white/30", bg: "bg-white/5", border: "border-white/10", dot: "bg-white/20", hex: "#fff" };
+                const isBuy   = trade.type === "buy";
+                const doraAmt = isBuy ? trade.totalCost : -trade.totalCost;
 
-      {recentTrades.length === 0 ? (
-        <p className="text-white/20 text-xs text-center py-6">No trades yet — be the first!</p>
-      ) : (
-        <div className="divide-y divide-white/5 max-h-80 overflow-y-auto">
-          {recentTrades.map(trade => {
-            const c = OUTCOME_COLORS[trade.outcome] ?? { text: "text-white/30", bg: "bg-white/5", border: "border-white/10", dot: "bg-white/20", hex: "#fff" };
-            const outcomeLabel = round.outcomes?.find(o => o.id === trade.outcome)?.label ?? trade.outcome;
-            const isBuy = trade.type === "buy";
-            const doraAmt = isBuy ? trade.totalCost : -trade.totalCost;
+                return (
+                  <div key={trade.id} className="flex items-center gap-2 py-1.5 text-xs">
+                    {/* Avatar + username */}
+                    {trade.username ? (
+                      <Link href={`/profile/${trade.username}`} className="flex items-center gap-1.5 shrink-0 group min-w-0">
+                        <Avatar username={trade.username} avatarUrl={trade.avatarUrl} size={18} />
+                        <span className="text-white/50 font-mono truncate max-w-[64px] group-hover:text-[#22c55e] transition-colors">
+                          {trade.username}
+                        </span>
+                      </Link>
+                    ) : (
+                      <span className="text-white/20 font-mono shrink-0">anon</span>
+                    )}
 
-            return (
-              <div key={trade.id} className="flex items-center gap-2 py-2 text-xs flex-wrap">
-                {/* User */}
-                {trade.username ? (
-                  <Link href={`/profile/${trade.username}`} className="flex items-center gap-1.5 shrink-0 group">
-                    <Avatar username={trade.username} avatarUrl={trade.avatarUrl} size={20} />
-                    <span className="text-white/50 font-mono group-hover:text-[#22c55e] group-hover:underline transition-colors">
-                      @{trade.username}
+                    {/* BUY / SELL */}
+                    <span className={`px-1 py-px rounded text-[10px] font-bold shrink-0
+                      ${isBuy ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-red-500/15 text-red-400"}`}>
+                      {isBuy ? "BUY" : "SELL"}
                     </span>
-                  </Link>
-                ) : (
-                  <span className="text-white/30 font-mono shrink-0">anon</span>
-                )}
 
-                {/* BUY / SELL badge */}
-                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0
-                  ${isBuy ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-red-500/15 text-red-400"}`}>
-                  {isBuy ? "BUY" : "SELL"}
-                </span>
-
-                {/* Outcome badge */}
-                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${c.bg} ${c.text} border ${c.border} shrink-0 max-w-[100px] truncate`}>
-                  <span className="font-bold">{trade.outcome}</span>
-                  <span className="opacity-70 truncate">· {outcomeLabel}</span>
-                </span>
-
-                <span className="flex-1" />
-
-                {/* Amount / P&L */}
-                <div className="flex flex-col items-end shrink-0">
-                  <span className="text-white font-mono">
-                    {isBuy ? `spent ${doraAmt.toFixed(2)}` : `recv ${doraAmt.toFixed(2)}`} DORA
-                  </span>
-                  {!isBuy && trade.profitLoss !== null && (
-                    <span className={`text-[10px] font-mono font-semibold ${trade.profitLoss >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
-                      {trade.profitLoss >= 0 ? "+" : ""}{trade.profitLoss.toFixed(2)} DORA
+                    {/* Outcome */}
+                    <span className={`px-1.5 py-px rounded text-[10px] font-bold border shrink-0 ${c.bg} ${c.text} ${c.border}`}>
+                      {trade.outcome}
                     </span>
-                  )}
-                </div>
 
-                <span className="text-white/20 w-14 text-right shrink-0">{timeAgo(trade.createdAt)}</span>
-              </div>
-            );
-          })}
+                    <span className="flex-1" />
+
+                    {/* Amount */}
+                    <span className="font-mono text-white/80 shrink-0">{doraAmt.toFixed(1)} D</span>
+
+                    {/* Time */}
+                    <span className="text-white/20 shrink-0 w-10 text-right">{timeAgo(trade.createdAt)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -545,6 +541,9 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                 <span className="text-white/20 text-sm">No chart available</span>
               </div>
             )}
+
+            {/* Recent Trades — collapsible */}
+            <RecentBetsPanel round={round} recentTrades={recentTrades} />
           </div>
 
           {/* ── RIGHT column (40%) ── */}
@@ -562,11 +561,6 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                 onTradeSuccess={refreshRound}
               />
             )}
-
-            {/* Recent Bets */}
-            <div className="bg-white/[0.02] rounded-xl border border-white/5 p-4">
-              <RecentBetsPanel round={round} recentTrades={recentTrades} />
-            </div>
           </div>
         </div>
 
