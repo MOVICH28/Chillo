@@ -1,6 +1,16 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { LiveData } from "@/lib/useLiveData";
+
+interface RecentTrade {
+  id: string;
+  username: string | null;
+  outcome: string;
+  type: string;
+  totalCost: number;
+  profitLoss: number | null;
+}
 
 interface LiveTickerProps {
   liveData: LiveData;
@@ -8,41 +18,34 @@ interface LiveTickerProps {
 
 export default function LiveTicker({ liveData }: LiveTickerProps) {
   const { btc, sol, pumpfun } = liveData;
+  const [trades, setTrades] = useState<RecentTrade[]>([]);
 
-  const items = [
+  useEffect(() => {
+    async function fetchTrades() {
+      try {
+        const res = await fetch("/api/trades/recent", { cache: "no-store" });
+        if (res.ok) setTrades(await res.json());
+      } catch { /* ignore */ }
+    }
+    fetchTrades();
+    const id = setInterval(fetchTrades, 10_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const priceItems = [
     btc
-      ? {
-          label: "BTC",
-          value: `$${btc.price.toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
-          change: btc.change24h,
-        }
+      ? { label: "BTC", value: `$${btc.price.toLocaleString("en-US", { maximumFractionDigits: 0 })}`, change: btc.change24h }
       : { label: "BTC", value: "—", change: null },
     sol
-      ? {
-          label: "SOL",
-          value: `$${sol.price.toFixed(2)}`,
-          change: sol.change24h,
-        }
+      ? { label: "SOL", value: `$${sol.price.toFixed(2)}`, change: sol.change24h }
       : { label: "SOL", value: "—", change: null },
-    {
-      label: "pump.fun 24h Vol",
-      value: pumpfun ? `$${pumpfun.volume24h}M` : "—",
-      change: null,
-    },
-    {
-      label: "Tokens Today",
-      value: pumpfun ? pumpfun.newTokensToday.toLocaleString() : "—",
-      change: null,
-    },
-    {
-      label: "All-Time Tokens",
-      value: pumpfun ? pumpfun.totalTokens.toLocaleString() : "—",
-      change: null,
-    },
+    { label: "pump.fun 24h Vol", value: pumpfun ? `$${pumpfun.volume24h}M` : "—", change: null },
+    { label: "Tokens Today",     value: pumpfun ? pumpfun.newTokensToday.toLocaleString() : "—", change: null },
   ];
 
   // Duplicate for seamless loop
-  const scrollItems = [...items, ...items];
+  const scrollPriceItems = [...priceItems, ...priceItems];
+  const scrollTrades     = trades.length > 0 ? [...trades, ...trades] : [];
 
   return (
     <div className="h-9 bg-surface border-b border-surface-3 overflow-hidden flex items-center">
@@ -52,8 +55,10 @@ export default function LiveTicker({ liveData }: LiveTickerProps) {
       </div>
       <div className="overflow-hidden flex-1">
         <div className="flex gap-8 animate-ticker whitespace-nowrap">
-          {scrollItems.map((item, i) => (
-            <div key={i} className="flex items-center gap-1.5 text-xs">
+
+          {/* Price data */}
+          {scrollPriceItems.map((item, i) => (
+            <div key={`p-${i}`} className="flex items-center gap-1.5 text-xs">
               <span className="text-muted">{item.label}</span>
               <span className="text-white font-mono font-medium">{item.value}</span>
               {item.change !== null && (
@@ -63,6 +68,33 @@ export default function LiveTicker({ liveData }: LiveTickerProps) {
               )}
             </div>
           ))}
+
+          {/* Separator */}
+          {scrollTrades.length > 0 && (
+            <span className="text-white/10 text-xs self-center">·</span>
+          )}
+
+          {/* Recent trades */}
+          {scrollTrades.map((t, i) => {
+            const isBuy  = t.type === "buy";
+            const amount = isBuy ? t.totalCost : -t.totalCost;
+            return (
+              <div key={`t-${i}`} className="flex items-center gap-1.5 text-xs">
+                <span className="text-white/40 font-mono">{t.username ?? "anon"}</span>
+                <span className={`px-1 py-px rounded text-[10px] font-bold ${isBuy ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-red-500/15 text-red-400"}`}>
+                  {isBuy ? "BUY" : "SELL"}
+                </span>
+                <span className="text-white/60 font-mono">{t.outcome}</span>
+                <span className="text-white font-mono">{amount.toFixed(1)} D</span>
+                {!isBuy && t.profitLoss !== null && (
+                  <span className={`font-mono text-[10px] ${t.profitLoss >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
+                    {t.profitLoss >= 0 ? "+" : ""}{t.profitLoss.toFixed(1)}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+
         </div>
       </div>
     </div>

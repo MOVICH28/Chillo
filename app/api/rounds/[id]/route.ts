@@ -9,10 +9,10 @@ const BASE_POOL_SEED = 20;
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const [round, pool, bets] = await Promise.all([
+  const [round, pool, trades] = await Promise.all([
     prisma.round.findUnique({ where: { id } }),
     prisma.roundPool.findUnique({ where: { roundId: id } }),
-    prisma.bet.findMany({
+    prisma.trade.findMany({
       where: { roundId: id },
       orderBy: { createdAt: "desc" },
       take: 20,
@@ -42,15 +42,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     noPool:  np,
     totalPool: tp,
     realPool,
-    recentBets: bets.map(b => ({
-      id:            b.id,
-      walletAddress: b.walletAddress,
-      username:      b.user?.username ?? null,
-      avatarUrl:     b.user?.avatarUrl ?? null,
-      side:          b.side,
-      amount:        b.amount,
-      odds:          b.odds,
-      createdAt:     b.createdAt.toISOString(),
+    recentTrades: trades.map(t => ({
+      id:          t.id,
+      username:    t.user?.username ?? null,
+      avatarUrl:   t.user?.avatarUrl ?? null,
+      outcome:     t.outcome,
+      type:        t.type,
+      totalCost:   t.totalCost,
+      profitLoss:  t.profitLoss ?? null,
+      createdAt:   t.createdAt.toISOString(),
     })),
   });
 }

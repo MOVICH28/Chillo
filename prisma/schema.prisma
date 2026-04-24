@@ -62,18 +62,19 @@ model Position {
 }
 
 model Trade {
-  id        String   @id @default(cuid())
-  userId    String
-  roundId   String
-  outcome   String
-  type      String   // "buy" | "sell"
-  shares    Float
-  price     Float    // cost per share at time of trade
-  totalCost Float    // total DORA spent (positive=buy) or received negative=sell)
-  fee       Float    // 1% platform fee
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id])
-  round     Round    @relation(fields: [roundId], references: [id])
+  id          String   @id @default(cuid())
+  userId      String
+  roundId     String
+  outcome     String
+  type        String   // "buy" | "sell"
+  shares      Float
+  price       Float    // cost per share at time of trade
+  totalCost   Float    // total DORA spent (positive=buy) or received negative=sell)
+  fee         Float    // 1% platform fee
+  profitLoss  Float?   // sell only: proceeds - cost basis
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
+  round       Round    @relation(fields: [roundId], references: [id])
 }
 
 model Follow {

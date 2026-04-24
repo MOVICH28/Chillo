@@ -38,14 +38,14 @@ interface RoundData {
   roundNumber: number | null;
 }
 
-interface RecentBet {
+interface RecentTrade {
   id: string;
-  walletAddress: string;
   username: string | null;
   avatarUrl: string | null;
-  side: string;
-  amount: number;
-  odds: number;
+  outcome: string;
+  type: "buy" | "sell";
+  totalCost: number;
+  profitLoss: number | null;
   createdAt: string;
 }
 
@@ -97,8 +97,6 @@ function timeAgo(dateStr: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
 }
-
-function shortAddr(a: string) { return `${a.slice(0, 4)}…${a.slice(-4)}`; }
 
 // ── Live chart ────────────────────────────────────────────────────────────────
 
@@ -227,15 +225,15 @@ function PoolBar({ outcomes, totalPool }: { outcomes: Outcome[]; totalPool: numb
   );
 }
 
-// ── Recent Bets panel ─────────────────────────────────────────────────────────
+// ── Recent Trades panel ───────────────────────────────────────────────────────
 
-function RecentBetsPanel({ round, recentBets }: { round: RoundData; recentBets: RecentBet[] }) {
+function RecentBetsPanel({ round, recentTrades }: { round: RoundData; recentTrades: RecentTrade[] }) {
   return (
     <div>
       <h2 className="text-sm font-semibold text-white mb-3">
-        Recent Bets
-        {recentBets.length > 0 && (
-          <span className="text-white/20 font-normal text-xs ml-2">{recentBets.length} shown</span>
+        Recent Trades
+        {recentTrades.length > 0 && (
+          <span className="text-white/20 font-normal text-xs ml-2">{recentTrades.length} shown</span>
         )}
       </h2>
 
@@ -252,41 +250,57 @@ function RecentBetsPanel({ round, recentBets }: { round: RoundData; recentBets: 
         );
       })()}
 
-      {recentBets.length === 0 ? (
-        <p className="text-white/20 text-xs text-center py-6">No bets placed yet — be the first!</p>
+      {recentTrades.length === 0 ? (
+        <p className="text-white/20 text-xs text-center py-6">No trades yet — be the first!</p>
       ) : (
         <div className="divide-y divide-white/5 max-h-80 overflow-y-auto">
-          {recentBets.map(bet => {
-            const c = OUTCOME_COLORS[bet.side] ?? { text: "text-white/30", bg: "bg-white/5", border: "border-white/10", dot: "bg-white/20", hex: "#fff" };
-            const outcomeLabel = round.outcomes?.find(o => o.id === bet.side)?.label ?? bet.side;
-
-            let resultNode: React.ReactNode;
-            if (round.status === "resolved") {
-              resultNode = bet.side === round.winningOutcome
-                ? <span className="text-[#22c55e] font-semibold text-[10px] shrink-0">✓ Won</span>
-                : <span className="text-red-400 font-semibold text-[10px] shrink-0">✗ Lost</span>;
-            } else {
-              resultNode = <span className="text-white/20 text-[10px] shrink-0">Pending</span>;
-            }
+          {recentTrades.map(trade => {
+            const c = OUTCOME_COLORS[trade.outcome] ?? { text: "text-white/30", bg: "bg-white/5", border: "border-white/10", dot: "bg-white/20", hex: "#fff" };
+            const outcomeLabel = round.outcomes?.find(o => o.id === trade.outcome)?.label ?? trade.outcome;
+            const isBuy = trade.type === "buy";
+            const doraAmt = isBuy ? trade.totalCost : -trade.totalCost;
 
             return (
-              <div key={bet.id} className="flex items-center gap-2 py-2 text-xs flex-wrap">
-                {bet.username ? (
-                  <Link href={`/profile/${bet.username}`} className="flex items-center gap-1.5 shrink-0 group">
-                    <Avatar username={bet.username} avatarUrl={bet.avatarUrl} size={20} />
-                    <span className="text-white/50 font-mono group-hover:text-[#22c55e] group-hover:underline transition-colors">@{bet.username}</span>
+              <div key={trade.id} className="flex items-center gap-2 py-2 text-xs flex-wrap">
+                {/* User */}
+                {trade.username ? (
+                  <Link href={`/profile/${trade.username}`} className="flex items-center gap-1.5 shrink-0 group">
+                    <Avatar username={trade.username} avatarUrl={trade.avatarUrl} size={20} />
+                    <span className="text-white/50 font-mono group-hover:text-[#22c55e] group-hover:underline transition-colors">
+                      @{trade.username}
+                    </span>
                   </Link>
                 ) : (
-                  <span className="text-white/30 font-mono shrink-0">{shortAddr(bet.walletAddress)}</span>
+                  <span className="text-white/30 font-mono shrink-0">anon</span>
                 )}
-                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${c.bg} ${c.text} border ${c.border} shrink-0 max-w-[120px] truncate`}>
-                  <span className="font-bold">{bet.side}</span>
+
+                {/* BUY / SELL badge */}
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0
+                  ${isBuy ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-red-500/15 text-red-400"}`}>
+                  {isBuy ? "BUY" : "SELL"}
+                </span>
+
+                {/* Outcome badge */}
+                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${c.bg} ${c.text} border ${c.border} shrink-0 max-w-[100px] truncate`}>
+                  <span className="font-bold">{trade.outcome}</span>
                   <span className="opacity-70 truncate">· {outcomeLabel}</span>
                 </span>
+
                 <span className="flex-1" />
-                <span className="text-white font-mono shrink-0">{bet.amount.toFixed(2)} DORA</span>
-                {resultNode}
-                <span className="text-white/20 w-14 text-right shrink-0">{timeAgo(bet.createdAt)}</span>
+
+                {/* Amount / P&L */}
+                <div className="flex flex-col items-end shrink-0">
+                  <span className="text-white font-mono">
+                    {isBuy ? `spent ${doraAmt.toFixed(2)}` : `recv ${doraAmt.toFixed(2)}`} DORA
+                  </span>
+                  {!isBuy && trade.profitLoss !== null && (
+                    <span className={`text-[10px] font-mono font-semibold ${trade.profitLoss >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
+                      {trade.profitLoss >= 0 ? "+" : ""}{trade.profitLoss.toFixed(2)} DORA
+                    </span>
+                  )}
+                </div>
+
+                <span className="text-white/20 w-14 text-right shrink-0">{timeAgo(trade.createdAt)}</span>
               </div>
             );
           })}
@@ -406,8 +420,8 @@ function CommentsSection({ roundId }: { roundId: string }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function RoundDetail({ initialRound }: { initialRound: RoundData }) {
-  const [round, setRound]           = useState<RoundData>(initialRound);
-  const [recentBets, setRecentBets] = useState<RecentBet[]>([]);
+  const [round, setRound]               = useState<RoundData>(initialRound);
+  const [recentTrades, setRecentTrades] = useState<RecentTrade[]>([]);
   const [copied, setCopied]         = useState(false);
 
   const resultCountdown  = useCountdown(round.endsAt);
@@ -428,7 +442,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
       if (!res.ok) return;
       const data = await res.json();
       setRound(data);
-      setRecentBets(data.recentBets ?? []);
+      setRecentTrades(data.recentTrades ?? []);
     } catch { /* ignore */ }
   }, [round.id]);
 
@@ -551,7 +565,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
 
             {/* Recent Bets */}
             <div className="bg-white/[0.02] rounded-xl border border-white/5 p-4">
-              <RecentBetsPanel round={round} recentBets={recentBets} />
+              <RecentBetsPanel round={round} recentTrades={recentTrades} />
             </div>
           </div>
         </div>

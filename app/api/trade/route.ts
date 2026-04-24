@@ -170,6 +170,10 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const profitLoss = type === "sell" && existing
+      ? (-totalCost) - (existing.avgCost * sharesToTrade)
+      : null;
+
     await tx.trade.create({
       data: {
         userId:    payload.userId,
@@ -180,6 +184,7 @@ export async function POST(req: NextRequest) {
         price:     pricePerShare,
         totalCost,
         fee,
+        profitLoss,
       },
     });
   });
