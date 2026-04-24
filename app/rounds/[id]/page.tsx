@@ -42,6 +42,8 @@ export default async function RoundDetailPage({ params }: PageProps) {
     winner:         round.winner,
     winningOutcome: round.winningOutcome,
     outcomes:       (round.outcomes as unknown as Outcome[] | null) ?? null,
+    shares:         (round.shares as Record<string, number> | null) ?? null,
+    lmsrB:          round.lmsrB,
     yesPool:  yp,
     noPool:   np,
     totalPool: tp,

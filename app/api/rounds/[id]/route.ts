@@ -36,6 +36,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     resolvedAt:      round.resolvedAt?.toISOString()      ?? null,
     bettingClosesAt: round.bettingClosesAt?.toISOString() ?? null,
     outcomes:        (round.outcomes as unknown as Outcome[] | null) ?? null,
+    shares:          (round.shares as Record<string, number> | null) ?? null,
+    lmsrB:           round.lmsrB,
     yesPool: yp,
     noPool:  np,
     totalPool: tp,

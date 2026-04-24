@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Avatar from "@/components/Avatar";
+import LMSRBetPanel from "@/components/LMSRBetPanel";
 import {
   LineChart, Line, XAxis, YAxis, ReferenceArea, ReferenceLine,
   ResponsiveContainer, Tooltip,
@@ -28,6 +29,8 @@ interface RoundData {
   winner: string | null;
   winningOutcome: string | null;
   outcomes: Outcome[] | null;
+  shares: Record<string, number> | null;
+  lmsrB: number;
   yesPool: number;
   noPool: number;
   totalPool: number;
@@ -63,11 +66,6 @@ const OUTCOME_COLORS: Record<string, { bg: string; border: string; text: string;
   D: { bg: "bg-green-500/10",  border: "border-green-500/40",  text: "text-green-400",  dot: "bg-green-400",  hex: "#4ade80" },
   E: { bg: "bg-sky-500/10",    border: "border-sky-500/40",    text: "text-sky-400",    dot: "bg-sky-400",    hex: "#38bdf8" },
   F: { bg: "bg-purple-500/10", border: "border-purple-500/40", text: "text-purple-400", dot: "bg-purple-400", hex: "#c084fc" },
-};
-
-type TxStatus = "idle" | "placing" | "success" | "error";
-const STATUS_MESSAGES: Record<TxStatus, string> = {
-  idle: "", placing: "Placing your bet…", success: "Bet placed!", error: "",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -225,104 +223,6 @@ function PoolBar({ outcomes, totalPool }: { outcomes: Outcome[]; totalPool: numb
           );
         })}
       </div>
-    </div>
-  );
-}
-
-// ── Inline bet panel ──────────────────────────────────────────────────────────
-
-function BetPanel({ round, outcome, onSuccess, onCancel }: {
-  round: RoundData; outcome: Outcome; onSuccess: () => void; onCancel: () => void;
-}) {
-  const { user, getToken, refreshUser } = useAuth();
-  const [amount, setAmount] = useState("100");
-  const [txStatus, setTxStatus] = useState<TxStatus>("idle");
-  const [error, setError] = useState("");
-
-  const PRESETS = ["50", "100", "250", "500"];
-  const numAmount = parseFloat(amount) || 0;
-  const multiplier = outcome.pool > 0 && round.totalPool > 0
-    ? Math.max(1.05, (round.totalPool * 0.95) / outcome.pool) : 2;
-  const payout = numAmount * multiplier;
-  const busy = txStatus === "placing";
-
-  async function handleBet() {
-    if (!user) { setError("Login to place a bet"); return; }
-    if (numAmount <= 0) { setError("Enter a valid amount"); return; }
-    if (numAmount > user.doraBalance) { setError("Insufficient DORA balance"); return; }
-    setError("");
-    setTxStatus("placing");
-    try {
-      const token = getToken();
-      const res = await fetch("/api/bets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ currency: "DORA", roundId: round.id, side: outcome.id, amount: numAmount }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to place bet");
-      setTxStatus("success");
-      await refreshUser();
-      window.dispatchEvent(new CustomEvent("betPlaced"));
-      setTimeout(onSuccess, 1500);
-    } catch (e: unknown) {
-      setTxStatus("error");
-      setError(e instanceof Error ? e.message : "Something went wrong");
-    }
-  }
-
-  const c = OUTCOME_COLORS[outcome.id];
-
-  return (
-    <div className={`mt-2 mb-3 rounded-xl border p-4 ${c.bg} ${c.border}`}>
-      <div className="flex items-center gap-2 mb-3">
-        <span className={`px-2 py-0.5 rounded text-xs font-bold ${c.bg} ${c.text} border ${c.border}`}>{outcome.id}</span>
-        <span className="text-xs text-white/70 truncate">{outcome.label}</span>
-        <span className={`ml-auto text-xs font-mono font-bold ${c.text}`}>{multiplier.toFixed(2)}x</span>
-      </div>
-      <div className="flex gap-1.5 mb-2">
-        {PRESETS.map(v => (
-          <button key={v} onClick={() => setAmount(v)} disabled={busy}
-            className={`flex-1 py-1 rounded text-xs font-mono transition-colors disabled:opacity-40
-              ${amount === v ? `${c.bg} ${c.text} border ${c.border}` : "bg-white/5 text-white/40 hover:text-white/70 border border-transparent"}`}>
-            {v}
-          </button>
-        ))}
-      </div>
-      <div className="flex items-center bg-black/30 rounded-lg px-3 py-2 mb-2 border border-white/10 focus-within:border-white/20">
-        <input type="number" min="0.01" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} disabled={busy}
-          className="flex-1 bg-transparent text-white font-mono text-sm outline-none disabled:opacity-50" placeholder="0.00" />
-        <span className="text-white/40 text-xs ml-2">DORA</span>
-      </div>
-      <div className="flex items-center justify-between text-xs mb-3 px-0.5">
-        <span className="text-white/40">If correct:</span>
-        <span className="text-[#22c55e] font-mono font-semibold">~{payout.toFixed(3)} DORA</span>
-      </div>
-      {txStatus !== "idle" && txStatus !== "error" && (
-        <div className={`flex items-center gap-2 text-xs mb-2 px-0.5 ${txStatus === "success" ? "text-[#22c55e]" : "text-white/50"}`}>
-          {txStatus !== "success" && (
-            <svg className="animate-spin w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-            </svg>
-          )}
-          {txStatus === "success" && <span>✓</span>}
-          {STATUS_MESSAGES[txStatus]}
-        </div>
-      )}
-      {error && <p className="text-red-400 text-xs mb-2 px-0.5">{error}</p>}
-      {!user ? (
-        <p className="text-center text-white/40 text-xs py-2">Login to place a bet</p>
-      ) : (
-        <button onClick={handleBet} disabled={busy || numAmount <= 0}
-          className="w-full py-2.5 rounded-lg bg-[#22c55e] text-black font-bold text-sm hover:bg-[#16a34a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-          {busy ? "Processing…" : `Place Bet · ${numAmount.toFixed(0)} DORA`}
-        </button>
-      )}
-      <button onClick={onCancel} disabled={busy}
-        className="w-full text-xs text-white/30 hover:text-white/60 transition-colors mt-2 py-1 disabled:opacity-0">
-        Cancel
-      </button>
     </div>
   );
 }
@@ -508,7 +408,6 @@ function CommentsSection({ roundId }: { roundId: string }) {
 export default function RoundDetail({ initialRound }: { initialRound: RoundData }) {
   const [round, setRound]           = useState<RoundData>(initialRound);
   const [recentBets, setRecentBets] = useState<RecentBet[]>([]);
-  const [selected, setSelected]     = useState<Outcome | null>(null);
   const [copied, setCopied]         = useState(false);
 
   const resultCountdown  = useCountdown(round.endsAt);
@@ -635,66 +534,24 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
           </div>
 
           {/* ── RIGHT column (40%) ── */}
-          <div className="lg:w-[40%] flex flex-col">
-            {/* Bet panel */}
+          <div className="lg:w-[40%] flex flex-col gap-4">
+            {/* LMSR Bet Panel */}
+            {outcomes.length > 0 && (
+              <LMSRBetPanel
+                roundId={round.id}
+                outcomes={outcomes}
+                lmsrB={round.lmsrB}
+                initialShares={round.shares ?? {}}
+                bettingClosed={bettingClosed}
+                roundStatus={round.status}
+                winningOutcome={round.winningOutcome}
+                onTradeSuccess={refreshRound}
+              />
+            )}
+
+            {/* Recent Bets */}
             <div className="bg-white/[0.02] rounded-xl border border-white/5 p-4">
-              <h2 className="text-sm font-semibold text-white mb-1">Place a Bet</h2>
-              <p className="text-[11px] text-white/30 mb-4">Select an outcome then enter your amount</p>
-
-              {round.status === "resolved" && round.winningOutcome && (
-                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border mb-4 text-xs font-semibold
-                  ${OUTCOME_COLORS[round.winningOutcome].bg} ${OUTCOME_COLORS[round.winningOutcome].text} ${OUTCOME_COLORS[round.winningOutcome].border}`}>
-                  <span className={`w-2 h-2 rounded-full ${OUTCOME_COLORS[round.winningOutcome].dot}`} />
-                  {round.winningOutcome} WON — {outcomes.find(o => o.id === round.winningOutcome)?.label}
-                </div>
-              )}
-
-              <div className="space-y-1.5">
-                {outcomes.map(o => {
-                  const c          = OUTCOME_COLORS[o.id];
-                  const isSelected = selected?.id === o.id;
-                  const isWinner   = round.winningOutcome === o.id;
-                  const multiplier = o.pool > 0 && totalPool > 0
-                    ? Math.max(1.05, (totalPool * 0.95) / o.pool) : null;
-                  const disabled   = bettingClosed || round.status === "resolved";
-
-                  return (
-                    <div key={o.id}>
-                      <button
-                        onClick={() => { if (!disabled) setSelected(isSelected ? null : o); }}
-                        disabled={disabled}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-left
-                          ${isSelected
-                            ? `${c.bg} ${c.border} ring-1 ring-inset ${c.border}`
-                            : isWinner
-                              ? `${c.bg} ${c.border}`
-                              : disabled
-                                ? "bg-white/[0.02] border-white/5 opacity-50 cursor-not-allowed"
-                                : `${c.bg} ${c.border} hover:opacity-90 cursor-pointer`
-                          }`}
-                      >
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${c.dot}`} />
-                        <span className={`flex-1 text-sm font-medium ${isSelected || isWinner ? c.text : "text-white/80"} truncate`}>
-                          {o.label}{isWinner && <span className="ml-1 text-[10px]">✓</span>}
-                        </span>
-                        <span className="text-[10px] font-mono text-white/30 shrink-0">{o.pool.toFixed(2)} DORA</span>
-                        <span className={`text-xs font-mono font-bold shrink-0 w-10 text-right ${c.text}`}>
-                          {multiplier !== null ? `${multiplier.toFixed(2)}x` : "--x"}
-                        </span>
-                      </button>
-                      {isSelected && !bettingClosed && round.status !== "resolved" && (
-                        <BetPanel round={round} outcome={o}
-                          onSuccess={() => { setSelected(null); refreshRound(); }}
-                          onCancel={() => setSelected(null)} />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-white/5">
-                <RecentBetsPanel round={round} recentBets={recentBets} />
-              </div>
+              <RecentBetsPanel round={round} recentBets={recentBets} />
             </div>
           </div>
         </div>
@@ -704,12 +561,12 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
           <h2 className="text-sm font-semibold text-white mb-3">Round Rules</h2>
           <ul className="space-y-2">
             {[
-              "Betting closes 5 minutes before the result",
-              "Place bets on any price range — multiple bets allowed",
-              "Winners share the prize pool proportionally to their stake",
-              "Platform fee: 5% from total pool",
-              "Results determined by real-time price at round end",
-              "Payout formula: (your stake ÷ winning range pool) × 95% of total pool",
+              "Trading closes 5 minutes before the result",
+              "Buy shares in any outcome — prices update automatically via LMSR",
+              "Each winning share pays out exactly 1 DORA at resolution",
+              "Platform fee: 1% on every trade",
+              "Sell your shares any time before trading closes",
+              "Results determined by real-time price data at round end",
             ].map((rule, i) => (
               <li key={i} className="flex items-start gap-2.5 text-xs text-white/50">
                 <span className="text-[#22c55e] font-mono shrink-0 mt-0.5">{i + 1}.</span>

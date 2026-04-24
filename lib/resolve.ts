@@ -10,6 +10,22 @@ import {
 import bs58 from "bs58";
 import { prisma } from "@/lib/prisma";
 
+// ─── LMSR position settlement ─────────────────────────────────────────────────
+async function settleLmsrPositions(roundId: string, winningOutcome: string) {
+  const positions = await prisma.position.findMany({
+    where: { roundId, outcome: winningOutcome, shares: { gt: 0 } },
+  });
+  for (const pos of positions) {
+    const payout = pos.shares * 1.0; // 1 DORA per winning share
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: pos.userId }, data: { doraBalance: { increment: payout } } }),
+      prisma.position.update({ where: { id: pos.id },   data: { shares: 0 } }),
+    ]);
+    console.log(`[lmsr] Settled ${pos.shares} shares → ${payout} DORA for user ${pos.userId}`);
+  }
+  console.log(`[lmsr] Settled ${positions.length} LMSR positions for round ${roundId}`);
+}
+
 const RPC = "https://api.devnet.solana.com";
 const PLATFORM_FEE_PCT = 0.05;
 
@@ -101,6 +117,9 @@ export async function resolveRound(
         },
       });
     } catch { /* legacy static round */ }
+    try { await settleLmsrPositions(roundId, winner); } catch (err) {
+      console.error(`[lmsr] settlement error for ${roundId}:`, err instanceof Error ? err.message : err);
+    }
     return {
       type: "no_bets",
       roundId,
@@ -188,6 +207,10 @@ export async function resolveRound(
     const succeeded = refundResults.filter((r) => r.txHash).length;
     const failed    = refundResults.filter((r) => !r.txHash).length;
     console.log(`[resolve] Round ${roundId} refunded: ${succeeded} succeeded, ${failed} failed`);
+
+    try { await settleLmsrPositions(roundId, winner); } catch (err) {
+      console.error(`[lmsr] settlement error for ${roundId}:`, err instanceof Error ? err.message : err);
+    }
 
     return {
       type: "refund",
@@ -317,6 +340,11 @@ export async function resolveRound(
     });
   } catch {
     // Round not in DB (legacy static round) — safe to ignore
+  }
+
+  // Settle LMSR positions for winning outcome (best-effort)
+  try { await settleLmsrPositions(roundId, winner); } catch (err) {
+    console.error(`[lmsr] settlement error for ${roundId}:`, err instanceof Error ? err.message : err);
   }
 
   return {

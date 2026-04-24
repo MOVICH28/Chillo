@@ -47,6 +47,9 @@ export default function Navbar({ rounds }: NavbarProps) {
         <Link href="/leaderboard" className="text-xs text-muted hover:text-white transition-colors">
           🏆 Leaderboard
         </Link>
+        <Link href="/portfolio" className="text-xs text-muted hover:text-white transition-colors">
+          Portfolio
+        </Link>
         <Link href="/faq" className="text-xs text-muted hover:text-white transition-colors">
           FAQ
         </Link>

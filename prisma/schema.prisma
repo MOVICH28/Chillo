@@ -7,38 +7,73 @@ datasource db {
 }
 
 model Round {
-  id              String    @id @default(cuid())
+  id              String     @id @default(cuid())
   question        String
   category        String
-  yesPool         Float     @default(0)
-  noPool          Float     @default(0)
-  totalPool       Float     @default(0)
-  status          String    @default("open") // open | closed | resolved
+  yesPool         Float      @default(0)
+  noPool          Float      @default(0)
+  totalPool       Float      @default(0)
+  status          String     @default("open") // open | closed | resolved
   endsAt          DateTime
-  createdAt       DateTime  @default(now())
+  createdAt       DateTime   @default(now())
   targetPrice     Float?
-  targetToken     String?   // "bitcoin" | "solana"
-  tokenList       String?   // JSON array of pump.fun token addresses
+  targetToken     String?    // "bitcoin" | "solana"
+  tokenList       String?    // JSON array of pump.fun token addresses
   resolvedAt      DateTime?
-  winner          String?   // "yes" | "no" — kept for pumpfun rounds
-  outcomes        Json?     // Array of {id,label,minPrice,maxPrice,pool} for range rounds
-  bettingClosesAt DateTime? // endsAt minus 5 min — betting locked after this
-  winningOutcome  String?   // "A"|"B"|"C"|"D" — set on resolution of range rounds
-  roundNumber     Int?      // sequential round number, null for old rounds
+  winner          String?    // "yes" | "no" — kept for pumpfun rounds
+  outcomes        Json?      // Array of {id,label,minPrice,maxPrice,pool} for range rounds
+  bettingClosesAt DateTime?  // endsAt minus 5 min — betting locked after this
+  winningOutcome  String?    // "A"|"B"|"C"|"D" — set on resolution of range rounds
+  roundNumber     Int?       // sequential round number, null for old rounds
+  lmsrB           Float      @default(100) // LMSR liquidity parameter
+  shares          Json?      // {A: 0, B: 0, ...} total shares per outcome
+  positions       Position[]
+  trades          Trade[]
 }
 
 model User {
-  id            String    @id @default(cuid())
-  username      String    @unique
-  email         String    @unique
+  id            String     @id @default(cuid())
+  username      String     @unique
+  email         String     @unique
   passwordHash  String
-  doraBalance   Float     @default(1000)
+  doraBalance   Float      @default(1000)
   avatarUrl     String?
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime   @default(now())
   bets          Bet[]
   comments      Comment[]
-  followers     Follow[]  @relation("following")
-  following     Follow[]  @relation("follower")
+  followers     Follow[]   @relation("following")
+  following     Follow[]   @relation("follower")
+  positions     Position[]
+  trades        Trade[]
+}
+
+model Position {
+  id        String   @id @default(cuid())
+  userId    String
+  roundId   String
+  outcome   String
+  shares    Float
+  avgCost   Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+  round     Round    @relation(fields: [roundId], references: [id])
+  @@unique([userId, roundId, outcome])
+}
+
+model Trade {
+  id        String   @id @default(cuid())
+  userId    String
+  roundId   String
+  outcome   String
+  type      String   // "buy" | "sell"
+  shares    Float
+  price     Float    // cost per share at time of trade
+  totalCost Float    // total DORA spent (positive=buy) or received negative=sell)
+  fee       Float    // 1% platform fee
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  round     Round    @relation(fields: [roundId], references: [id])
 }
 
 model Follow {
