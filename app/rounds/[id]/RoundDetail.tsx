@@ -7,12 +7,13 @@ import Avatar from "@/components/Avatar";
 import LMSRBetPanel from "@/components/LMSRBetPanel";
 import { getAllPrices } from "@/lib/lmsr";
 import {
-  LineChart, Line, XAxis, YAxis, ReferenceArea, ReferenceLine,
-  ResponsiveContainer, Tooltip,
+  ComposedChart, LineChart, Line, Bar,
+  XAxis, YAxis, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip,
 } from "recharts";
 import { Outcome } from "@/lib/types";
-import { useTokenPrice } from "@/lib/useTokenPrice";
+import { useTokenPrice, Timeframe } from "@/lib/useTokenPrice";
 import { useAuth } from "@/lib/useAuth";
+import TokenStats from "@/components/TokenStats";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -109,25 +110,42 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+// ── Timeframe config ─────────────────────────────────────────────────────────
+
+const TIMEFRAMES: { key: Timeframe; label: string }[] = [
+  { key: "1s",  label: "1s"  },
+  { key: "5s",  label: "5s"  },
+  { key: "30s", label: "30s" },
+  { key: "1m",  label: "1m"  },
+  { key: "5m",  label: "5m"  },
+  { key: "15m", label: "15m" },
+  { key: "30m", label: "30m" },
+  { key: "1h",  label: "1h"  },
+  { key: "4h",  label: "4h"  },
+  { key: "6h",  label: "6h"  },
+  { key: "24h", label: "24h" },
+];
+
 // ── Live chart ────────────────────────────────────────────────────────────────
 
-function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat }: {
+function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat, timeframe }: {
   targetToken?:  string | null;
   tokenAddress?: string | null;
   tokenSymbol?:  string | null;
   priceToBeat:   number | null;
+  timeframe:     Timeframe;
 }) {
-  const { price, history, status, label } = useTokenPrice({ targetToken, tokenAddress, tokenSymbol });
+  const { price, history, status, label, isKline } = useTokenPrice({
+    targetToken, tokenAddress, tokenSymbol, timeframe,
+  });
 
   const isBtc = label.startsWith("BTC");
-  const fmtY = isBtc
-    ? (v: number) => `$${Math.round(v).toLocaleString("en-US")}`
-    : (v: number) => {
-        if (v >= 1000) return `$${Math.round(v).toLocaleString("en-US")}`;
-        if (v >= 1)    return `$${v.toFixed(2)}`;
-        if (v >= 0.01) return `$${v.toFixed(4)}`;
-        return `$${v.toFixed(6)}`;
-      };
+  const fmtY = (v: number) => {
+    if (v >= 1000) return `$${Math.round(v).toLocaleString("en-US")}`;
+    if (v >= 1)    return `$${v.toFixed(isBtc ? 2 : 4)}`;
+    if (v >= 0.01) return `$${v.toFixed(6)}`;
+    return `$${v.toFixed(8)}`;
+  };
 
   if (history.length < 2) {
     return (
@@ -147,7 +165,7 @@ function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat }: {
   const isAbove   = priceToBeat !== null ? currentPrice >= priceToBeat : true;
   const lineColor = priceToBeat !== null ? (isAbove ? "#22c55e" : "#ef4444") : "#22c55e";
 
-  const allPrices = [...history.map(p => p.price), ...(priceToBeat ? [priceToBeat] : [])];
+  const allPrices = [...history.map(p => p.price), ...(priceToBeat != null ? [priceToBeat] : [])];
   const rawMin  = Math.min(...allPrices);
   const rawMax  = Math.max(...allPrices);
   const rawSpan = rawMax - rawMin;
@@ -155,17 +173,86 @@ function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat }: {
   const domainMin = rawMin - pad;
   const domainMax = rawMax + pad;
 
+  // X-axis label: elapsed time for streaming, human time for klines
   const t0   = history[0].time;
-  const fmtX = (t: number) => {
-    const elapsed = Math.round((t - t0) / 1000);
-    const m = Math.floor(elapsed / 60);
-    const s = elapsed % 60;
-    return `${m}:${String(s).padStart(2, "0")}`;
-  };
+  const fmtX = isKline
+    ? (t: number) => {
+        const d = new Date(t);
+        if (timeframe === "1m" || timeframe === "5m" || timeframe === "15m" || timeframe === "30m")
+          return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+        return d.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+      }
+    : (t: number) => {
+        const elapsed = Math.round((t - t0) / 1000);
+        const m = Math.floor(elapsed / 60);
+        const s = elapsed % 60;
+        return `${m}:${String(s).padStart(2, "0")}`;
+      };
 
-  const data    = history.map(p => ({ t: p.time, price: p.price }));
-  const yWidth  = isBtc ? 72 : 64;
+  const data   = history.map(p => ({ t: p.time, price: p.price, volume: p.volume ?? 0 }));
+  const yWidth = isBtc ? 72 : 64;
 
+  // Kline view: ComposedChart with price line + volume bars
+  if (isKline) {
+    const maxVol = Math.max(...data.map(d => d.volume), 1);
+    return (
+      <div className="w-full select-none bg-surface-2 rounded-xl border border-white/5 overflow-hidden">
+        <div className="flex items-center gap-1.5 px-4 pt-3 pb-0">
+          <span className={`w-1.5 h-1.5 rounded-full ${status === "live" ? "bg-[#22c55e]" : "bg-white/20"}`} />
+          <span className="text-[10px] uppercase tracking-widest font-bold text-white/40">{label}</span>
+          <span className="ml-auto text-xs font-mono font-semibold text-white/80">{fmtY(currentPrice)}</span>
+        </div>
+        {/* Price chart: 75% height */}
+        <div style={{ height: 280 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={data} margin={{ top: 8, right: yWidth, left: 0, bottom: 0 }}>
+              {priceToBeat != null && (
+                <>
+                  <ReferenceArea y1={priceToBeat} y2={domainMax} fill="rgba(34,197,94,0.05)" strokeOpacity={0} />
+                  <ReferenceArea y1={domainMin} y2={priceToBeat} fill="rgba(239,68,68,0.05)" strokeOpacity={0} />
+                </>
+              )}
+              {priceToBeat != null && (
+                <ReferenceLine y={priceToBeat} stroke="#4b5563" strokeDasharray="6 3" strokeWidth={1}
+                  label={{ value: `Start ${fmtY(priceToBeat)}`, position: "insideTopLeft", fill: "#6b7280", fontSize: 9, dy: -4 }} />
+              )}
+              <ReferenceLine y={currentPrice} stroke={lineColor} strokeWidth={1} strokeOpacity={0.6} strokeDasharray="3 3"
+                label={{ value: fmtY(currentPrice), position: "right", fill: lineColor, fontSize: 11, fontWeight: 700, dx: 6 }} />
+              <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={fmtX}
+                tick={{ fontSize: 9, fill: "#374151" }} axisLine={{ stroke: "#1f2937" }} tickLine={false}
+                interval="preserveStartEnd" tickCount={6} hide />
+              <YAxis domain={[domainMin, domainMax]} tickFormatter={fmtY} width={yWidth}
+                tick={{ fontSize: 9, fill: "#374151" }} axisLine={false} tickLine={false} tickCount={5} />
+              <Tooltip
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                formatter={(v: any, name: any) => name === "price" ? [fmtY(v as number), "Price"] : null}
+                labelFormatter={(t) => fmtX(t as number)}
+                contentStyle={{ background: "#0f0f1a", border: "1px solid #1f2937", borderRadius: 6, fontSize: 11, padding: "4px 10px" }}
+                itemStyle={{ color: lineColor }}
+                cursor={{ stroke: "#1f2937", strokeWidth: 1 }}
+              />
+              <Line type="linear" dataKey="price" stroke={lineColor} strokeWidth={2} dot={false}
+                activeDot={{ r: 3, fill: lineColor, stroke: "#0f0f1a", strokeWidth: 2 }} isAnimationActive={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+        {/* Volume bars: 25% height */}
+        <div style={{ height: 80 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={data} margin={{ top: 0, right: yWidth, left: 0, bottom: 8 }}>
+              <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={fmtX}
+                tick={{ fontSize: 9, fill: "#374151" }} axisLine={{ stroke: "#1f2937" }} tickLine={false}
+                interval="preserveStartEnd" tickCount={6} />
+              <YAxis domain={[0, maxVol * 1.1]} width={yWidth} tick={false} axisLine={false} tickLine={false} />
+              <Bar dataKey="volume" fill="rgba(255,255,255,0.12)" isAnimationActive={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    );
+  }
+
+  // Streaming view: simple LineChart
   return (
     <div className="h-[400px] w-full select-none bg-surface-2 rounded-xl border border-white/5 overflow-hidden">
       <div className="flex items-center gap-1.5 px-4 pt-3 pb-0">
@@ -174,14 +261,14 @@ function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat }: {
         <span className="ml-auto text-xs font-mono font-semibold text-white/80">{fmtY(currentPrice)}</span>
       </div>
       <ResponsiveContainer width="100%" height="90%">
-        <LineChart data={data} margin={{ top: 8, right: 72, left: 0, bottom: 8 }}>
-          {priceToBeat !== null && (
+        <LineChart data={data} margin={{ top: 8, right: yWidth, left: 0, bottom: 8 }}>
+          {priceToBeat != null && (
             <>
               <ReferenceArea y1={priceToBeat} y2={domainMax} fill="rgba(34,197,94,0.05)" strokeOpacity={0} />
               <ReferenceArea y1={domainMin} y2={priceToBeat} fill="rgba(239,68,68,0.05)" strokeOpacity={0} />
             </>
           )}
-          {priceToBeat !== null && (
+          {priceToBeat != null && (
             <ReferenceLine y={priceToBeat} stroke="#4b5563" strokeDasharray="6 3" strokeWidth={1}
               label={{ value: `Start ${fmtY(priceToBeat)}`, position: "insideTopLeft", fill: "#6b7280", fontSize: 9, dy: -4 }} />
           )}
@@ -414,6 +501,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
   const [recentTrades, setRecentTrades] = useState<RecentTrade[]>([]);
   const [copied, setCopied]             = useState(false);
   const [activeTab, setActiveTab]       = useState<"discussion" | "activity">("discussion");
+  const [timeframe, setTimeframe]       = useState<Timeframe>("1s");
   const [lmsrPrices, setLmsrPrices]     = useState<Record<string, number>>(() => {
     const outcomes = (initialRound.outcomes ?? []).map(o => o.id);
     return getAllPrices(initialRound.shares ?? {}, initialRound.lmsrB, outcomes);
@@ -541,14 +629,39 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
               </div>
             )}
 
+            {/* Token stats bar */}
+            {hasToken && (
+              <TokenStats
+                targetToken={round.targetToken}
+                tokenAddress={round.tokenAddress}
+                tokenSymbol={round.tokenSymbol}
+              />
+            )}
+
             {/* Chart + pool bar */}
             {hasToken && outcomes.length > 0 ? (
               <>
+                {/* Timeframe selector */}
+                <div className="flex items-center gap-1 flex-wrap mb-2">
+                  {TIMEFRAMES.map(tf => (
+                    <button
+                      key={tf.key}
+                      onClick={() => setTimeframe(tf.key)}
+                      className={`px-2 py-0.5 rounded text-[11px] font-mono font-semibold transition-colors
+                        ${timeframe === tf.key
+                          ? "bg-brand/20 text-brand border border-brand/40"
+                          : "text-white/30 hover:text-white/60 border border-transparent"}`}
+                    >
+                      {tf.label}
+                    </button>
+                  ))}
+                </div>
                 <LiveChart
                   targetToken={round.targetToken}
                   tokenAddress={round.tokenAddress}
                   tokenSymbol={round.tokenSymbol}
                   priceToBeat={round.targetPrice}
+                  timeframe={timeframe}
                 />
                 <PoolBar outcomes={outcomes} prices={lmsrPrices} />
               </>
