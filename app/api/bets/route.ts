@@ -205,7 +205,7 @@ export async function GET(req: NextRequest) {
       take: 30,
       include: {
         user:  { select: { username: true, avatarUrl: true } },
-        round: { select: { question: true, status: true, winningOutcome: true } },
+        round: { select: { question: true, status: true, winningOutcome: true, targetToken: true } },
       },
     });
 
@@ -220,7 +220,7 @@ export async function GET(req: NextRequest) {
         profitLoss:    t.profitLoss ?? null,
         roundId:       t.roundId,
         createdAt:     t.createdAt.toISOString(),
-        round:         { question: t.round.question, status: t.round.status },
+        round:         { question: t.round.question, status: t.round.status, targetToken: t.round.targetToken ?? null },
       })),
     );
   } catch {

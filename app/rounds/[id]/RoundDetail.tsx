@@ -61,6 +61,11 @@ interface Comment {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+const TOKEN_LOGOS: Record<string, string> = {
+  bitcoin: "https://assets.coingecko.com/coins/images/1/small/bitcoin.png",
+  solana:  "https://assets.coingecko.com/coins/images/4128/small/solana.png",
+};
+
 const OUTCOME_COLORS: Record<string, { bg: string; border: string; text: string; dot: string; hex: string }> = {
   A: { bg: "bg-red-500/10",    border: "border-red-500/40",    text: "text-red-400",    dot: "bg-red-400",    hex: "#f87171" },
   B: { bg: "bg-orange-500/10", border: "border-orange-500/40", text: "text-orange-400", dot: "bg-orange-400", hex: "#fb923c" },
@@ -493,7 +498,12 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
               </button>
             </div>
 
-            <h1 className="text-xl font-semibold text-white leading-snug mb-4">{round.question}</h1>
+            <div className="flex items-start gap-3 mb-4">
+              {round.targetToken && TOKEN_LOGOS[round.targetToken] && (
+                <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-7 h-7 rounded-full shrink-0 mt-0.5" />
+              )}
+              <h1 className="text-xl font-semibold text-white leading-snug">{round.question}</h1>
+            </div>
 
             {/* Countdown timers */}
             {round.status !== "resolved" && (

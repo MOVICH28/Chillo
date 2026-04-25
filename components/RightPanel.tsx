@@ -18,8 +18,13 @@ interface LiveBet {
   amount: number;
   profitLoss: number | null;
   createdAt: string;
-  round: { question: string; status: string } | null;
+  round: { question: string; status: string; targetToken: string | null } | null;
 }
+
+const TOKEN_LOGOS: Record<string, string> = {
+  bitcoin: "https://assets.coingecko.com/coins/images/1/small/bitcoin.png",
+  solana:  "https://assets.coingecko.com/coins/images/4128/small/solana.png",
+};
 
 function formatDora(amount: number): string {
   const n = Math.round(amount * 100) / 100;
@@ -139,6 +144,9 @@ export default function RightPanel({ rounds }: RightPanelProps) {
                           {isBuy ? "BUY" : "SELL"}
                         </span>
                         <span className="text-[10px] font-mono text-white/50">{bet.side.toUpperCase()}</span>
+                        {bet.round?.targetToken && TOKEN_LOGOS[bet.round.targetToken] && (
+                          <img src={TOKEN_LOGOS[bet.round.targetToken]} alt={bet.round.targetToken} className="w-3.5 h-3.5 rounded-full" />
+                        )}
                       </div>
                       <div className="flex flex-col items-end">
                         <span className="text-xs font-mono text-white">{formatDora(bet.amount)} DORA</span>

@@ -18,6 +18,10 @@ const CATEGORY_STYLES: Record<string, string> = {
 const CATEGORY_LABELS: Record<string, string> = {
   crypto: "Crypto",
 };
+const TOKEN_LOGOS: Record<string, string> = {
+  bitcoin: "https://assets.coingecko.com/coins/images/1/small/bitcoin.png",
+  solana:  "https://assets.coingecko.com/coins/images/4128/small/solana.png",
+};
 
 // Tailwind classes for outcome buttons / labels
 const OUTCOME_COLORS: Record<string, { bg: string; border: string; text: string; dot: string }> = {
@@ -99,7 +103,12 @@ function ResolvedRangeCard({ round }: { round: Round }) {
           )}
         </div>
 
-        <p className="text-white/80 text-sm font-medium leading-snug mb-2">{round.question}</p>
+        <div className="flex items-start gap-2 mb-2">
+          {round.targetToken && TOKEN_LOGOS[round.targetToken] && (
+            <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-5 h-5 rounded-full shrink-0 mt-0.5" />
+          )}
+          <p className="text-white/80 text-sm font-medium leading-snug">{round.question}</p>
+        </div>
 
         {winning && (
           <p className={`text-xs mb-3 font-mono ${colors?.text ?? "text-muted"}`}>
@@ -209,7 +218,12 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
         </div>
 
         {/* Question */}
-        <p className="text-white text-sm font-medium leading-snug mb-3">{round.question}</p>
+        <div className="flex items-start gap-2 mb-3">
+          {round.targetToken && TOKEN_LOGOS[round.targetToken] && (
+            <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-5 h-5 rounded-full shrink-0 mt-0.5" />
+          )}
+          <p className="text-white text-sm font-medium leading-snug">{round.question}</p>
+        </div>
 
         {/* Live price row */}
         {asset && (
