@@ -48,7 +48,11 @@ export default async function RoundDetailPage({ params }: PageProps) {
     noPool:   np,
     totalPool: tp,
     realPool,
-    roundNumber: round.roundNumber ?? null,
+    roundNumber:  round.roundNumber  ?? null,
+    tokenAddress: round.tokenAddress ?? null,
+    tokenSymbol:  round.tokenSymbol  ?? null,
+    tokenLogo:    round.tokenLogo    ?? null,
+    isCustom:     round.isCustom,
   };
 
   return (
