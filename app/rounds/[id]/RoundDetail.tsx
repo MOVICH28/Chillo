@@ -123,8 +123,6 @@ const TIMEFRAMES: { key: Timeframe; label: string }[] = [
   { key: "24h", label: "24h" },
 ];
 
-const CHART_BG = "#0d0f14";
-
 // ── Live chart ────────────────────────────────────────────────────────────────
 
 function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat, timeframe, chartType }: {
