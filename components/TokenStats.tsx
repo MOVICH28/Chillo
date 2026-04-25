@@ -41,25 +41,6 @@ const BINANCE_REST: Record<string, string> = {
   solana:  "SOLUSDT",
 };
 
-// Fetch change % for one kline interval: (currentPrice - prevCandleOpen) / prevCandleOpen * 100
-async function fetchBinanceChange(
-  symbol: string, interval: string, currentPrice: number, signal: AbortSignal
-): Promise<number | null> {
-  try {
-    const res = await fetch(
-      `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=2`,
-      { signal, cache: "no-store" }
-    );
-    if (!res.ok) return null;
-    const candles = await res.json() as unknown[][];
-    if (!candles.length) return null;
-    // candles[0] = the last completed candle; c[1] = open price
-    const open = parseFloat(candles[0][1] as string);
-    if (!isFinite(open) || open === 0) return null;
-    return (currentPrice - open) / open * 100;
-  } catch { return null; }
-}
-
 // ── Formatters ────────────────────────────────────────────────────────────────
 
 function fmtLarge(n: number | null): string {
@@ -124,17 +105,91 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
     setLoading(true);
   }, [sym, tokenAddress]);
 
-  // ── BTC / SOL: Binance WebSocket + CoinGecko markets ─────────────────────
+  // ── BTC / SOL: parallel REST load + Binance WebSocket for live ticks ────────
   useEffect(() => {
     if (!isCG || !cgId) return;
 
-    const binanceSym = BINANCE_WS[cgId];
-    let cancelled    = false;
-    let ws:              WebSocket | null = null;
-    let reconnectTimer:  ReturnType<typeof setTimeout> | null = null;
-    let pollInterval:    ReturnType<typeof setInterval> | null = null;
+    const binanceSym  = BINANCE_WS[cgId];
+    const binanceRest = BINANCE_REST[cgId];
+    let cancelled     = false;
+    let ws:             WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let pollInterval:   ReturnType<typeof setInterval> | null = null;
+    let ac:             AbortController | null = null;
 
-    // Live price: Binance 24h-ticker stream (~1s updates)
+    // Fire all 5 requests simultaneously — Binance price, CoinGecko, and 3 kline intervals.
+    // Fetching price inline each cycle avoids the stale-closure problem that caused -100% changes.
+    const loadAll = async () => {
+      if (cancelled) return;
+      ac?.abort();
+      ac = new AbortController();
+      const { signal } = ac;
+
+      try {
+        const [priceRes, cgRes, k5mRes, k1hRes, k6hRes] = await Promise.all([
+          fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${binanceRest}`,
+                { signal, cache: "no-store" }),
+          fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${cgId}` +
+                `&price_change_percentage=24h`,
+                { signal, cache: "no-store" }),
+          fetch(`https://api.binance.com/api/v3/klines?symbol=${binanceRest}&interval=5m&limit=2`,
+                { signal, cache: "no-store" }),
+          fetch(`https://api.binance.com/api/v3/klines?symbol=${binanceRest}&interval=1h&limit=2`,
+                { signal, cache: "no-store" }),
+          fetch(`https://api.binance.com/api/v3/klines?symbol=${binanceRest}&interval=6h&limit=2`,
+                { signal, cache: "no-store" }),
+        ]);
+        if (cancelled) return;
+
+        // Parse all bodies in parallel (each body stream consumed once)
+        const [priceJson, cgJson, k5m, k1h, k6h] = await Promise.all([
+          priceRes.ok  ? priceRes.json()  : Promise.resolve(null),
+          cgRes.ok     ? cgRes.json()     : Promise.resolve([]),
+          k5mRes.ok    ? k5mRes.json()    : Promise.resolve([]),
+          k1hRes.ok    ? k1hRes.json()    : Promise.resolve([]),
+          k6hRes.ok    ? k6hRes.json()    : Promise.resolve([]),
+        ]);
+        if (cancelled) return;
+
+        // Current price from REST ticker
+        const currentPrice: number = priceJson
+          ? parseFloat((priceJson as { price: string }).price)
+          : 0;
+        if (isFinite(currentPrice) && currentPrice > 0) setLivePrice(currentPrice);
+
+        // CoinGecko: volume, 24h change, circulating supply
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cgRow = (cgJson as any[])[0] ?? null;
+        const volume24h:         number | null = cgRow?.total_volume                             ?? null;
+        const change24h:         number | null = cgRow?.price_change_percentage_24h_in_currency ?? null;
+        const circulatingSupply: number | null = cgRow?.circulating_supply                       ?? null;
+
+        // Binance klines: change = (currentPrice - previousCandleClose) / previousCandleClose
+        // klines[length-2] = last completed candle; field [4] = close price
+        const klinesChange = (klines: unknown[][]): number | null => {
+          if (!klines || klines.length < 2 || currentPrice === 0) return null;
+          const prevClose = parseFloat(klines[klines.length - 2][4] as string);
+          if (!isFinite(prevClose) || prevClose === 0) return null;
+          return (currentPrice - prevClose) / prevClose * 100;
+        };
+
+        setCgData({
+          volume24h,
+          change5m:  klinesChange(k5m  as unknown[][]),
+          change1h:  klinesChange(k1h  as unknown[][]),
+          change6h:  klinesChange(k6h  as unknown[][]),
+          change24h,
+          circulatingSupply,
+        });
+        setLoading(false);
+      } catch { /**/ }
+    };
+
+    // Initial load on mount (no waiting for WebSocket)
+    loadAll();
+    pollInterval = setInterval(loadAll, 30_000);
+
+    // WebSocket for ~1s live price ticks after initial load
     const connect = () => {
       if (cancelled) return;
       ws = new WebSocket(`wss://stream.binance.com:9443/ws/${binanceSym}@ticker`);
@@ -152,62 +207,10 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
     };
     connect();
 
-    const binanceRest = BINANCE_REST[cgId];
-    let pollAc: AbortController | null = null;
-
-    // Volume, 24h change, circulating supply: CoinGecko (every 30s)
-    // 5m / 1h / 6h changes: Binance klines, calculated vs current live price
-    const fetchMarkets = async () => {
-      if (cancelled) return;
-      pollAc?.abort();
-      pollAc = new AbortController();
-      const { signal } = pollAc;
-
-      try {
-        // CoinGecko: volume, 24h change, supply (no 5m/1h/6h — those are gated on free tier)
-        const cgRes = await fetch(
-          `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${cgId}` +
-          `&price_change_percentage=24h`,
-          { cache: "no-store", signal }
-        );
-
-        // Binance klines for 5m / 1h / 6h — run in parallel, use latest live price
-        const currentPrice = livePrice ?? 0;
-        const [c5m, c1h, c6h] = await Promise.all([
-          fetchBinanceChange(binanceRest, "5m",  currentPrice, signal),
-          fetchBinanceChange(binanceRest, "1h",  currentPrice, signal),
-          fetchBinanceChange(binanceRest, "6h",  currentPrice, signal),
-        ]);
-
-        if (cancelled) return;
-
-        let volume24h:         number | null = null;
-        let change24h:         number | null = null;
-        let circulatingSupply: number | null = null;
-
-        if (cgRes.ok) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const arr: any[] = await cgRes.json();
-          const d = arr[0];
-          if (d) {
-            volume24h         = d.total_volume                             ?? null;
-            change24h         = d.price_change_percentage_24h_in_currency ?? null;
-            circulatingSupply = d.circulating_supply                       ?? null;
-          }
-        }
-
-        if (cancelled) return;
-        setCgData({ volume24h, change5m: c5m, change1h: c1h, change6h: c6h, change24h, circulatingSupply });
-        setLoading(false);
-      } catch { /**/ }
-    };
-    fetchMarkets();
-    pollInterval = setInterval(fetchMarkets, 30_000);
-
     return () => {
       cancelled = true;
       ws?.close();
-      pollAc?.abort();
+      ac?.abort();
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (pollInterval)   clearInterval(pollInterval);
     };
