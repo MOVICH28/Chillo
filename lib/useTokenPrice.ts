@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 
 export type Timeframe = "1s" | "5s" | "30s" | "1m" | "5m" | "15m" | "30m" | "1h" | "4h" | "6h" | "24h";
 
@@ -18,7 +18,7 @@ export interface TokenPriceState {
   history: OHLCPoint[];
   status:  "connecting" | "live" | "error";
   label:   string;
-  isKline: boolean; // true when data comes from kline REST (has OHLCV)
+  isKline: boolean;
 }
 
 const BINANCE_MAP: Record<string, string> = {
@@ -31,12 +31,10 @@ const LABEL_MAP: Record<string, string> = {
   btc:     "BTC/USDT", sol:    "SOL/USDT",
 };
 
-// ms to throttle streaming history points at this timeframe
 const THROTTLE_MS: Partial<Record<Timeframe, number>> = {
   "1s": 1_000, "5s": 5_000, "30s": 30_000,
 };
 
-// Binance kline interval string for each timeframe
 const KLINE_INTERVAL: Partial<Record<Timeframe, string>> = {
   "1m": "1m", "5m": "5m", "15m": "15m",
   "30m": "30m", "1h": "1h", "4h": "4h",
@@ -48,13 +46,14 @@ const KLINE_LIMIT        = 100;
 const KLINE_REFRESH_MS   = 30_000;
 const DEX_POLL_MS        = 5_000;
 
-async function fetchKlines(symbol: string, interval: string): Promise<OHLCPoint[]> {
+async function fetchKlines(symbol: string, interval: string, signal: AbortSignal): Promise<OHLCPoint[]> {
   try {
     const res = await fetch(
-      `https://api.binance.com/api/v3/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${KLINE_LIMIT}`
+      `https://api.binance.com/api/v3/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${KLINE_LIMIT}`,
+      { signal }
     );
     if (!res.ok) return [];
-    const raw: unknown[][] = await res.json() as unknown[][];
+    const raw = await res.json() as unknown[][];
     return raw.map(c => ({
       time:   c[6] as number,
       price:  parseFloat(c[4] as string),
@@ -63,15 +62,18 @@ async function fetchKlines(symbol: string, interval: string): Promise<OHLCPoint[
       low:    parseFloat(c[3] as string),
       volume: parseFloat(c[5] as string),
     }));
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 
 /**
- * Unified price hook supporting all timeframes.
+ * Single useEffect drives exactly one data source per render cycle.
+ * Re-runs only when sym / tokenAddress / timeframe changes — no race conditions.
  *
- * BTC/SOL + streaming (1s/5s/30s) → Binance aggTrade WebSocket
- * BTC/SOL + kline (1m+)           → Binance klines REST, refreshed every 30s
- * Custom tokenAddress              → DexScreener polling every 5s (all timeframes)
+ * Mode A  BTC/SOL + kline timeframe (1m+)  → Binance klines REST, refresh every 30s
+ * Mode B  BTC/SOL + stream timeframe        → Binance aggTrade WebSocket
+ * Mode C  custom tokenAddress               → DexScreener polling every 5s
  */
 export function useTokenPrice(opts: {
   targetToken?:  string | null;
@@ -83,125 +85,118 @@ export function useTokenPrice(opts: {
 
   const sym           = (targetToken ?? tokenSymbol ?? "").toLowerCase();
   const binanceSymbol = BINANCE_MAP[sym] ?? null;
-  const throttleMs    = THROTTLE_MS[timeframe] ?? 1_000;
   const klineInterval = KLINE_INTERVAL[timeframe] ?? null;
   const isKline       = !!klineInterval && !!binanceSymbol;
-
-  const defaultLabel = binanceSymbol ? (LABEL_MAP[sym] ?? "TOKEN/USDT") : "TOKEN/USD";
+  const throttleMs    = THROTTLE_MS[timeframe] ?? 1_000;
+  const defaultLabel  = binanceSymbol ? (LABEL_MAP[sym] ?? "TOKEN/USDT") : "TOKEN/USD";
 
   const [state, setState] = useState<TokenPriceState>({
-    price: null, history: [], status: "connecting", label: defaultLabel, isKline: false,
+    price: null, history: [], status: "connecting", label: defaultLabel, isKline,
   });
 
-  const historyRef    = useRef<OHLCPoint[]>([]);
-  const lastAddedRef  = useRef<number>(0);
-  const throttleRef   = useRef<number>(throttleMs);
-  // Update throttle without restarting WebSocket
-  useEffect(() => { throttleRef.current = throttleMs; }, [throttleMs]);
-
-  // ── Binance WebSocket — streaming timeframes (1s / 5s / 30s) ─────────────
   useEffect(() => {
-    if (!binanceSymbol || isKline) return;
+    const label = binanceSymbol ? (LABEL_MAP[sym] ?? "TOKEN/USDT") : "TOKEN/USD";
 
-    const label = LABEL_MAP[sym] ?? "TOKEN/USDT";
-    historyRef.current   = [];
-    lastAddedRef.current = 0;
-    setState({ price: null, history: [], status: "connecting", label, isKline: false });
+    // Reset immediately so stale data from previous source never shows
+    setState({ price: null, history: [], status: "connecting", label, isKline });
 
-    let ws: WebSocket;
-    let reconnectId: ReturnType<typeof setTimeout>;
+    if (!binanceSymbol && !tokenAddress) return;
 
-    function connect() {
-      ws = new WebSocket(`wss://stream.binance.com:9443/ws/${binanceSymbol}@aggTrade`);
-      setState(s => ({ ...s, status: "connecting" }));
+    let cancelled       = false;
+    const ac            = new AbortController();
+    let ws: WebSocket | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+    let reconnectTimer:  ReturnType<typeof setTimeout>  | null = null;
 
-      ws.onopen = () => setState(s => ({ ...s, status: "live" }));
+    // Local mutable history — avoids stale closure over setState prev
+    const history: OHLCPoint[] = [];
+    let lastAdded = 0;
 
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data as string);
-        const p = parseFloat(data.p);
-        if (!isFinite(p)) return;
-
-        const now = Date.now();
-        if (now - lastAddedRef.current >= throttleRef.current) {
-          lastAddedRef.current = now;
-          const point: OHLCPoint = { time: now, price: p };
-          historyRef.current = historyRef.current.length >= MAX_STREAM_HISTORY
-            ? [...historyRef.current.slice(1), point]
-            : [...historyRef.current, point];
-        }
-        setState({ price: p, history: historyRef.current, status: "live", label, isKline: false });
-      };
-
-      ws.onerror = () => setState(s => ({ ...s, status: "error" }));
-      ws.onclose = () => {
-        setState(s => ({ ...s, status: "error" }));
-        reconnectId = setTimeout(connect, 5_000);
-      };
-    }
-
-    connect();
-    return () => { clearTimeout(reconnectId); ws?.close(); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [binanceSymbol, isKline]);
-
-  // ── Binance klines REST — longer timeframes (1m+) ─────────────────────────
-  useEffect(() => {
-    if (!binanceSymbol || !klineInterval) return;
-
-    const label = LABEL_MAP[sym] ?? "TOKEN/USDT";
-    historyRef.current = [];
-    setState({ price: null, history: [], status: "connecting", label, isKline: true });
-
-    let cancelled = false;
-
-    async function load() {
-      const points = await fetchKlines(binanceSymbol!, klineInterval!);
-      if (cancelled) return;
-      if (!points.length) { setState(s => ({ ...s, status: "error" })); return; }
-      historyRef.current = points;
-      setState({ price: points[points.length - 1].price, history: points, status: "live", label, isKline: true });
-    }
-
-    load();
-    const id = setInterval(load, KLINE_REFRESH_MS);
-    return () => { cancelled = true; clearInterval(id); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [binanceSymbol, klineInterval]);
-
-  // ── DexScreener polling — custom tokens (all timeframes) ──────────────────
-  useEffect(() => {
-    if (binanceSymbol || !tokenAddress) return;
-
-    let cancelled  = false;
-    historyRef.current = [];
-    setState({ price: null, history: [], status: "connecting", label: "TOKEN/USD", isKline: false });
-
-    async function poll() {
-      try {
-        const res = await fetch(
-          `/api/markets/token-lookup?address=${encodeURIComponent(tokenAddress!)}`,
-          { cache: "no-store" }
-        );
+    // ── Mode A: Binance klines REST ────────────────────────────────────────────
+    if (isKline && binanceSymbol && klineInterval) {
+      const load = async () => {
         if (cancelled) return;
-        if (!res.ok) { setState(s => ({ ...s, status: "error" })); return; }
-        const data = await res.json();
-        const p    = parseFloat(data.priceUsd);
-        if (!isFinite(p) || cancelled) return;
-        const point: OHLCPoint = { time: Date.now(), price: p };
-        historyRef.current = [...historyRef.current.slice(-149), point];
-        const label = `${data.symbol ?? "TOKEN"}/USD`;
-        setState({ price: p, history: historyRef.current, status: "live", label, isKline: false });
-      } catch {
-        if (!cancelled) setState(s => ({ ...s, status: "error" }));
-      }
+        const points = await fetchKlines(binanceSymbol, klineInterval, ac.signal);
+        if (cancelled) return;
+        if (!points.length) { setState(s => ({ ...s, status: "error" })); return; }
+        setState({ price: points[points.length - 1].price, history: points, status: "live", label, isKline: true });
+      };
+      load();
+      pollInterval = setInterval(load, KLINE_REFRESH_MS);
     }
 
-    poll();
-    const id = setInterval(poll, DEX_POLL_MS);
-    return () => { cancelled = true; clearInterval(id); };
+    // ── Mode B: Binance aggTrade WebSocket ─────────────────────────────────────
+    else if (binanceSymbol) {
+      const connect = () => {
+        if (cancelled) return;
+        ws = new WebSocket(`wss://stream.binance.com:9443/ws/${binanceSymbol}@aggTrade`);
+        setState(s => ({ ...s, status: "connecting" }));
+
+        ws.onopen = () => { if (!cancelled) setState(s => ({ ...s, status: "live" })); };
+
+        ws.onmessage = (event) => {
+          if (cancelled) return;
+          const msg = JSON.parse(event.data as string);
+          const p   = parseFloat(msg.p);
+          if (!isFinite(p)) return;
+
+          const now = Date.now();
+          if (now - lastAdded >= throttleMs) {
+            lastAdded = now;
+            if (history.length >= MAX_STREAM_HISTORY) history.shift();
+            history.push({ time: now, price: p });
+          }
+          setState({ price: p, history: [...history], status: "live", label, isKline: false });
+        };
+
+        ws.onerror = () => { if (!cancelled) setState(s => ({ ...s, status: "error" })); };
+        ws.onclose = () => {
+          if (!cancelled) {
+            setState(s => ({ ...s, status: "error" }));
+            reconnectTimer = setTimeout(connect, 5_000);
+          }
+        };
+      };
+      connect();
+    }
+
+    // ── Mode C: DexScreener polling ────────────────────────────────────────────
+    else if (tokenAddress) {
+      const poll = async () => {
+        if (cancelled) return;
+        try {
+          const res = await fetch(
+            `/api/markets/token-lookup?address=${encodeURIComponent(tokenAddress)}`,
+            { cache: "no-store", signal: ac.signal }
+          );
+          if (cancelled) return;
+          if (!res.ok) { setState(s => ({ ...s, status: "error" })); return; }
+          const d = await res.json();
+          const p = parseFloat(d.priceUsd);
+          if (!isFinite(p) || cancelled) return;
+          if (history.length >= MAX_STREAM_HISTORY) history.shift();
+          history.push({ time: Date.now(), price: p });
+          setState({ price: p, history: [...history], status: "live", label: `${d.symbol ?? "TOKEN"}/USD`, isKline: false });
+        } catch (e) {
+          if (!cancelled && !(e instanceof DOMException && e.name === "AbortError")) {
+            setState(s => ({ ...s, status: "error" }));
+          }
+        }
+      };
+      poll();
+      pollInterval = setInterval(poll, DEX_POLL_MS);
+    }
+
+    return () => {
+      cancelled = true;
+      ac.abort();
+      ws?.close();
+      if (pollInterval)   clearInterval(pollInterval);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+    };
+  // sym / tokenAddress / timeframe fully determine which source to use
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [binanceSymbol, tokenAddress]);
+  }, [sym, tokenAddress, timeframe]);
 
   return state;
 }

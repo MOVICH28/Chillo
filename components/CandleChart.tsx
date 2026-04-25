@@ -21,28 +21,29 @@ interface Props {
 }
 
 export default function CandleChart({ data, chartType, isKline, priceToBeat, status, label }: Props) {
-  const containerRef  = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const chartRef      = useRef<any>(null);
+  const chartRef  = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const seriesRef     = useRef<any>(null);
+  const lineRef   = useRef<any>(null);   // LineSeries — always present
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const volRef        = useRef<any>(null);
-  const mountedRef    = useRef(false);
+  const candleRef = useRef<any>(null);   // CandlestickSeries — always present
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const volRef    = useRef<any>(null);   // HistogramSeries — always present
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const priceLineRef       = useRef<any>(null);
+  const prevPriceToBeat    = useRef<number | null | undefined>(undefined);
+  const mountedRef         = useRef(false);
 
-  const effectiveType = isKline ? chartType : "line";
-
-  // ── Mount chart ─────────────────────────────────────────────────────────────
+  // ── Effect 1: create chart + all series once ────────────────────────────────
+  // All three series are created upfront. Data effect switches between them by
+  // calling setData([]) on the inactive one — no remove/re-add, no flicker.
   useEffect(() => {
     if (!containerRef.current) return;
-
     mountedRef.current = true;
 
-    let chart: ReturnType<typeof createChart> | null = null;
-    let ro: ResizeObserver | null = null;
-
     try {
-      chart = createChart(containerRef.current, {
+      const chart = createChart(containerRef.current, {
         width:  containerRef.current.clientWidth || 600,
         height: H,
         layout: {
@@ -70,141 +71,149 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, sta
         handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
         handleScale:  { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
       });
-
       chartRef.current = chart;
 
-      ro = new ResizeObserver(() => {
+      // Volume histogram on its own price scale
+      volRef.current = chart.addSeries(HistogramSeries, {
+        color:        "rgba(255,255,255,0.07)",
+        priceFormat:  { type: "volume" },
+        priceScaleId: "vol",
+      });
+      try { chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } }); } catch { /**/ }
+
+      // Line series (active in line mode)
+      lineRef.current = chart.addSeries(LineSeries, {
+        color:                  "#22c55e",
+        lineWidth:              2,
+        crosshairMarkerVisible: true,
+        crosshairMarkerRadius:  4,
+        priceLineVisible:       false,
+        priceScaleId:           "right",
+        lastValueVisible:       true,
+      });
+
+      // Candlestick series (active in candles mode)
+      candleRef.current = chart.addSeries(CandlestickSeries, {
+        upColor:         "#22c55e",
+        downColor:       "#ef4444",
+        borderUpColor:   "#22c55e",
+        borderDownColor: "#ef4444",
+        wickUpColor:     "rgba(34,197,94,0.65)",
+        wickDownColor:   "rgba(239,68,68,0.65)",
+        priceScaleId:    "right",
+      });
+
+      const ro = new ResizeObserver(() => {
         if (!mountedRef.current || !containerRef.current || !chartRef.current) return;
         try { chartRef.current.applyOptions({ width: containerRef.current.clientWidth }); } catch { /**/ }
       });
       ro.observe(containerRef.current);
-    } catch { /**/ }
 
-    return () => {
-      mountedRef.current = false;
-      ro?.disconnect();
-      seriesRef.current = null;
-      volRef.current    = null;
-      chartRef.current  = null;
-      try { chart?.remove(); } catch { /**/ }
-    };
+      return () => {
+        mountedRef.current = false;
+        ro.disconnect();
+        lineRef.current   = null;
+        candleRef.current = null;
+        volRef.current    = null;
+        chartRef.current  = null;
+        priceLineRef.current = null;
+        try { chart.remove(); } catch { /**/ }
+      };
+    } catch { /**/ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Rebuild series when type / isKline / priceToBeat changes ───────────────
+  // ── Effect 2: push data + sync visibility + manage price line ───────────────
+  // Runs whenever data, chartType, isKline, or priceToBeat changes.
+  // Never removes/re-adds series — just calls setData() on the active one.
   useEffect(() => {
-    if (!mountedRef.current || !chartRef.current) return;
+    if (!mountedRef.current || !lineRef.current || !candleRef.current || !volRef.current) return;
 
-    const chart = chartRef.current;
+    const effectiveType = isKline ? chartType : "line";
+    const showCandles   = effectiveType === "candles";
 
     try {
-      if (seriesRef.current) { try { chart.removeSeries(seriesRef.current); } catch { /**/ } seriesRef.current = null; }
-      if (volRef.current)    { try { chart.removeSeries(volRef.current);    } catch { /**/ } volRef.current    = null; }
-
-      if (isKline) {
-        volRef.current = chart.addSeries(HistogramSeries, {
-          color:        "rgba(255,255,255,0.07)",
-          priceFormat:  { type: "volume" },
-          priceScaleId: "vol",
-        });
-        try { chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } }); } catch { /**/ }
+      // ── Price line: recreate only when priceToBeat changes ─────────────────
+      if (prevPriceToBeat.current !== priceToBeat) {
+        prevPriceToBeat.current = priceToBeat;
+        // Always attach to lineRef so it stays visible regardless of chart mode
+        if (priceLineRef.current) {
+          try { lineRef.current.removePriceLine(priceLineRef.current); } catch { /**/ }
+          priceLineRef.current = null;
+        }
+        if (priceToBeat != null) {
+          try {
+            priceLineRef.current = lineRef.current.createPriceLine({
+              price:            priceToBeat,
+              color:            "rgba(255,255,255,0.2)",
+              lineStyle:        LineStyle.Dashed,
+              lineWidth:        1,
+              axisLabelVisible: true,
+              title:            "Target",
+            });
+          } catch { /**/ }
+        }
       }
 
-      if (effectiveType === "candles") {
-        seriesRef.current = chart.addSeries(CandlestickSeries, {
-          upColor:         "#22c55e",
-          downColor:       "#ef4444",
-          borderUpColor:   "#22c55e",
-          borderDownColor: "#ef4444",
-          wickUpColor:     "rgba(34,197,94,0.65)",
-          wickDownColor:   "rgba(239,68,68,0.65)",
-          priceScaleId:    "right",
-        });
-      } else {
-        seriesRef.current = chart.addSeries(LineSeries, {
-          color:                  "#22c55e",
-          lineWidth:              1.5,
-          crosshairMarkerVisible: true,
-          crosshairMarkerRadius:  4,
-          priceLineVisible:       false,
-          priceScaleId:           "right",
-          lastValueVisible:       true,
-        });
-      }
+      // ── secondsVisible ──────────────────────────────────────────────────────
+      try { chartRef.current?.applyOptions({ timeScale: { secondsVisible: !isKline } }); } catch { /**/ }
 
-      if (priceToBeat != null && seriesRef.current) {
-        try {
-          seriesRef.current.createPriceLine({
-            price:            priceToBeat,
-            color:            "rgba(255,255,255,0.2)",
-            lineStyle:        LineStyle.Dashed,
-            lineWidth:        1,
-            axisLabelVisible: true,
-            title:            "Target",
-          });
-        } catch { /**/ }
-      }
-    } catch { /**/ }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveType, isKline, priceToBeat]);
+      if (!data.length) return;
 
-  // ── Push data ───────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!mountedRef.current || !seriesRef.current || !data.length) return;
-
-    try {
       const first = data[0].price;
       const last  = data[data.length - 1].price;
       const color = priceToBeat != null
         ? (last >= priceToBeat ? "#22c55e" : "#ef4444")
         : (last >= first       ? "#22c55e" : "#ef4444");
 
-      if (effectiveType === "candles" && isKline) {
+      // ── Candles mode ────────────────────────────────────────────────────────
+      if (showCandles && isKline) {
+        // Clear line series so its price scale doesn't interfere
+        try { lineRef.current.setData([]); } catch { /**/ }
+
         const candleData = data
           .filter(p => p.open != null && p.high != null && p.low != null)
-          .map(p => ({
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            time:  Math.floor(p.time / 1000) as any,
-            open:  p.open!,
-            high:  p.high!,
-            low:   p.low!,
-            close: p.price,
-          }));
-        if (candleData.length) try { seriesRef.current.setData(candleData); } catch { /**/ }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map(p => ({ time: Math.floor(p.time / 1000) as any, open: p.open!, high: p.high!, low: p.low!, close: p.price }));
+        if (candleData.length) try { candleRef.current.setData(candleData); } catch { /**/ }
 
-        if (volRef.current) {
-          const volData = data
-            .filter(p => p.volume != null)
-            .map(p => ({
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              time:  Math.floor(p.time / 1000) as any,
-              value: p.volume!,
-              color: (p.price >= (p.open ?? p.price)) ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)",
-            }));
-          if (volData.length) try { volRef.current.setData(volData); } catch { /**/ }
-        }
-      } else {
-        try { seriesRef.current.applyOptions({ color }); } catch { /**/ }
+        const volData = data
+          .filter(p => p.volume != null)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map(p => ({ time: Math.floor(p.time / 1000) as any, value: p.volume!, color: (p.price >= (p.open ?? p.price)) ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)" }));
+        if (volData.length) try { volRef.current.setData(volData); } catch { /**/ }
+
+        if (chartRef.current) try { chartRef.current.timeScale().fitContent(); } catch { /**/ }
+      }
+
+      // ── Line mode ───────────────────────────────────────────────────────────
+      else {
+        // Clear candle series so its price scale doesn't interfere
+        try { candleRef.current.setData([]); } catch { /**/ }
+
+        try { lineRef.current.applyOptions({ color }); } catch { /**/ }
         const lineData = data.map(p => ({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           time:  Math.floor(p.time / 1000) as any,
           value: p.price,
         }));
-        try { seriesRef.current.setData(lineData); } catch { /**/ }
-      }
+        try { lineRef.current.setData(lineData); } catch { /**/ }
 
-      if (isKline && chartRef.current) {
-        try { chartRef.current.timeScale().fitContent(); } catch { /**/ }
+        // Volume only meaningful for kline data
+        if (isKline) {
+          const volData = data
+            .filter(p => p.volume != null)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .map(p => ({ time: Math.floor(p.time / 1000) as any, value: p.volume!, color: (p.price >= (p.open ?? p.price)) ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)" }));
+          if (volData.length) try { volRef.current.setData(volData); } catch { /**/ }
+          if (chartRef.current) try { chartRef.current.timeScale().fitContent(); } catch { /**/ }
+        } else {
+          try { volRef.current.setData([]); } catch { /**/ }
+        }
       }
     } catch { /**/ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, effectiveType, isKline, priceToBeat]);
-
-  // ── secondsVisible sync ─────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!mountedRef.current || !chartRef.current) return;
-    try { chartRef.current.applyOptions({ timeScale: { secondsVisible: !isKline } }); } catch { /**/ }
-  }, [isKline]);
+  }, [data, chartType, isKline, priceToBeat]);
 
   const loading = data.length < 2 && status !== "live";
 
