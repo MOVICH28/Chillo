@@ -37,6 +37,17 @@ export interface Round {
   realPool?: number; // totalPool minus base seed (yes/no rounds) or totalPool (range rounds)
   roundNumber?: number | null;
   bets?: Bet[];
+  // Custom market fields
+  isCustom?: boolean;
+  creatorId?: string | null;
+  creatorUsername?: string | null;
+  creatorAvatarUrl?: string | null;
+  description?: string | null;
+  twitterUrl?: string | null;
+  customImage?: string | null;
+  tokenAddress?: string | null;
+  tokenSymbol?: string | null;
+  tokenLogo?: string | null;
 }
 
 export interface Bet {

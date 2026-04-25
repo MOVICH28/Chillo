@@ -27,6 +27,17 @@ model Round {
   roundNumber     Int?       // sequential round number, null for old rounds
   lmsrB           Float      @default(100) // LMSR liquidity parameter
   shares          Json?      // {A: 0, B: 0, ...} total shares per outcome
+  // Custom market fields
+  isCustom        Boolean    @default(false)
+  creatorId       String?
+  creatorFee      Float      @default(0)
+  description     String?
+  twitterUrl      String?
+  customImage     String?
+  tokenAddress    String?    // contract address for custom tokens
+  tokenSymbol     String?    // e.g. "BONK", "WIF"
+  tokenLogo       String?    // logo URL
+  creator         User?      @relation("CreatedRounds", fields: [creatorId], references: [id])
   positions       Position[]
   trades          Trade[]
 }
@@ -38,13 +49,15 @@ model User {
   passwordHash  String
   doraBalance   Float      @default(1000)
   avatarUrl     String?
-  createdAt     DateTime   @default(now())
-  bets          Bet[]
-  comments      Comment[]
-  followers     Follow[]   @relation("following")
-  following     Follow[]   @relation("follower")
-  positions     Position[]
-  trades        Trade[]
+  createdAt           DateTime   @default(now())
+  lastMarketCreatedAt DateTime?
+  bets                Bet[]
+  comments            Comment[]
+  followers           Follow[]   @relation("following")
+  following           Follow[]   @relation("follower")
+  positions           Position[]
+  trades              Trade[]
+  createdRounds       Round[]    @relation("CreatedRounds")
 }
 
 model Position {

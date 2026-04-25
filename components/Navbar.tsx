@@ -53,6 +53,11 @@ export default function Navbar({ rounds }: NavbarProps) {
         <Link href="/faq" className="text-xs text-muted hover:text-white transition-colors">
           FAQ
         </Link>
+        {user && (
+          <Link href="/create" className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-brand/10 border border-brand/30 text-brand hover:bg-brand/20 transition-colors">
+            + Create
+          </Link>
+        )}
       </div>
 
       {/* Spacer */}

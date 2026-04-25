@@ -25,6 +25,7 @@ export async function GET() {
     prisma.round.findMany({
       where: { status: { in: ["open", "closed", "resolved"] } },
       orderBy: { createdAt: "desc" },
+      include: { creator: { select: { username: true, avatarUrl: true } } },
     }),
     prisma.roundPool.findMany(),
   ]);
@@ -53,15 +54,18 @@ export async function GET() {
 
     return {
       ...round,
-      endsAt:          round.endsAt.toISOString(),
-      createdAt:       round.createdAt.toISOString(),
-      resolvedAt:      round.resolvedAt?.toISOString()      ?? null,
-      bettingClosesAt: round.bettingClosesAt?.toISOString() ?? null,
+      endsAt:           round.endsAt.toISOString(),
+      createdAt:        round.createdAt.toISOString(),
+      resolvedAt:       round.resolvedAt?.toISOString()      ?? null,
+      bettingClosesAt:  round.bettingClosesAt?.toISOString() ?? null,
       yesPool:  yp,
       noPool:   np,
       totalPool: tp,
       realPool,
       outcomes,
+      creatorUsername:  round.creator?.username  ?? null,
+      creatorAvatarUrl: round.creator?.avatarUrl ?? null,
+      creator: undefined,
       ...computeOdds(yp, np, tp),
       bets: [],
     };

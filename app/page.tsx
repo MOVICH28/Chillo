@@ -49,13 +49,14 @@ export default function Home() {
     return () => clearInterval(id);
   }, [fetchRounds]);
 
-const openRounds     = rounds.filter((r) => r.status !== "resolved");
-  const resolvedRounds = rounds.filter((r) => r.status === "resolved").slice(0, 20);
+const openRounds     = rounds.filter((r) => r.status !== "resolved" && !r.isCustom);
+  const resolvedRounds = rounds.filter((r) => r.status === "resolved" && !r.isCustom).slice(0, 20);
+  const customRounds   = rounds.filter((r) => r.isCustom && r.status !== "resolved");
 
   const filtered =
     category === "all" ? openRounds : openRounds.filter((r) => r.category === category);
 
-  // Category counts reflect only open rounds
+  // Category counts reflect only open non-custom rounds
   const counts = openRounds.reduce<Record<string, number>>((acc, r) => {
     acc[r.category] = (acc[r.category] ?? 0) + 1;
     acc["all"] = (acc["all"] ?? 0) + 1;
@@ -138,6 +139,25 @@ const openRounds     = rounds.filter((r) => r.status !== "resolved");
                   />
                 )
               )}
+            </div>
+          )}
+
+          {/* Community Markets */}
+          {customRounds.length > 0 && (
+            <div className="mt-8">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-purple-400" />
+                  <h2 className="text-white font-semibold text-sm">Community Markets</h2>
+                  <span className="text-[10px] uppercase tracking-widest text-muted">{customRounds.length} open</span>
+                </div>
+                <a href="/create" className="text-xs text-brand hover:text-brand-dim transition-colors">+ Create yours →</a>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {customRounds.map((round) => (
+                  <RangeCard key={round.id} round={round} liveData={liveData} />
+                ))}
+              </div>
             </div>
           )}
 
