@@ -207,8 +207,56 @@ async function resolveTwitterRounds(
 
 // ─── Cron handler ─────────────────────────────────────────────────────────────
 
+async function sendAdminNotifications(now: Date): Promise<void> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://chillo-f11o.vercel.app";
+
+  // Rounds ending in 25–35 minutes (warning window)
+  const warnFrom = new Date(now.getTime() + 25 * 60_000);
+  const warnTo   = new Date(now.getTime() + 35 * 60_000);
+
+  const closingSoon = await prisma.round.findMany({
+    where: { status: "open", category: "twitter", endsAt: { gte: warnFrom, lte: warnTo } },
+  });
+
+  // Twitter rounds that are past endsAt but still open (stuck / unresolved)
+  const stuck = await prisma.round.findMany({
+    where: { status: "open", category: "twitter", endsAt: { lte: now } },
+  });
+
+  const toNotify = [
+    ...closingSoon.map(r => ({ r, urgent: false })),
+    ...stuck.map(r => ({ r, urgent: true })),
+  ];
+
+  for (const { r, urgent } of toNotify) {
+    const outcomes = (r.outcomes as { id: string; label: string }[] | null) ?? [];
+    const minutesRemaining = Math.round((r.endsAt.getTime() - now.getTime()) / 60_000);
+
+    try {
+      await fetch(`${appUrl}/api/admin/notify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roundId: r.id,
+          username: r.twitterUsername ?? "unknown",
+          questionType: r.twitterQuestion ?? "posts_count",
+          minutesRemaining,
+          outcomes,
+          urgent,
+        }),
+        cache: "no-store",
+      });
+    } catch (err) {
+      console.warn(`[cron] notify failed for round ${r.id}:`, err instanceof Error ? err.message : err);
+    }
+  }
+}
+
 async function runCron(): Promise<NextResponse> {
   const now = new Date();
+
+  // ── Step 0: send admin notifications for Twitter rounds closing soon / stuck ──
+  await sendAdminNotifications(now);
 
   // ── Step 1: resolve ended open rounds ─────────────────────────────────────
   const endedRounds = await prisma.round.findMany({

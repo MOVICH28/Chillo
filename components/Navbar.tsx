@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/useAuth";
 import { Round } from "@/lib/types";
 import WinToastBanner from "@/components/WinToastBanner";
@@ -16,6 +16,11 @@ interface NavbarProps {
 export default function Navbar({ rounds }: NavbarProps) {
   const { user, logout } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    setIsAdmin(!!localStorage.getItem("pumpdora_admin_session"));
+  }, []);
 
   const totalPool = rounds.reduce((sum, r) => sum + r.totalPool, 0);
   const doraFormatted = user ? Math.floor(user.doraBalance).toLocaleString("en-US") : "0";
@@ -53,6 +58,11 @@ export default function Navbar({ rounds }: NavbarProps) {
         <Link href="/faq" className="text-xs text-muted hover:text-white transition-colors">
           FAQ
         </Link>
+        {isAdmin && (
+          <Link href="/admin" className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
+            Admin
+          </Link>
+        )}
         {user && (
           <Link href="/create" className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-brand/10 border border-brand/30 text-brand hover:bg-brand/20 transition-colors">
             + Create
