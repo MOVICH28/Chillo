@@ -12,9 +12,16 @@ interface LiveBet {
   walletAddress: string;
   roundId: string;
   side: string;
+  type: string;
   amount: number;
+  profitLoss: number | null;
   createdAt: string;
   round: { question: string; status: string } | null;
+}
+
+function formatDora(amount: number): string {
+  const n = parseFloat(amount.toString());
+  return n % 1 === 0 ? n.toString() : n.toFixed(2);
 }
 
 function timeAgo(dateStr: string): string {
@@ -59,10 +66,10 @@ export default function RightPanel({ rounds }: RightPanelProps) {
       <div className="bg-surface rounded-xl border border-surface-3 p-4">
         <p className="text-[10px] uppercase tracking-widest text-muted mb-3">Today&apos;s Stats</p>
         <div className="space-y-2.5">
-          <Stat label="Total Pool" value={`${totalPool.toFixed(1)} DORA`} highlight />
+          <Stat label="Total Pool" value={`${formatDora(totalPool)} DORA`} highlight />
           <Stat label="Active Markets" value={openRounds.toString()} />
           <Stat label="Total Bets" value={totalBets.toString()} />
-          <Stat label="Avg Pool" value={`${openRounds ? (totalPool / openRounds).toFixed(1) : "0"} DORA`} />
+          <Stat label="Avg Pool" value={`${openRounds ? formatDora(totalPool / openRounds) : "0"} DORA`} />
         </div>
       </div>
 
@@ -78,29 +85,36 @@ export default function RightPanel({ rounds }: RightPanelProps) {
         ) : (
           <div className="space-y-2.5">
             {liveBets.map((bet) => {
-              const isYes = bet.side === "yes";
-              const isNo  = bet.side === "no";
-              const sideClass = isYes
-                ? "bg-yes/10 text-yes"
-                : isNo
-                ? "bg-no/10 text-no"
-                : "bg-brand/10 text-brand";
+              const isBuy = bet.type === "buy";
+              const badgeClass = isBuy
+                ? "bg-[#22c55e]/15 text-[#22c55e]"
+                : "bg-red-500/15 text-red-400";
               return (
-              <div key={bet.id} className="flex flex-col gap-0.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono text-white/60 truncate max-w-[100px]">
-                    {bet.walletAddress}
-                  </span>
-                  <span className="text-[10px] text-muted">{timeAgo(bet.createdAt)}</span>
+                <div key={bet.id} className="flex flex-col gap-0.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono text-white/60 truncate max-w-[100px]">
+                      {bet.walletAddress}
+                    </span>
+                    <span className="text-[10px] text-muted">{timeAgo(bet.createdAt)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${badgeClass}`}>
+                        {isBuy ? "BUY" : "SELL"}
+                      </span>
+                      <span className="text-[10px] font-mono text-white/50">{bet.side.toUpperCase()}</span>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className="text-xs font-mono text-white">{formatDora(bet.amount)} DORA</span>
+                      {!isBuy && bet.profitLoss !== null && (
+                        <span className={`text-[10px] font-mono ${bet.profitLoss >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
+                          {bet.profitLoss >= 0 ? "+" : ""}{formatDora(bet.profitLoss)} DORA
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted truncate">{bet.round?.question ?? bet.roundId}</p>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${sideClass}`}>
-                    {bet.side.toUpperCase()}
-                  </span>
-                  <span className="text-xs font-mono text-white">{parseFloat(String(bet.amount)).toFixed(2)} D</span>
-                </div>
-                <p className="text-[10px] text-muted truncate">{bet.round?.question ?? bet.roundId}</p>
-              </div>
               );
             })}
           </div>

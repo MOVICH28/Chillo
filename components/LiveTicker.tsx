@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import { LiveData } from "@/lib/useLiveData";
 
+function formatDora(amount: number): string {
+  const n = parseFloat(amount.toString());
+  return n % 1 === 0 ? n.toString() : n.toFixed(2);
+}
+
 interface RecentTrade {
   id: string;
   username: string | null;
@@ -86,7 +91,7 @@ export default function LiveTicker({ liveData }: LiveTickerProps) {
                   {isBuy ? "BUY" : "SELL"}
                 </span>
                 <span className="text-white/60 font-mono">{t.outcome}</span>
-                <span className="text-white font-mono">{Math.abs(t.amount).toFixed(2)} D</span>
+                <span className="text-white font-mono">{formatDora(Math.abs(t.amount))} DORA</span>
                 {!isBuy && t.profitLoss !== null && (
                   <span className={`font-mono text-[10px] ${t.profitLoss >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
                     {t.profitLoss >= 0 ? "+" : ""}{t.profitLoss.toFixed(1)}
