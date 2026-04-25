@@ -47,8 +47,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Duration must be 15 min–7 days" }, { status: 400 });
 
   if (isTwitterMarket) {
-    if (!twitterUserId)
-      return NextResponse.json({ error: "Twitter user ID required" }, { status: 400 });
     if (!["posts_count", "next_post_time"].includes(twitterQuestion))
       return NextResponse.json({ error: "Invalid twitterQuestion type" }, { status: 400 });
   }

@@ -42,13 +42,9 @@ interface TokenInfo {
   address: string;
 }
 
-interface TwitterInfo {
-  id: string;
-  name: string;
-  username: string;
-  profileImageUrl: string | null;
-  followersCount: number;
-  tweetsCount: number;
+function validTwitterUsername(u: string): boolean {
+  const clean = u.replace(/^@/, "");
+  return /^[A-Za-z0-9_]{1,15}$/.test(clean);
 }
 
 interface OutcomeInput {
@@ -71,10 +67,7 @@ export default function CreatePage() {
   const [tokenError,   setTokenError]   = useState("");
 
   // ── Twitter: Step 1 — account ─────────────────────────────────────────────
-  const [twitterQuery,   setTwitterQuery]   = useState("");
-  const [twitterInfo,    setTwitterInfo]    = useState<TwitterInfo | null>(null);
-  const [twitterLoading, setTwitterLoading] = useState(false);
-  const [twitterError,   setTwitterError]   = useState("");
+  const [twitterQuery, setTwitterQuery] = useState("");
 
   // ── Twitter: Step 2 — question type ──────────────────────────────────────
   const [twitterQuestion, setTwitterQuestion] = useState<"posts_count" | "next_post_time">("posts_count");
@@ -120,31 +113,18 @@ export default function CreatePage() {
     return () => clearTimeout(id);
   }, [tokenQuery, lookupToken]);
 
-  // ── Twitter account lookup ────────────────────────────────────────────────
-  async function verifyTwitter() {
-    if (!twitterQuery.trim()) return;
-    setTwitterLoading(true);
-    setTwitterError("");
-    setTwitterInfo(null);
-    try {
-      const res = await fetch(`/api/markets/twitter-lookup?username=${encodeURIComponent(twitterQuery.trim())}`);
-      if (!res.ok) { setTwitterError((await res.json()).error ?? "User not found"); }
-      else         { setTwitterInfo(await res.json()); }
-    } catch { setTwitterError("Lookup failed"); }
-    finally { setTwitterLoading(false); }
-  }
-
-  // ── Auto-set question text when twitter info/question changes ─────────────
+  // ── Auto-set question text when twitter username/question changes ────────
+  const cleanTwitter = twitterQuery.replace(/^@/, "").trim();
   useEffect(() => {
-    if (!twitterInfo) return;
+    if (!cleanTwitter) return;
     if (twitterQuestion === "posts_count") {
-      setQuestion(`How many posts will @${twitterInfo.username} make in 24 hours?`);
+      setQuestion(`How many posts will @${cleanTwitter} make in 24 hours?`);
       setOutcomes(POSTS_COUNT_OUTCOMES);
     } else {
-      setQuestion(`When will @${twitterInfo.username} make their next post?`);
+      setQuestion(`When will @${cleanTwitter} make their next post?`);
       setOutcomes(NEXT_POST_OUTCOMES);
     }
-  }, [twitterInfo, twitterQuestion]);
+  }, [cleanTwitter, twitterQuestion]);
 
   // ── Crypto helpers ────────────────────────────────────────────────────────
   function addOutcome() {
@@ -176,11 +156,11 @@ export default function CreatePage() {
       const token = getToken();
       const body: Record<string, unknown> = { question, outcomes, duration, description };
 
-      if (category === "twitter" && twitterInfo) {
-        body.twitterUsername    = twitterInfo.username;
-        body.twitterUserId      = twitterInfo.id;
+      if (category === "twitter" && cleanTwitter) {
+        body.twitterUsername    = cleanTwitter;
+        body.twitterUserId      = null;
         body.twitterQuestion    = twitterQuestion;
-        body.twitterPeriodHours = twitterQuestion === "posts_count" ? 24 : 24;
+        body.twitterPeriodHours = 24;
       } else {
         body.tokenAddress = tokenInfo?.address && tokenInfo.address !== tokenInfo.symbol
           ? tokenInfo.address : null;
@@ -203,7 +183,7 @@ export default function CreatePage() {
   }
 
   // ── Validation ────────────────────────────────────────────────────────────
-  const step1Valid = category === "twitter" ? !!twitterInfo : true;
+  const step1Valid = category === "twitter" ? validTwitterUsername(twitterQuery) : true;
   const step2Valid = category === "twitter" ? true : (question.trim().length >= 5 && question.trim().length <= 150);
   const step3Valid = outcomes.every(o => o.label.trim().length > 0);
   // For Twitter step 4, question is auto-generated so just need duration
@@ -464,39 +444,44 @@ export default function CreatePage() {
             <div>
               <h2 className="text-white font-semibold mb-1">Twitter Account</h2>
               <p className="text-muted text-xs mb-3">Enter a public Twitter/X username to track.</p>
-              <div className="flex gap-2">
-                <input type="text" placeholder="@elonmusk"
-                  value={twitterQuery} onChange={e => setTwitterQuery(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && verifyTwitter()}
-                  className="flex-1 px-3 py-2.5 rounded-lg bg-surface-2 border border-surface-3 text-white text-sm placeholder:text-muted focus:outline-none focus:border-[#1d9bf0] transition-colors font-mono" />
-                <button onClick={verifyTwitter} disabled={twitterLoading || !twitterQuery.trim()}
-                  className="px-4 py-2.5 rounded-lg bg-[#1d9bf0] hover:bg-[#1a8cd8] text-white font-semibold text-sm transition-colors disabled:opacity-40 shrink-0">
-                  {twitterLoading ? "Checking…" : "Verify"}
-                </button>
-              </div>
-              {twitterError && <p className="text-red-400 text-xs mt-1.5">{twitterError}</p>}
+              <input
+                type="text"
+                placeholder="@elonmusk"
+                value={twitterQuery}
+                onChange={e => setTwitterQuery(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg bg-surface-2 border border-surface-3 text-white text-sm placeholder:text-muted focus:outline-none focus:border-[#1d9bf0] transition-colors font-mono"
+              />
+              {twitterQuery.trim() && !validTwitterUsername(twitterQuery) && (
+                <p className="text-red-400 text-xs mt-1.5">
+                  Invalid username — only letters, numbers, underscores (max 15 chars)
+                </p>
+              )}
             </div>
 
-            {twitterInfo && (
+            {/* Account preview (no API call) */}
+            {validTwitterUsername(twitterQuery) && cleanTwitter && (
               <div className="flex items-center gap-3 p-4 rounded-xl bg-surface-2 border border-[#1d9bf0]/30">
-                {twitterInfo.profileImageUrl
-                  ? <img src={twitterInfo.profileImageUrl} alt={twitterInfo.username} className="w-12 h-12 rounded-full shrink-0" />
-                  : <div className="w-12 h-12 rounded-full bg-[#1d9bf0]/20 flex items-center justify-center text-[#1d9bf0] font-bold text-lg shrink-0">
-                      {twitterInfo.name[0]}
-                    </div>}
-                <div className="flex-1 min-w-0">
-                  <p className="text-white font-semibold text-sm">{twitterInfo.name}</p>
-                  <p className="text-[#1d9bf0] text-xs font-mono">@{twitterInfo.username}</p>
-                  <div className="flex gap-3 mt-1">
-                    <span className="text-muted text-[10px]">
-                      <span className="text-white/70 font-semibold">{twitterInfo.followersCount.toLocaleString()}</span> followers
-                    </span>
-                    <span className="text-muted text-[10px]">
-                      <span className="text-white/70 font-semibold">{twitterInfo.tweetsCount.toLocaleString()}</span> posts
-                    </span>
-                  </div>
+                <div className="w-12 h-12 rounded-full bg-[#1d9bf0]/15 border border-[#1d9bf0]/30 flex items-center justify-center shrink-0">
+                  <svg className="w-6 h-6 text-[#1d9bf0]" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.858L1.808 2.25h6.946l4.258 5.63 5.232-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                  </svg>
                 </div>
-                <button onClick={() => { setTwitterInfo(null); setTwitterQuery(""); }} className="text-muted hover:text-white text-xs">✕</button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[#1d9bf0] text-sm font-mono font-semibold">@{cleanTwitter}</p>
+                  <a
+                    href={`https://twitter.com/${cleanTwitter}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-white/40 text-xs hover:text-[#1d9bf0] transition-colors"
+                  >
+                    View on X →
+                  </a>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] text-yellow-400/80 bg-yellow-400/10 border border-yellow-400/20 px-2 py-0.5 rounded">
+                    Make sure account is public
+                  </p>
+                </div>
               </div>
             )}
 
@@ -516,15 +501,15 @@ export default function CreatePage() {
           <div className="space-y-4">
             <div>
               <h2 className="text-white font-semibold mb-1">Question Type</h2>
-              <p className="text-muted text-xs mb-4">What do you want to predict about @{twitterInfo?.username}?</p>
+              <p className="text-muted text-xs mb-4">What do you want to predict about @{cleanTwitter}?</p>
             </div>
             <div className="space-y-3">
               {([
                 { value: "posts_count",   label: "Post count in 24 hours",
-                  desc: `How many posts will @${twitterInfo?.username} make in the next 24 hours?`,
+                  desc: `How many posts will @${cleanTwitter} make in the next 24 hours?`,
                   icon: "📊" },
                 { value: "next_post_time", label: "Time until next post",
-                  desc: `When will @${twitterInfo?.username} make their next post?`,
+                  desc: `When will @${cleanTwitter} make their next post?`,
                   icon: "⏱" },
               ] as const).map(opt => (
                 <button key={opt.value} onClick={() => setTwitterQuestion(opt.value)}
@@ -610,15 +595,13 @@ export default function CreatePage() {
             {/* Preview */}
             <div className="rounded-xl border border-white/8 bg-[#0d0f14] overflow-hidden">
               <div className="flex items-center gap-3 p-4">
-                {twitterInfo?.profileImageUrl
-                  ? <img src={twitterInfo.profileImageUrl} alt={twitterInfo?.username} className="w-10 h-10 rounded-full shrink-0" />
-                  : <div className="w-10 h-10 rounded-full bg-[#1d9bf0]/20 flex items-center justify-center shrink-0">
-                      <svg className="w-5 h-5 text-[#1d9bf0]" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.858L1.808 2.25h6.946l4.258 5.63 5.232-5.63z"/>
-                      </svg>
-                    </div>}
+                <div className="w-10 h-10 rounded-full bg-[#1d9bf0]/15 border border-[#1d9bf0]/30 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 text-[#1d9bf0]" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.858L1.808 2.25h6.946l4.258 5.63 5.232-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                  </svg>
+                </div>
                 <div>
-                  <p className="text-white font-semibold text-sm">@{twitterInfo?.username}</p>
+                  <p className="text-white font-semibold text-sm">@{cleanTwitter}</p>
                   <p className="text-white/60 text-xs">{question}</p>
                 </div>
               </div>
