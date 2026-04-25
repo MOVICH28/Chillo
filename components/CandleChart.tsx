@@ -18,6 +18,24 @@ const LIVE_WINDOW_MS: Partial<Record<Timeframe, number>> = {
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
+// Axis layout constants
+const Y_AXIS_W = 60; // px reserved on right for price labels
+const X_AXIS_H = 20; // px reserved at bottom for time labels
+const LINE_COLOR = "#00ff88";
+
+function formatPrice(p: number): string {
+  if (p >= 10_000) return "$" + Math.round(p).toLocaleString();
+  if (p >= 1_000)  return "$" + p.toFixed(1);
+  if (p >= 1)      return "$" + p.toFixed(2);
+  return "$" + p.toFixed(6);
+}
+
+function formatTime(ms: number): string {
+  return new Date(ms).toLocaleTimeString("en-US", {
+    hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+}
+
 // ── Canvas snake-line for LIVE mode ──────────────────────────────────────────
 
 function LiveLineCanvas({ data, priceToBeat, timeframe, width, height }: {
@@ -30,18 +48,19 @@ function LiveLineCanvas({ data, priceToBeat, timeframe, width, height }: {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef   = useRef<number>(0);
 
-  // Mutable refs read every frame — no effect restarts on data changes
+  // Mutable refs — read every frame without restarting the RAF loop
   const dataRef = useRef(data);
   const ptbRef  = useRef(priceToBeat);
   dataRef.current = data;
   ptbRef.current  = priceToBeat;
 
-  // Lerp state: displayPrice eases toward targetPrice each frame
+  // Velocity-based smoothing: inertia toward targetPrice
   const targetPriceRef  = useRef(0);
   const displayPriceRef = useRef(0);
+  const velocityRef     = useRef(0);
   const initializedRef  = useRef(false);
 
-  // Sync target with latest data point on every render
+  // Sync target from latest data on every render
   if (data.length > 0) {
     const latest = data[data.length - 1].price;
     targetPriceRef.current = latest;
@@ -57,70 +76,115 @@ function LiveLineCanvas({ data, priceToBeat, timeframe, width, height }: {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // Chart drawing area (inset from full canvas)
+    const chartW = width  - Y_AXIS_W;
+    const chartH = height - X_AXIS_H;
+
     const draw = () => {
-      const pts = dataRef.current;
-      const ptb = ptbRef.current;
+      const pts          = dataRef.current;
+      const ptb          = ptbRef.current;
+      const displayPrice = displayPriceRef.current;
       ctx.clearRect(0, 0, width, height);
       if (pts.length < 2) return;
 
-      // Build price array: historical points + lerped live price at tail
-      const rawPrices    = pts.map(d => d.price);
-      const displayPrice = displayPriceRef.current;
-      const allPrices    = [...rawPrices.slice(0, -1), displayPrice];
+      // Build price array: historical + velocity-eased live tail
+      const rawPrices = pts.map(d => d.price);
+      const allPrices = [...rawPrices.slice(0, -1), displayPrice];
 
-      // For sparse 5s data: add 4 linear intermediate points between each pair
-      // so the bezier curve has more anchors and looks denser
-      let drawPrices = allPrices;
-      if (timeframe === "5s" && allPrices.length > 1) {
+      // 5s mode: add 4 intermediate points between each pair for denser bezier anchors
+      const interpFactor = timeframe === "5s" ? 5 : 1;
+      let drawPrices     = allPrices;
+      if (interpFactor > 1 && allPrices.length > 1) {
         const dense: number[] = [];
         for (let i = 0; i < allPrices.length - 1; i++) {
           dense.push(allPrices[i]);
-          for (let j = 1; j <= 4; j++) dense.push(lerp(allPrices[i], allPrices[i + 1], j / 5));
+          for (let j = 1; j < interpFactor; j++)
+            dense.push(lerp(allPrices[i], allPrices[i + 1], j / interpFactor));
         }
         dense.push(allPrices[allPrices.length - 1]);
         drawPrices = dense;
       }
 
-      const minP  = Math.min(...drawPrices) * 0.9999;
-      const maxP  = Math.max(...drawPrices) * 1.0001;
+      // Price range across all visible prices
+      const allForRange = [...rawPrices, displayPrice];
+      const minP  = Math.min(...allForRange) * 0.9999;
+      const maxP  = Math.max(...allForRange) * 1.0001;
       const range = maxP - minP || 1;
 
-      const toY = (p: number) => height - ((p - minP) / range) * height * 0.85 - height * 0.05;
-      const toX = (i: number) => (i / (drawPrices.length - 1)) * width;
+      // Coordinate helpers — chart area only
+      const PAD_T = 10, PAD_B = 5;
+      const toY = (p: number) =>
+        PAD_T + (chartH - PAD_T - PAD_B) * (1 - (p - minP) / range);
+      const toX = (i: number) =>
+        (i / (drawPrices.length - 1)) * chartW;
+      // Map a real data index → dense index → x
+      const realToX = (ri: number) => toX(ri * interpFactor);
 
-      const lineColor = ptb != null
-        ? (displayPrice >= ptb ? "#22c55e" : "#ef4444")
-        : "#22c55e";
-
-      // Above/below color zones
-      if (ptb != null) {
-        const y = toY(ptb);
-        ctx.fillStyle = "rgba(34,197,94,0.04)";
-        ctx.fillRect(0, 0, width, y);
-        ctx.fillStyle = "rgba(239,68,68,0.04)";
-        ctx.fillRect(0, y, width, height - y);
-      }
-
-      // Dashed target price reference line
-      if (ptb != null) {
-        const y = toY(ptb);
-        ctx.setLineDash([4, 4]);
-        ctx.strokeStyle = "rgba(255,255,255,0.3)";
-        ctx.lineWidth = 1;
+      // ── Y-axis grid + price labels ─────────────────────────────────────────
+      ctx.font = "10px monospace";
+      const nY = 5;
+      for (let i = 0; i <= nY; i++) {
+        const p = minP + (maxP - minP) * (i / nY);
+        const y = toY(p);
+        if (y < 0 || y > chartH) continue;
+        // Grid line
+        ctx.strokeStyle = "rgba(255,255,255,0.05)";
+        ctx.lineWidth   = 1;
+        ctx.setLineDash([]);
         ctx.beginPath();
         ctx.moveTo(0, y);
-        ctx.lineTo(width, y);
+        ctx.lineTo(chartW, y);
+        ctx.stroke();
+        // Price label
+        ctx.fillStyle  = "rgba(255,255,255,0.35)";
+        ctx.textAlign  = "left";
+        ctx.fillText(formatPrice(p), chartW + 4, y + 3);
+      }
+
+      // ── X-axis grid + time labels ──────────────────────────────────────────
+      const nX = 5;
+      for (let i = 0; i <= nX; i++) {
+        const realIdx = Math.round((pts.length - 1) * (i / nX));
+        const x       = realToX(realIdx);
+        const ts      = pts[realIdx]?.time ?? 0;
+        if (x < 0 || x > chartW) continue;
+        // Grid line
+        ctx.strokeStyle = "rgba(255,255,255,0.05)";
+        ctx.lineWidth   = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, chartH);
+        ctx.stroke();
+        // Time label
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        ctx.textAlign = i === 0 ? "left" : i === nX ? "right" : "center";
+        ctx.fillText(formatTime(ts), x, chartH + 14);
+      }
+
+      // ── priceToBeat line + green zone ──────────────────────────────────────
+      if (ptb != null) {
+        const y = toY(ptb);
+        // Subtle green zone above the target
+        ctx.fillStyle = "rgba(0,255,136,0.04)";
+        ctx.fillRect(0, 0, chartW, Math.max(0, y));
+        // White dashed reference line
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = "rgba(255,255,255,0.3)";
+        ctx.lineWidth   = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(chartW, y);
         ctx.stroke();
         ctx.setLineDash([]);
       }
 
-      // Bezier curve price line with glow
-      ctx.strokeStyle = lineColor;
-      ctx.lineWidth = 2;
-      ctx.lineJoin = "round";
-      ctx.lineCap = "round";
-      ctx.shadowColor = lineColor;
-      ctx.shadowBlur = 6;
+      // ── Bezier price line with glow ────────────────────────────────────────
+      ctx.strokeStyle = LINE_COLOR;
+      ctx.lineWidth   = 2;
+      ctx.lineJoin    = "round";
+      ctx.lineCap     = "round";
+      ctx.shadowColor = LINE_COLOR;
+      ctx.shadowBlur  = 8;
       ctx.beginPath();
       drawPrices.forEach((price, i) => {
         const x = toX(i);
@@ -137,33 +201,57 @@ function LiveLineCanvas({ data, priceToBeat, timeframe, width, height }: {
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      // Glowing dot at lerped live position
+      // ── Glowing dot at live tail ───────────────────────────────────────────
       const lastX = toX(drawPrices.length - 1);
       const lastY = toY(displayPrice);
-      ctx.fillStyle = lineColor;
-      ctx.shadowColor = lineColor;
-      ctx.shadowBlur = 10;
+      ctx.fillStyle   = LINE_COLOR;
+      ctx.shadowColor = LINE_COLOR;
+      ctx.shadowBlur  = 10;
       ctx.beginPath();
       ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
 
-      // Floating price label
-      ctx.fillStyle = lineColor;
-      ctx.font = "11px monospace";
-      ctx.textAlign = "right";
-      ctx.fillText(displayPrice.toFixed(2), width - 4, lastY - 6);
+      // ── Current price pill label (in Y-axis area) ─────────────────────────
+      const pillText  = formatPrice(displayPrice);
+      ctx.font        = "bold 13px monospace";
+      const pillW     = ctx.measureText(pillText).width + 10;
+      const pillH     = 18;
+      const pillX     = chartW + 2;
+      const pillY     = Math.max(pillH / 2, Math.min(chartH - pillH / 2, lastY)) - pillH / 2;
+      // Rounded rectangle background
+      const r = 4;
+      ctx.fillStyle = LINE_COLOR;
+      ctx.beginPath();
+      ctx.moveTo(pillX + r, pillY);
+      ctx.lineTo(pillX + pillW - r, pillY);
+      ctx.quadraticCurveTo(pillX + pillW, pillY,           pillX + pillW, pillY + r);
+      ctx.lineTo(pillX + pillW, pillY + pillH - r);
+      ctx.quadraticCurveTo(pillX + pillW, pillY + pillH,   pillX + pillW - r, pillY + pillH);
+      ctx.lineTo(pillX + r,    pillY + pillH);
+      ctx.quadraticCurveTo(pillX,          pillY + pillH,  pillX, pillY + pillH - r);
+      ctx.lineTo(pillX, pillY + r);
+      ctx.quadraticCurveTo(pillX,          pillY,          pillX + r, pillY);
+      ctx.closePath();
+      ctx.fill();
+      // Text inside pill
+      ctx.fillStyle = "#000";
+      ctx.textAlign = "left";
+      ctx.fillText(pillText, pillX + 5, pillY + pillH - 4);
     };
 
     const animate = () => {
-      // Ease display price toward the latest WebSocket target each frame
-      displayPriceRef.current = lerp(displayPriceRef.current, targetPriceRef.current, 0.15);
+      // Velocity-based inertia: accelerates toward target, then decelerates naturally
+      const diff = targetPriceRef.current - displayPriceRef.current;
+      velocityRef.current    = velocityRef.current * 0.8 + diff * 0.2;
+      displayPriceRef.current += velocityRef.current;
       draw();
       animRef.current = requestAnimationFrame(animate);
     };
+    velocityRef.current = 0; // reset on canvas restart
     animate();
     return () => cancelAnimationFrame(animRef.current);
-  // Restart only on dimension changes; data/price are read via refs at 60fps
+  // Restart only on dimension changes; all data is read via refs each frame
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [width, height]);
 
