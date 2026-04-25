@@ -204,7 +204,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
       take: 30,
       include: {
-        user:  { select: { username: true } },
+        user:  { select: { username: true, avatarUrl: true } },
         round: { select: { question: true, status: true, winningOutcome: true } },
       },
     });
@@ -213,6 +213,7 @@ export async function GET(req: NextRequest) {
       trades.map(t => ({
         id:            t.id,
         walletAddress: t.user?.username ?? "anon",
+        avatarUrl:     t.user?.avatarUrl ?? null,
         side:          t.outcome,
         type:          t.type,
         amount:        t.totalCost,
