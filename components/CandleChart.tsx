@@ -10,12 +10,132 @@ import { OHLCPoint, Timeframe } from "@/lib/useTokenPrice";
 const CHART_BG = "#0d0f14";
 const H = 350;
 
-// Visible time window for LIVE mode (ms)
 const LIVE_WINDOW_MS: Partial<Record<Timeframe, number>> = {
-  "1s":  150_000,   // last 150 seconds
-  "5s":  300_000,   // last 5 minutes
-  "30s": 900_000,   // last 15 minutes
+  "1s":  150_000,
+  "5s":  300_000,
+  "30s": 900_000,
 };
+
+// ── Canvas snake-line for LIVE mode ──────────────────────────────────────────
+
+function LiveLineCanvas({ data, priceToBeat, width, height }: {
+  data:        OHLCPoint[];
+  priceToBeat: number | null;
+  width:       number;
+  height:      number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animRef   = useRef<number>(0);
+
+  // Refs so the animation loop always reads the latest values without restarting
+  const dataRef = useRef(data);
+  const ptbRef  = useRef(priceToBeat);
+  dataRef.current = data;
+  ptbRef.current  = priceToBeat;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || width === 0 || height === 0) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const draw = () => {
+      const pts = dataRef.current;
+      const ptb = ptbRef.current;
+      ctx.clearRect(0, 0, width, height);
+      if (pts.length < 2) return;
+
+      const prices = pts.map(d => d.price);
+      const minP   = Math.min(...prices) * 0.9999;
+      const maxP   = Math.max(...prices) * 1.0001;
+      const range  = maxP - minP || 1;
+
+      const toY = (p: number) => height - ((p - minP) / range) * height * 0.85 - height * 0.05;
+      const toX = (i: number) => (i / (pts.length - 1)) * width;
+
+      const currentPrice = prices[prices.length - 1];
+      const lineColor = ptb != null
+        ? (currentPrice >= ptb ? "#22c55e" : "#ef4444")
+        : "#22c55e";
+
+      // Above/below zones relative to priceToBeat
+      if (ptb != null) {
+        const y = toY(ptb);
+        ctx.fillStyle = "rgba(34,197,94,0.04)";
+        ctx.fillRect(0, 0, width, y);
+        ctx.fillStyle = "rgba(239,68,68,0.04)";
+        ctx.fillRect(0, y, width, height - y);
+      }
+
+      // Dashed priceToBeat reference line
+      if (ptb != null) {
+        const y = toY(ptb);
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = "rgba(255,255,255,0.3)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Smooth price line with glow
+      ctx.strokeStyle = lineColor;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.shadowColor = lineColor;
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      pts.forEach((_, i) => {
+        const x = toX(i);
+        const y = toY(prices[i]);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Glowing dot at current price
+      const lastX = toX(pts.length - 1);
+      const lastY = toY(currentPrice);
+      ctx.fillStyle = lineColor;
+      ctx.shadowColor = lineColor;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Current price label
+      ctx.fillStyle = lineColor;
+      ctx.font = "11px monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(currentPrice.toFixed(2), width - 4, lastY - 6);
+    };
+
+    const animate = () => {
+      draw();
+      animRef.current = requestAnimationFrame(animate);
+    };
+    animate();
+    return () => cancelAnimationFrame(animRef.current);
+  // Restart only when canvas dimensions change; data/ptb are read via refs
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [width, height]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={width}
+      height={height}
+      style={{ display: "block" }}
+    />
+  );
+}
+
+// ── Main CandleChart component ────────────────────────────────────────────────
 
 interface Props {
   data:        OHLCPoint[];
@@ -42,27 +162,26 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
   const prevPriceToBeat = useRef<number | null | undefined>(undefined);
   const mountedRef      = useRef(false);
 
-  // Pan / auto-scroll state
+  // Pan / auto-scroll state (for Line/Candles modes)
   const userPannedRef   = useRef(false);
-  const programmaticRef = useRef(false); // true while we call chart APIs ourselves
-  const fittedRef       = useRef(false); // true after first setData per timeframe+chartType
+  const programmaticRef = useRef(false);
+  const fittedRef       = useRef(false);
   const [showLiveBtn, setShowLiveBtn] = useState(false);
 
-  // LIVE mode incremental update tracking
-  const prevLastTimeRef  = useRef<number | null>(null);
-  const prevLastPriceRef = useRef<number | null>(null);
+  // Tracked width fed to LiveLineCanvas
+  const [containerWidth, setContainerWidth] = useState(600);
 
-  // Wrap every chart API call so the subscription ignores it
   const prog = (fn: () => void) => {
     programmaticRef.current = true;
     try { fn(); } catch { /**/ }
     programmaticRef.current = false;
   };
 
-  // ── Effect 1: create chart + all series ─────────────────────────────────────
+  // ── Effect 1: create lightweight-charts chart + all series ──────────────────
   useEffect(() => {
     if (!containerRef.current) return;
     mountedRef.current = true;
+    setContainerWidth(containerRef.current.clientWidth || 600);
 
     try {
       const chart = createChart(containerRef.current, {
@@ -122,7 +241,6 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
         priceScaleId:    "right",
       });
 
-      // Detect user pan — ignored when we're making programmatic changes
       const onRangeChange = () => {
         if (programmaticRef.current || !mountedRef.current) return;
         userPannedRef.current = true;
@@ -132,7 +250,9 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
 
       const ro = new ResizeObserver(() => {
         if (!mountedRef.current || !containerRef.current || !chartRef.current) return;
-        prog(() => chartRef.current.applyOptions({ width: containerRef.current!.clientWidth }));
+        const w = containerRef.current.clientWidth;
+        prog(() => chartRef.current.applyOptions({ width: w }));
+        setContainerWidth(w);
       });
       ro.observe(containerRef.current);
 
@@ -151,8 +271,9 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Effect 2: push data ──────────────────────────────────────────────────────
+  // ── Effect 2: push data to lightweight-charts (Line / Candles only) ─────────
   useEffect(() => {
+    if (chartType === "live") return; // canvas handles LIVE mode
     if (!mountedRef.current || !lineRef.current || !candleRef.current || !volRef.current) return;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -184,53 +305,13 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
 
       if (!data.length) return;
 
-      const isStreamingTf = ["1s", "5s", "30s"].includes(timeframe);
-      // LIVE mode only available for streaming timeframes; falls back to LINE otherwise
-      const effectiveType = chartType === "live" && !isStreamingTf ? "line" : chartType;
-
       const first     = data[0].price;
-      const last      = data[data.length - 1];
-      const lastPrice = last.price;
+      const lastPrice = data[data.length - 1].price;
       const lineColor = priceToBeat != null
         ? (lastPrice >= priceToBeat ? "#22c55e" : "#ef4444")
         : (lastPrice >= first       ? "#22c55e" : "#ef4444");
 
-      // ── LIVE mode: snake line with series.update() ──────────────────────────
-      if (effectiveType === "live") {
-        prog(() => candleRef.current.setData([]));
-        prog(() => volRef.current.setData([]));
-        prog(() => lineRef.current.applyOptions({ color: lineColor }));
-
-        const windowMs = LIVE_WINDOW_MS[timeframe] ?? 150_000;
-        const cutoff   = Date.now() - windowMs;
-
-        if (!fittedRef.current) {
-          // Initial load: setData with windowed history, then fit
-          fittedRef.current = true;
-          const initialData = data
-            .filter(p => p.time >= cutoff)
-            .map(p => ({ time: toSec(p.time), value: p.price }));
-          if (initialData.length) {
-            prog(() => lineRef.current.setData(initialData));
-            prog(() => chartRef.current.timeScale().fitContent());
-          }
-          prevLastTimeRef.current  = toSec(last.time);
-          prevLastPriceRef.current = lastPrice;
-        } else {
-          // Incremental update: series.update() for smooth snake animation
-          const lastTimeSec = toSec(last.time);
-          if (lastTimeSec !== prevLastTimeRef.current || lastPrice !== prevLastPriceRef.current) {
-            prog(() => lineRef.current.update({ time: lastTimeSec, value: lastPrice }));
-          }
-          prevLastTimeRef.current  = lastTimeSec;
-          prevLastPriceRef.current = lastPrice;
-          if (!userPannedRef.current) {
-            prog(() => chartRef.current.timeScale().scrollToRealTime());
-          }
-        }
-
-      // ── CANDLES mode: OHLCV candlestick ────────────────────────────────────
-      } else if (effectiveType === "candles" && isKline) {
+      if (chartType === "candles" && isKline) {
         prog(() => lineRef.current.setData([]));
 
         const candleData = data
@@ -246,19 +327,9 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
             color: p.price >= (p.open ?? p.price) ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)",
           }));
         if (volData.length) prog(() => volRef.current.setData(volData));
-
-        if (!fittedRef.current) {
-          fittedRef.current = true;
-          prog(() => chartRef.current.timeScale().fitContent());
-        } else if (!userPannedRef.current) {
-          prog(() => chartRef.current.timeScale().scrollToRealTime());
-        }
-
-      // ── LINE mode: static full-history line ────────────────────────────────
       } else {
         prog(() => candleRef.current.setData([]));
         prog(() => lineRef.current.applyOptions({ color: lineColor }));
-
         const lineData = data.map(p => ({ time: toSec(p.time), value: p.price }));
         prog(() => lineRef.current.setData(lineData));
 
@@ -274,42 +345,67 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
         } else {
           prog(() => volRef.current.setData([]));
         }
+      }
 
-        if (!fittedRef.current) {
-          fittedRef.current = true;
-          prog(() => chartRef.current.timeScale().fitContent());
-        } else if (!userPannedRef.current) {
-          prog(() => chartRef.current.timeScale().scrollToRealTime());
-        }
+      if (!fittedRef.current) {
+        fittedRef.current = true;
+        prog(() => chartRef.current.timeScale().fitContent());
+      } else if (!userPannedRef.current) {
+        prog(() => chartRef.current.timeScale().scrollToRealTime());
       }
     } catch { /**/ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, chartType, isKline, priceToBeat, timeframe]);
+  }, [data, chartType, isKline, priceToBeat]);
 
-  // ── Effect 3: reset state on timeframe or chartType change ──────────────────
+  // ── Effect 3: reset scroll state on timeframe or chartType change ────────────
   useEffect(() => {
-    userPannedRef.current    = false;
-    fittedRef.current        = false;
-    prevLastTimeRef.current  = null;
-    prevLastPriceRef.current = null;
+    userPannedRef.current = false;
+    fittedRef.current     = false;
     setShowLiveBtn(false);
   }, [timeframe, chartType]);
 
-  // "▶ Live" button — jump back to newest data
   const handleGoLive = () => {
     userPannedRef.current = false;
     setShowLiveBtn(false);
     prog(() => chartRef.current?.timeScale().scrollToRealTime());
   };
 
+  // Windowed data slice for the canvas (LIVE mode only)
+  const windowMs  = LIVE_WINDOW_MS[timeframe] ?? 150_000;
+  const cutoff    = Date.now() - windowMs;
+  const liveData  = chartType === "live"
+    ? data.filter(p => p.time >= cutoff)
+    : [];
+
   const loading = data.length < 2 && status !== "live";
 
   return (
     <div className="relative w-full rounded-xl overflow-hidden" style={{ height: H, background: CHART_BG }}>
-      <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
 
-      {/* Back-to-live button */}
-      {showLiveBtn && !loading && (
+      {/* lightweight-charts container — always mounted so chart persists across mode switches */}
+      <div
+        ref={containerRef}
+        style={{
+          width:      "100%",
+          height:     "100%",
+          visibility: chartType === "live" ? "hidden" : "visible",
+        }}
+      />
+
+      {/* Canvas snake-line — rendered only in LIVE mode, absolutely overlaid */}
+      {chartType === "live" && containerWidth > 0 && (
+        <div style={{ position: "absolute", inset: 0 }}>
+          <LiveLineCanvas
+            data={liveData}
+            priceToBeat={priceToBeat}
+            width={containerWidth}
+            height={H}
+          />
+        </div>
+      )}
+
+      {/* Back-to-live button (Line / Candles modes only) */}
+      {showLiveBtn && !loading && chartType !== "live" && (
         <button
           onClick={handleGoLive}
           className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-1 rounded text-[11px] font-mono font-semibold transition-opacity hover:opacity-80"
