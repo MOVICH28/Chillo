@@ -461,10 +461,10 @@ export default function CreatePage() {
             {/* Account preview (no API call) */}
             {validTwitterUsername(twitterQuery) && cleanTwitter && (
               <div className="flex items-center gap-3 p-4 rounded-xl bg-surface-2 border border-[#1d9bf0]/30">
-                <div className="w-12 h-12 rounded-full bg-[#1d9bf0]/15 border border-[#1d9bf0]/30 flex items-center justify-center shrink-0">
-                  <svg className="w-6 h-6 text-[#1d9bf0]" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.858L1.808 2.25h6.946l4.258 5.63 5.232-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                  </svg>
+                <div className="w-12 h-12 rounded-full bg-[#1d9bf0] flex items-center justify-center shrink-0">
+                  <span className="text-white font-bold text-xl leading-none">
+                    {cleanTwitter[0]?.toUpperCase() ?? "?"}
+                  </span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[#1d9bf0] text-sm font-mono font-semibold">@{cleanTwitter}</p>
@@ -595,10 +595,10 @@ export default function CreatePage() {
             {/* Preview */}
             <div className="rounded-xl border border-white/8 bg-[#0d0f14] overflow-hidden">
               <div className="flex items-center gap-3 p-4">
-                <div className="w-10 h-10 rounded-full bg-[#1d9bf0]/15 border border-[#1d9bf0]/30 flex items-center justify-center shrink-0">
-                  <svg className="w-5 h-5 text-[#1d9bf0]" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.858L1.808 2.25h6.946l4.258 5.63 5.232-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                  </svg>
+                <div className="w-10 h-10 rounded-full bg-[#1d9bf0] flex items-center justify-center shrink-0">
+                  <span className="text-white font-bold text-base leading-none">
+                    {cleanTwitter[0]?.toUpperCase() ?? "?"}
+                  </span>
                 </div>
                 <div>
                   <p className="text-white font-semibold text-sm">@{cleanTwitter}</p>
