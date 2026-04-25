@@ -147,18 +147,18 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2 rounded-lg border border-white/5 mb-2"
          style={{ background: "#0d0f14" }}>
-      {/* Price */}
-      <div className="flex flex-col">
-        <span className="text-[9px] text-white/25 mb-0.5 uppercase tracking-wider">Price</span>
-        <span className="text-white font-mono font-bold text-sm">{fmtPrice(stats.priceUsd)}</span>
-      </div>
-
-      <span className="hidden sm:block w-px h-6 bg-white/8 shrink-0" />
-
-      {/* Market cap */}
+      {/* Market cap — primary stat */}
       <div className="flex flex-col">
         <span className="text-[9px] text-white/25 mb-0.5 uppercase tracking-wider">Mkt Cap</span>
-        <span className="text-white/60 text-xs font-mono">{fmtLarge(stats.marketCap)}</span>
+        <span className="text-white font-mono font-bold text-xl leading-tight">{fmtLarge(stats.marketCap)}</span>
+      </div>
+
+      <span className="hidden sm:block w-px h-8 bg-white/8 shrink-0" />
+
+      {/* Price — secondary stat */}
+      <div className="flex flex-col">
+        <span className="text-[9px] text-white/25 mb-0.5 uppercase tracking-wider">Price</span>
+        <span className="text-white/80 text-sm font-mono font-semibold">{fmtPrice(stats.priceUsd)}</span>
       </div>
 
       {/* Volume */}
@@ -167,7 +167,7 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
         <span className="text-white/60 text-xs font-mono">{fmtLarge(stats.volume24h)}</span>
       </div>
 
-      <span className="hidden sm:block w-px h-6 bg-white/8 shrink-0" />
+      <span className="hidden sm:block w-px h-8 bg-white/8 shrink-0" />
 
       <Change v={stats.priceChange.m5}  label="5m"  />
       <Change v={stats.priceChange.h1}  label="1h"  />

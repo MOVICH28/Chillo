@@ -7,7 +7,7 @@ import Avatar from "@/components/Avatar";
 import LMSRBetPanel from "@/components/LMSRBetPanel";
 import { getAllPrices } from "@/lib/lmsr";
 import {
-  ComposedChart, Line, Bar,
+  ComposedChart, Line, Bar, Customized,
   XAxis, YAxis, CartesianGrid, ReferenceArea, ReferenceLine,
   ResponsiveContainer, Tooltip,
 } from "recharts";
@@ -127,20 +127,72 @@ const TIMEFRAMES: { key: Timeframe; label: string }[] = [
   { key: "24h", label: "24h" },
 ];
 
-// ── Live chart ────────────────────────────────────────────────────────────────
+// ── Candlestick layer (rendered via Recharts Customized) ──────────────────────
 
 const CHART_BG = "#0d0f14";
 
-function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat, timeframe }: {
+interface OHLCRow { t: number; price: number; open?: number; high?: number; low?: number; volume?: number }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function CandlestickLayer({ xAxisMap, yAxisMap, ohlcData }: any) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const xAxis: any = xAxisMap?.[0] ?? xAxisMap?.["0"] ?? Object.values(xAxisMap ?? {})[0];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const yAxis: any = yAxisMap?.["price"] ?? yAxisMap?.[0] ?? Object.values(yAxisMap ?? {})[0];
+  if (!xAxis?.scale || !yAxis?.scale || !ohlcData?.length) return null;
+
+  const xs = xAxis.scale;
+  const ys = yAxis.scale;
+  const n  = ohlcData.length;
+  const slotW  = n > 1 ? Math.abs(xs(ohlcData[1].t) - xs(ohlcData[0].t)) : 8;
+  const bodyW  = Math.max(slotW * 0.55, 1.5);
+
+  return (
+    <g>
+      {(ohlcData as OHLCRow[]).map((d, i) => {
+        if (d.open == null || d.high == null || d.low == null) return null;
+
+        const cx   = xs(d.t);
+        const yH   = ys(d.high);
+        const yL   = ys(d.low);
+        const yO   = ys(d.open);
+        const yC   = ys(d.price);
+        const isUp = d.price >= d.open;
+        const clr  = isUp ? "#22c55e" : "#ef4444";
+        const fill = isUp ? "rgba(34,197,94,0.55)" : "rgba(239,68,68,0.65)";
+        const bTop = Math.min(yO, yC);
+        const bH   = Math.max(Math.abs(yC - yO), 1);
+
+        return (
+          <g key={i}>
+            {/* Full wick */}
+            <line x1={cx} x2={cx} y1={yH} y2={yL} stroke={clr} strokeWidth={1} opacity={0.7} />
+            {/* Body */}
+            <rect x={cx - bodyW / 2} y={bTop} width={bodyW} height={bH}
+              fill={fill} stroke={clr} strokeWidth={0.5} />
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+// ── Live chart ────────────────────────────────────────────────────────────────
+
+function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat, timeframe, chartType }: {
   targetToken?:  string | null;
   tokenAddress?: string | null;
   tokenSymbol?:  string | null;
   priceToBeat:   number | null;
   timeframe:     Timeframe;
+  chartType:     "line" | "candles";
 }) {
   const { price, history, status, label, isKline } = useTokenPrice({
     targetToken, tokenAddress, tokenSymbol, timeframe,
   });
+
+  // Candles require OHLCV from klines; force line for streaming timeframes
+  const effectiveChartType = isKline ? chartType : "line";
 
   const fmtY = (v: number) => {
     if (v >= 1000) return `$${Math.round(v).toLocaleString("en-US")}`;
@@ -248,41 +300,58 @@ function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat, timefr
             label={{ value: fmtY(currentPrice), position: "right",
               fill: lineColor, fontSize: 11, fontWeight: 700, dx: 4 }} />
 
-          {/* Volume bars (kline only) — rendered before price line so line sits on top */}
+          {/* Volume bars (kline only) */}
           {isKline && (
-            <Bar
-              yAxisId="vol" dataKey="volume"
-              fill="rgba(255,255,255,0.07)"
-              isAnimationActive={false}
+            <Bar yAxisId="vol" dataKey="volume" fill="rgba(255,255,255,0.07)" isAnimationActive={false} />
+          )}
+
+          {/* Candlesticks (kline + candles mode) */}
+          {effectiveChartType === "candles" && (
+            <Customized
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              component={(p: any) => <CandlestickLayer {...p} ohlcData={data} />}
             />
           )}
 
-          {/* Price line */}
+          {/* Price line — always rendered; invisible in candles mode (keeps tooltip tracking) */}
           <Line
             yAxisId="price"
             type="monotone"
             dataKey="price"
-            stroke={lineColor}
+            stroke={effectiveChartType === "candles" ? "transparent" : lineColor}
             strokeWidth={1.5}
             dot={false}
-            activeDot={{ r: 3, fill: lineColor, stroke: CHART_BG, strokeWidth: 2 }}
+            activeDot={effectiveChartType === "candles"
+              ? { r: 0 }
+              : { r: 3, fill: lineColor, stroke: CHART_BG, strokeWidth: 2 }}
             isAnimationActive={false}
           />
 
           <Tooltip
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            formatter={(v: any, name: any) =>
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              name === "price" ? [fmtY(v as number), "Price"] : (null as any)
-            }
-            labelFormatter={(t) => fmtX(t as number)}
-            contentStyle={{
-              background: "#0d0f14",
-              border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: 6, fontSize: 11, padding: "4px 10px",
-            }}
-            itemStyle={{ color: lineColor }}
             cursor={{ stroke: "rgba(255,255,255,0.08)", strokeWidth: 1 }}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            content={({ active, payload }: any) => {
+              if (!active || !payload?.length) return null;
+              const d: OHLCRow = payload[0]?.payload;
+              if (!d) return null;
+              const isUp = d.price >= (d.open ?? d.price);
+              const c    = effectiveChartType === "candles" ? (isUp ? "#22c55e" : "#ef4444") : lineColor;
+              return (
+                <div style={{ background: "#0d0f14", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, fontSize: 11, padding: "5px 10px" }}>
+                  <div style={{ color: "rgba(255,255,255,0.3)", marginBottom: 3, fontSize: 9 }}>{fmtX(d.t)}</div>
+                  {effectiveChartType === "candles" && d.open != null ? (
+                    <div style={{ color: c, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1px 10px" }}>
+                      <span>O {fmtY(d.open)}</span>
+                      <span>H {fmtY(d.high!)}</span>
+                      <span>L {fmtY(d.low!)}</span>
+                      <span>C {fmtY(d.price)}</span>
+                    </div>
+                  ) : (
+                    <span style={{ color: lineColor }}>{fmtY(d.price)}</span>
+                  )}
+                </div>
+              );
+            }}
           />
         </ComposedChart>
       </ResponsiveContainer>
@@ -497,6 +566,9 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
   const [copied, setCopied]             = useState(false);
   const [activeTab, setActiveTab]       = useState<"discussion" | "activity">("discussion");
   const [timeframe, setTimeframe]       = useState<Timeframe>("1s");
+  const [chartType, setChartType]       = useState<"line" | "candles">("line");
+  const [tfOpen, setTfOpen]             = useState(false);
+  const tfRef                           = useRef<HTMLDivElement>(null);
   const [lmsrPrices, setLmsrPrices]     = useState<Record<string, number>>(() => {
     const outcomes = (initialRound.outcomes ?? []).map(o => o.id);
     return getAllPrices(initialRound.shares ?? {}, initialRound.lmsrB, outcomes);
@@ -536,6 +608,15 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
       setTimeout(() => betPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
     }
   }, [initialOutcome]);
+
+  // Close timeframe dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (tfRef.current && !tfRef.current.contains(e.target as Node)) setTfOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   function handleShare() {
     navigator.clipboard.writeText(window.location.href).then(() => {
@@ -636,27 +717,82 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
             {/* Chart + pool bar */}
             {hasToken && outcomes.length > 0 ? (
               <>
-                {/* Timeframe selector */}
-                <div className="flex items-center gap-0.5 flex-wrap mb-1">
-                  {TIMEFRAMES.map(tf => (
-                    <button
-                      key={tf.key}
-                      onClick={() => setTimeframe(tf.key)}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold transition-colors
-                        ${timeframe === tf.key
-                          ? "bg-brand/20 text-brand border border-brand/40"
-                          : "text-white/25 hover:text-white/50 border border-transparent"}`}
-                    >
-                      {tf.label}
-                    </button>
-                  ))}
-                </div>
+                {/* Chart controls: Line/Candles toggle + timeframe dropdown */}
+                {(() => {
+                  const isStreaming = ["1s","5s","30s"].includes(timeframe);
+                  return (
+                    <div className="flex items-center justify-between mb-1">
+                      {/* Line / Candles toggle */}
+                      <div className="flex items-center gap-0.5 rounded-md overflow-hidden border border-white/8"
+                           style={{ background: "#0d0f14" }}>
+                        {(["line", "candles"] as const).map(ct => {
+                          const disabled = ct === "candles" && isStreaming;
+                          return (
+                            <button
+                              key={ct}
+                              disabled={disabled}
+                              onClick={() => setChartType(ct)}
+                              className={`px-2.5 py-1 text-[11px] font-semibold transition-colors capitalize
+                                ${chartType === ct && !disabled
+                                  ? "bg-white/10 text-white"
+                                  : "text-white/30 hover:text-white/60"}
+                                ${disabled ? "opacity-30 cursor-not-allowed" : ""}`}
+                            >
+                              {ct === "line" ? "Line" : "Candles"}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Timeframe dropdown */}
+                      <div ref={tfRef} className="relative">
+                        <button
+                          onClick={() => setTfOpen(v => !v)}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold transition-colors"
+                          style={{
+                            background: "#0d0f14",
+                            border: "1px solid rgba(34,197,94,0.35)",
+                            color: "#22c55e",
+                          }}
+                        >
+                          {timeframe}
+                          <svg className={`w-3 h-3 transition-transform duration-150 ${tfOpen ? "rotate-180" : ""}`}
+                               fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+
+                        {tfOpen && (
+                          <div className="absolute right-0 top-full mt-1 z-30 rounded-lg overflow-hidden py-1"
+                               style={{ background: "#0d0f14", border: "1px solid rgba(255,255,255,0.1)", minWidth: 68 }}>
+                            {TIMEFRAMES.map(tf => (
+                              <button
+                                key={tf.key}
+                                onClick={() => {
+                                  setTimeframe(tf.key);
+                                  if (["1s","5s","30s"].includes(tf.key)) setChartType("line");
+                                  setTfOpen(false);
+                                }}
+                                className={`w-full text-left px-3 py-1.5 text-[11px] font-mono transition-colors hover:bg-white/5
+                                  ${timeframe === tf.key ? "text-[#22c55e]" : "text-white/45"}`}
+                              >
+                                {tf.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <LiveChart
                   targetToken={round.targetToken}
                   tokenAddress={round.tokenAddress}
                   tokenSymbol={round.tokenSymbol}
                   priceToBeat={round.targetPrice}
                   timeframe={timeframe}
+                  chartType={chartType}
                 />
                 <PoolBar outcomes={outcomes} prices={lmsrPrices} />
               </>
