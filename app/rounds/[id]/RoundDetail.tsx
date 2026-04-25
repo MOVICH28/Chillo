@@ -11,7 +11,7 @@ import {
   ResponsiveContainer, Tooltip,
 } from "recharts";
 import { Outcome } from "@/lib/types";
-import { useBinancePrice } from "@/lib/useBinancePrice";
+import { useTokenPrice } from "@/lib/useTokenPrice";
 import { useAuth } from "@/lib/useAuth";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -37,7 +37,11 @@ interface RoundData {
   noPool: number;
   totalPool: number;
   realPool: number;
-  roundNumber: number | null;
+  roundNumber:  number | null;
+  tokenAddress: string | null;
+  tokenSymbol:  string | null;
+  tokenLogo:    string | null;
+  isCustom:     boolean;
 }
 
 interface RecentTrade {
@@ -107,12 +111,23 @@ function timeAgo(dateStr: string): string {
 
 // ── Live chart ────────────────────────────────────────────────────────────────
 
-function LiveChart({ token, priceToBeat }: { token: "bitcoin" | "solana"; priceToBeat: number | null }) {
-  const { price, history, status } = useBinancePrice(token);
+function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat }: {
+  targetToken?:  string | null;
+  tokenAddress?: string | null;
+  tokenSymbol?:  string | null;
+  priceToBeat:   number | null;
+}) {
+  const { price, history, status, label } = useTokenPrice({ targetToken, tokenAddress, tokenSymbol });
 
-  const fmtY = token === "bitcoin"
+  const isBtc = label.startsWith("BTC");
+  const fmtY = isBtc
     ? (v: number) => `$${Math.round(v).toLocaleString("en-US")}`
-    : (v: number) => `$${v.toFixed(2)}`;
+    : (v: number) => {
+        if (v >= 1000) return `$${Math.round(v).toLocaleString("en-US")}`;
+        if (v >= 1)    return `$${v.toFixed(2)}`;
+        if (v >= 0.01) return `$${v.toFixed(4)}`;
+        return `$${v.toFixed(6)}`;
+      };
 
   if (history.length < 2) {
     return (
@@ -129,17 +144,18 @@ function LiveChart({ token, priceToBeat }: { token: "bitcoin" | "solana"; priceT
   }
 
   const currentPrice = price ?? history[history.length - 1].price;
-  const isAbove = priceToBeat !== null ? currentPrice >= priceToBeat : true;
+  const isAbove   = priceToBeat !== null ? currentPrice >= priceToBeat : true;
   const lineColor = priceToBeat !== null ? (isAbove ? "#22c55e" : "#ef4444") : "#22c55e";
 
   const allPrices = [...history.map(p => p.price), ...(priceToBeat ? [priceToBeat] : [])];
-  const rawMin = Math.min(...allPrices);
-  const rawMax = Math.max(...allPrices);
-  const pad = Math.max((rawMax - rawMin) * 0.18, token === "bitcoin" ? 100 : 0.2);
+  const rawMin  = Math.min(...allPrices);
+  const rawMax  = Math.max(...allPrices);
+  const rawSpan = rawMax - rawMin;
+  const pad     = Math.max(rawSpan * 0.18, rawMax * 0.001, 0.000001);
   const domainMin = rawMin - pad;
   const domainMax = rawMax + pad;
 
-  const t0 = history[0].time;
+  const t0   = history[0].time;
   const fmtX = (t: number) => {
     const elapsed = Math.round((t - t0) / 1000);
     const m = Math.floor(elapsed / 60);
@@ -147,15 +163,14 @@ function LiveChart({ token, priceToBeat }: { token: "bitcoin" | "solana"; priceT
     return `${m}:${String(s).padStart(2, "0")}`;
   };
 
-  const data = history.map(p => ({ t: p.time, price: p.price }));
+  const data    = history.map(p => ({ t: p.time, price: p.price }));
+  const yWidth  = isBtc ? 72 : 64;
 
   return (
     <div className="h-[400px] w-full select-none bg-surface-2 rounded-xl border border-white/5 overflow-hidden">
       <div className="flex items-center gap-1.5 px-4 pt-3 pb-0">
         <span className={`w-1.5 h-1.5 rounded-full ${status === "live" ? "bg-[#22c55e]" : "bg-white/20"}`} />
-        <span className="text-[10px] uppercase tracking-widest font-bold text-white/40">
-          {token === "bitcoin" ? "BTC/USDT" : "SOL/USDT"}
-        </span>
+        <span className="text-[10px] uppercase tracking-widest font-bold text-white/40">{label}</span>
         <span className="ml-auto text-xs font-mono font-semibold text-white/80">{fmtY(currentPrice)}</span>
       </div>
       <ResponsiveContainer width="100%" height="90%">
@@ -175,7 +190,7 @@ function LiveChart({ token, priceToBeat }: { token: "bitcoin" | "solana"; priceT
           <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={fmtX}
             tick={{ fontSize: 9, fill: "#374151" }} axisLine={{ stroke: "#1f2937" }} tickLine={false}
             interval="preserveStartEnd" tickCount={6} />
-          <YAxis domain={[domainMin, domainMax]} tickFormatter={fmtY} width={token === "bitcoin" ? 72 : 58}
+          <YAxis domain={[domainMin, domainMax]} tickFormatter={fmtY} width={yWidth}
             tick={{ fontSize: 9, fill: "#374151" }} axisLine={false} tickLine={false} tickCount={6} />
           <Tooltip
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -412,8 +427,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
     ? new Date() > new Date(round.bettingClosesAt)
     : round.status !== "open";
 
-  const hasToken = round.targetToken === "bitcoin" || round.targetToken === "solana";
-  const token: "bitcoin" | "solana" = round.targetToken === "solana" ? "solana" : "bitcoin";
+  const hasToken = !!(round.targetToken || round.tokenAddress || round.tokenSymbol);
 
   const refreshRound = useCallback(async () => {
     try {
@@ -530,7 +544,12 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
             {/* Chart + pool bar */}
             {hasToken && outcomes.length > 0 ? (
               <>
-                <LiveChart token={token} priceToBeat={round.targetPrice} />
+                <LiveChart
+                  targetToken={round.targetToken}
+                  tokenAddress={round.tokenAddress}
+                  tokenSymbol={round.tokenSymbol}
+                  priceToBeat={round.targetPrice}
+                />
                 <PoolBar outcomes={outcomes} prices={lmsrPrices} />
               </>
             ) : (
