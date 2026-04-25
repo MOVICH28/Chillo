@@ -1,69 +1,42 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 
-interface Stats {
-  priceUsd:    number;
-  marketCap:   number | null;
-  volume24h:   number | null;
-  priceChange: { m5: number | null; h1: number | null; h6: number | null; h24: number | null };
-  symbol:      string;
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface CgData {
+  volume24h:         number | null;
+  change5m:          number | null;
+  change1h:          number | null;
+  change6h:          number | null;
+  change24h:         number | null;
+  circulatingSupply: number | null;
 }
+
+interface DexData {
+  priceUsd:  number;
+  marketCap: number | null;
+  volume24h: number | null;
+  change5m:  number | null;
+  change1h:  number | null;
+  change6h:  number | null;
+  change24h: number | null;
+  symbol:    string;
+}
+
+// ── Config ────────────────────────────────────────────────────────────────────
 
 const CG_IDS: Record<string, string> = {
   bitcoin: "bitcoin", solana: "solana",
   btc:     "bitcoin", sol:    "solana",
 };
 
-async function fetchCoinGecko(cgId: string): Promise<Stats | null> {
-  try {
-    const res = await fetch(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd` +
-      `&include_24hr_change=true&include_market_cap=true&include_24hr_vol=true`,
-      { cache: "no-store" }
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const d = data[cgId];
-    if (!d) return null;
-    return {
-      priceUsd:  d.usd,
-      marketCap: d.usd_market_cap   ?? null,
-      volume24h: d.usd_24h_vol      ?? null,
-      priceChange: { m5: null, h1: null, h6: null, h24: d.usd_24h_change ?? null },
-      symbol: cgId === "bitcoin" ? "BTC" : "SOL",
-    };
-  } catch { return null; }
-}
+const BINANCE_WS: Record<string, string> = {
+  bitcoin: "btcusdt",
+  solana:  "solusdt",
+};
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fetchDexScreener(address: string): Promise<Stats | null> {
-  try {
-    const res = await fetch(
-      `https://api.dexscreener.com/latest/dex/tokens/${address}`,
-      { cache: "no-store" }
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pairs: any[] = data.pairs ?? [];
-    if (!pairs.length) return null;
-    pairs.sort((a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0));
-    const pair = pairs[0];
-    return {
-      priceUsd:  parseFloat(pair.priceUsd ?? "0"),
-      marketCap: pair.marketCap ?? pair.fdv ?? null,
-      volume24h: pair.volume?.h24 ?? null,
-      priceChange: {
-        m5:  pair.priceChange?.m5  ?? null,
-        h1:  pair.priceChange?.h1  ?? null,
-        h6:  pair.priceChange?.h6  ?? null,
-        h24: pair.priceChange?.h24 ?? null,
-      },
-      symbol: pair.baseToken?.symbol ?? address.slice(0, 8),
-    };
-  } catch { return null; }
-}
+// ── Formatters ────────────────────────────────────────────────────────────────
 
 function fmtLarge(n: number | null): string {
   if (n == null) return "—";
@@ -74,7 +47,8 @@ function fmtLarge(n: number | null): string {
   return `$${n.toFixed(2)}`;
 }
 
-function fmtPrice(p: number): string {
+function fmtPrice(p: number | null): string {
+  if (p == null) return "—";
   if (p >= 1000) return `$${Math.round(p).toLocaleString("en-US")}`;
   if (p >= 1)    return `$${p.toFixed(4)}`;
   if (p >= 0.01) return `$${p.toFixed(6)}`;
@@ -96,6 +70,8 @@ function Change({ v, label }: { v: number | null; label: string }) {
   );
 }
 
+// ── Component ─────────────────────────────────────────────────────────────────
+
 interface Props {
   targetToken?:  string | null;
   tokenAddress?: string | null;
@@ -103,69 +79,138 @@ interface Props {
 }
 
 export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: Props) {
-  const [stats, setStats]     = useState<Stats | null>(null);
+  const sym   = (targetToken ?? tokenSymbol ?? "").toLowerCase();
+  const cgId  = CG_IDS[sym] ?? null;
+  const isCG  = !!cgId;
+
+  // BTC/SOL state
+  const [livePrice, setLivePrice] = useState<number | null>(null);
+  const [cgData,    setCgData]    = useState<CgData    | null>(null);
+
+  // Custom token state
+  const [dexData, setDexData] = useState<DexData | null>(null);
+
   const [loading, setLoading] = useState(true);
 
-  // Local price history for CoinGecko tokens (BTC/SOL) — API only returns 24h change
-  const priceHistory               = useRef<{ time: number; price: number }[]>([]);
-  const [localChange5m, setLocal5m] = useState<number | null>(null);
-  const [localChange1h, setLocal1h] = useState<number | null>(null);
-  const [localChange6h, setLocal6h] = useState<number | null>(null);
-
-  const sym       = (targetToken ?? tokenSymbol ?? "").toLowerCase();
-  const cgId      = CG_IDS[sym] ?? null;
-  const isCoinGecko = !!cgId;
-
-  // Fetch stats on mount and every 10s
+  // Reset all state when the token changes
   useEffect(() => {
-    const addr = tokenAddress ?? null;
-    if (!cgId && !addr) { setLoading(false); return; }
+    setLivePrice(null);
+    setCgData(null);
+    setDexData(null);
+    setLoading(true);
+  }, [sym, tokenAddress]);
 
-    // Reset local history when token changes
-    priceHistory.current = [];
-    setLocal5m(null);
-    setLocal1h(null);
-    setLocal6h(null);
+  // ── BTC / SOL: Binance WebSocket + CoinGecko markets ─────────────────────
+  useEffect(() => {
+    if (!isCG || !cgId) return;
+
+    const binanceSym = BINANCE_WS[cgId];
+    let cancelled    = false;
+    let ws:              WebSocket | null = null;
+    let reconnectTimer:  ReturnType<typeof setTimeout> | null = null;
+    let pollInterval:    ReturnType<typeof setInterval> | null = null;
+
+    // Live price: Binance 24h-ticker stream (~1s updates)
+    const connect = () => {
+      if (cancelled) return;
+      ws = new WebSocket(`wss://stream.binance.com:9443/ws/${binanceSym}@ticker`);
+      ws.onmessage = (event) => {
+        if (cancelled) return;
+        try {
+          const price = parseFloat(JSON.parse(event.data as string).c);
+          if (isFinite(price)) setLivePrice(price);
+        } catch { /**/ }
+      };
+      ws.onerror = () => ws?.close();
+      ws.onclose = () => {
+        if (!cancelled) reconnectTimer = setTimeout(connect, 5_000);
+      };
+    };
+    connect();
+
+    // Price changes + supply + volume: CoinGecko markets (every 30s)
+    const fetchMarkets = async () => {
+      if (cancelled) return;
+      try {
+        const res = await fetch(
+          `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${cgId}` +
+          `&price_change_percentage=5m,1h,6h,24h`,
+          { cache: "no-store" }
+        );
+        if (!res.ok || cancelled) return;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const arr: any[] = await res.json();
+        const d = arr[0];
+        if (!d || cancelled) return;
+        setCgData({
+          volume24h:         d.total_volume                              ?? null,
+          change5m:          d.price_change_percentage_5m_in_currency   ?? null,
+          change1h:          d.price_change_percentage_1h_in_currency   ?? null,
+          change6h:          d.price_change_percentage_6h_in_currency   ?? null,
+          change24h:         d.price_change_percentage_24h_in_currency  ?? null,
+          circulatingSupply: d.circulating_supply                       ?? null,
+        });
+        if (!cancelled) setLoading(false);
+      } catch { /**/ }
+    };
+    fetchMarkets();
+    pollInterval = setInterval(fetchMarkets, 30_000);
+
+    return () => {
+      cancelled = true;
+      ws?.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (pollInterval)   clearInterval(pollInterval);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cgId]);
+
+  // ── Custom tokens: DexScreener polling ───────────────────────────────────
+  useEffect(() => {
+    if (isCG || !tokenAddress) return;
 
     let cancelled = false;
 
-    async function load() {
-      const result = cgId
-        ? await fetchCoinGecko(cgId)
-        : await fetchDexScreener(addr!);
+    const poll = async () => {
       if (cancelled) return;
-      if (result) setStats(result);
-      setLoading(false);
-    }
+      try {
+        const res = await fetch(
+          `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`,
+          { cache: "no-store" }
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pairs: any[] = data.pairs ?? [];
+        if (!pairs.length) { if (!cancelled) setLoading(false); return; }
+        pairs.sort((a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0));
+        const pair = pairs[0];
+        if (cancelled) return;
+        setDexData({
+          priceUsd:  parseFloat(pair.priceUsd ?? "0"),
+          marketCap: pair.marketCap ?? pair.fdv                 ?? null,
+          volume24h: pair.volume?.h24                           ?? null,
+          change5m:  pair.priceChange?.m5                       ?? null,
+          change1h:  pair.priceChange?.h1                       ?? null,
+          change6h:  pair.priceChange?.h6                       ?? null,
+          change24h: pair.priceChange?.h24                      ?? null,
+          symbol:    pair.baseToken?.symbol ?? tokenAddress.slice(0, 8),
+        });
+        setLoading(false);
+      } catch { /**/ }
+    };
 
-    load();
-    const id = setInterval(load, 10_000);
+    poll();
+    const id = setInterval(poll, 5_000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [targetToken, tokenAddress, tokenSymbol]); // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokenAddress, isCG]);
 
-  // Build local price history for CoinGecko tokens to derive 5m / 1h / 6h changes
-  useEffect(() => {
-    if (!stats?.priceUsd || !isCoinGecko) return;
-
-    const now   = Date.now();
-    const price = stats.priceUsd;
-
-    priceHistory.current.push({ time: now, price });
-    // Keep only last 6 hours
-    priceHistory.current = priceHistory.current.filter(p => now - p.time < 6 * 60 * 60 * 1000);
-
-    const price5m = priceHistory.current.find(p => now - p.time >= 5  * 60 * 1000);
-    const price1h = priceHistory.current.find(p => now - p.time >= 60 * 60 * 1000);
-    const price6h = priceHistory.current.find(p => now - p.time >= 6  * 60 * 60 * 1000);
-
-    setLocal5m(price5m ? (price - price5m.price) / price5m.price * 100 : null);
-    setLocal1h(price1h ? (price - price1h.price) / price1h.price * 100 : null);
-    setLocal6h(price6h ? (price - price6h.price) / price6h.price * 100 : null);
-  }, [stats?.priceUsd]); // eslint-disable-line react-hooks/exhaustive-deps
-
+  // ── Guard ─────────────────────────────────────────────────────────────────
   if (!targetToken && !tokenAddress && !tokenSymbol) return null;
 
-  if (loading) {
+  // Show skeleton while waiting for the first data
+  if (loading && !livePrice && !cgData && !dexData) {
     return (
       <div className="flex items-center gap-4 px-3 py-2 rounded-lg border border-white/5 mb-2 animate-pulse"
            style={{ background: "#0d0f14" }}>
@@ -176,44 +221,67 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
     );
   }
 
-  if (!stats) return null;
+  // ── Derive display values ─────────────────────────────────────────────────
+  let price:    number | null = null;
+  let mktCap:   number | null = null;
+  let vol24h:   number | null = null;
+  let c5m:      number | null = null;
+  let c1h:      number | null = null;
+  let c6h:      number | null = null;
+  let c24h:     number | null = null;
 
-  // For CoinGecko: use locally-calculated changes (API only provides 24h)
-  // For DexScreener: use changes returned directly from the API
-  const change5m  = isCoinGecko ? localChange5m          : stats.priceChange.m5;
-  const change1h  = isCoinGecko ? localChange1h          : stats.priceChange.h1;
-  const change6h  = isCoinGecko ? localChange6h          : stats.priceChange.h6;
-  const change24h = stats.priceChange.h24;
+  if (isCG) {
+    price  = livePrice;
+    mktCap = livePrice != null && cgData?.circulatingSupply != null
+      ? livePrice * cgData.circulatingSupply
+      : null;
+    vol24h = cgData?.volume24h ?? null;
+    c5m    = cgData?.change5m  ?? null;
+    c1h    = cgData?.change1h  ?? null;
+    c6h    = cgData?.change6h  ?? null;
+    c24h   = cgData?.change24h ?? null;
+  } else if (dexData) {
+    price  = dexData.priceUsd;
+    mktCap = dexData.marketCap;
+    vol24h = dexData.volume24h;
+    c5m    = dexData.change5m;
+    c1h    = dexData.change1h;
+    c6h    = dexData.change6h;
+    c24h   = dexData.change24h;
+  } else {
+    return null;
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2 rounded-lg border border-white/5 mb-2"
          style={{ background: "#0d0f14" }}>
-      {/* Market cap — primary stat */}
+
+      {/* Market cap */}
       <div className="flex flex-col">
         <span className="text-[9px] text-white/25 mb-0.5 uppercase tracking-wider">Mkt Cap</span>
-        <span className="text-white font-mono font-bold text-xl leading-tight">{fmtLarge(stats.marketCap)}</span>
+        <span className="text-white font-mono font-bold text-xl leading-tight">{fmtLarge(mktCap)}</span>
       </div>
 
       <span className="hidden sm:block w-px h-8 bg-white/8 shrink-0" />
 
-      {/* Price */}
+      {/* Live price */}
       <div className="flex flex-col">
         <span className="text-[9px] text-white/25 mb-0.5 uppercase tracking-wider">Price</span>
-        <span className="text-white/80 text-sm font-mono font-semibold">{fmtPrice(stats.priceUsd)}</span>
+        <span className="text-white/80 text-sm font-mono font-semibold">{fmtPrice(price)}</span>
       </div>
 
       {/* Volume */}
       <div className="flex flex-col">
         <span className="text-[9px] text-white/25 mb-0.5 uppercase tracking-wider">Vol 24h</span>
-        <span className="text-white/60 text-xs font-mono">{fmtLarge(stats.volume24h)}</span>
+        <span className="text-white/60 text-xs font-mono">{fmtLarge(vol24h)}</span>
       </div>
 
       <span className="hidden sm:block w-px h-8 bg-white/8 shrink-0" />
 
-      <Change v={change5m}  label="5m"  />
-      <Change v={change1h}  label="1h"  />
-      <Change v={change6h}  label="6h"  />
-      <Change v={change24h} label="24h" />
+      <Change v={c5m}  label="5m"  />
+      <Change v={c1h}  label="1h"  />
+      <Change v={c6h}  label="6h"  />
+      <Change v={c24h} label="24h" />
     </div>
   );
 }
