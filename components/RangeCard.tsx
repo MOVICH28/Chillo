@@ -105,7 +105,7 @@ function ResolvedRangeCard({ round }: { round: Round }) {
 
         <div className="flex items-start gap-2 mb-2">
           {round.targetToken && TOKEN_LOGOS[round.targetToken] && (
-            <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-5 h-5 rounded-full shrink-0 mt-0.5" />
+            <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-8 h-8 rounded-full shrink-0 mt-0.5" />
           )}
           <p className="text-white/80 text-sm font-medium leading-snug">{round.question}</p>
         </div>
@@ -220,7 +220,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
         {/* Question */}
         <div className="flex items-start gap-2 mb-3">
           {round.targetToken && TOKEN_LOGOS[round.targetToken] && (
-            <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-5 h-5 rounded-full shrink-0 mt-0.5" />
+            <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-8 h-8 rounded-full shrink-0 mt-0.5" />
           )}
           <p className="text-white text-sm font-medium leading-snug">{round.question}</p>
         </div>
