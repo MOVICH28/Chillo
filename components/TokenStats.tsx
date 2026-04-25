@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface Stats {
   priceUsd:    number;
@@ -106,12 +106,26 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
   const [stats, setStats]     = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const sym   = (targetToken ?? tokenSymbol ?? "").toLowerCase();
-    const cgId  = CG_IDS[sym] ?? null;
-    const addr  = tokenAddress ?? null;
+  // Local price history for CoinGecko tokens (BTC/SOL) — API only returns 24h change
+  const priceHistory               = useRef<{ time: number; price: number }[]>([]);
+  const [localChange5m, setLocal5m] = useState<number | null>(null);
+  const [localChange1h, setLocal1h] = useState<number | null>(null);
+  const [localChange6h, setLocal6h] = useState<number | null>(null);
 
+  const sym       = (targetToken ?? tokenSymbol ?? "").toLowerCase();
+  const cgId      = CG_IDS[sym] ?? null;
+  const isCoinGecko = !!cgId;
+
+  // Fetch stats on mount and every 10s
+  useEffect(() => {
+    const addr = tokenAddress ?? null;
     if (!cgId && !addr) { setLoading(false); return; }
+
+    // Reset local history when token changes
+    priceHistory.current = [];
+    setLocal5m(null);
+    setLocal1h(null);
+    setLocal6h(null);
 
     let cancelled = false;
 
@@ -127,7 +141,27 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
     load();
     const id = setInterval(load, 10_000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [targetToken, tokenAddress, tokenSymbol]);
+  }, [targetToken, tokenAddress, tokenSymbol]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Build local price history for CoinGecko tokens to derive 5m / 1h / 6h changes
+  useEffect(() => {
+    if (!stats?.priceUsd || !isCoinGecko) return;
+
+    const now   = Date.now();
+    const price = stats.priceUsd;
+
+    priceHistory.current.push({ time: now, price });
+    // Keep only last 6 hours
+    priceHistory.current = priceHistory.current.filter(p => now - p.time < 6 * 60 * 60 * 1000);
+
+    const price5m = priceHistory.current.find(p => now - p.time >= 5  * 60 * 1000);
+    const price1h = priceHistory.current.find(p => now - p.time >= 60 * 60 * 1000);
+    const price6h = priceHistory.current.find(p => now - p.time >= 6  * 60 * 60 * 1000);
+
+    setLocal5m(price5m ? (price - price5m.price) / price5m.price * 100 : null);
+    setLocal1h(price1h ? (price - price1h.price) / price1h.price * 100 : null);
+    setLocal6h(price6h ? (price - price6h.price) / price6h.price * 100 : null);
+  }, [stats?.priceUsd]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!targetToken && !tokenAddress && !tokenSymbol) return null;
 
@@ -144,6 +178,13 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
 
   if (!stats) return null;
 
+  // For CoinGecko: use locally-calculated changes (API only provides 24h)
+  // For DexScreener: use changes returned directly from the API
+  const change5m  = isCoinGecko ? localChange5m          : stats.priceChange.m5;
+  const change1h  = isCoinGecko ? localChange1h          : stats.priceChange.h1;
+  const change6h  = isCoinGecko ? localChange6h          : stats.priceChange.h6;
+  const change24h = stats.priceChange.h24;
+
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2 rounded-lg border border-white/5 mb-2"
          style={{ background: "#0d0f14" }}>
@@ -155,7 +196,7 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
 
       <span className="hidden sm:block w-px h-8 bg-white/8 shrink-0" />
 
-      {/* Price — secondary stat */}
+      {/* Price */}
       <div className="flex flex-col">
         <span className="text-[9px] text-white/25 mb-0.5 uppercase tracking-wider">Price</span>
         <span className="text-white/80 text-sm font-mono font-semibold">{fmtPrice(stats.priceUsd)}</span>
@@ -169,10 +210,10 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
 
       <span className="hidden sm:block w-px h-8 bg-white/8 shrink-0" />
 
-      <Change v={stats.priceChange.m5}  label="5m"  />
-      <Change v={stats.priceChange.h1}  label="1h"  />
-      <Change v={stats.priceChange.h6}  label="6h"  />
-      <Change v={stats.priceChange.h24} label="24h" />
+      <Change v={change5m}  label="5m"  />
+      <Change v={change1h}  label="1h"  />
+      <Change v={change6h}  label="6h"  />
+      <Change v={change24h} label="24h" />
     </div>
   );
 }
