@@ -98,6 +98,113 @@ async function determineYesNoWinner(
   return null;
 }
 
+// ─── Twitter resolution ───────────────────────────────────────────────────────
+
+// Fixed outcome ranges for posts_count questions
+function postsCountOutcome(count: number): string {
+  if (count <= 2)  return "A";
+  if (count <= 5)  return "B";
+  if (count <= 10) return "C";
+  if (count <= 20) return "D";
+  if (count <= 50) return "E";
+  return "F";
+}
+
+// Fixed outcome ranges for next_post_time questions (hours from round start)
+function nextPostTimeOutcome(hoursElapsed: number | null): string {
+  if (hoursElapsed === null) return "F"; // no post found
+  if (hoursElapsed < 1)  return "A";
+  if (hoursElapsed < 3)  return "B";
+  if (hoursElapsed < 6)  return "C";
+  if (hoursElapsed < 12) return "D";
+  if (hoursElapsed < 24) return "E";
+  return "F";
+}
+
+async function resolveTwitterRounds(
+  rounds: { id: string; twitterUserId: string | null; twitterQuestion: string | null; createdAt: Date; endsAt: Date }[],
+): Promise<{ roundId: string; status: "resolved" | "skipped" | "no_data" | "error"; winner?: string; detail?: string }[]> {
+  const bearerToken = process.env.TWITTER_BEARER_TOKEN;
+  if (!bearerToken) {
+    console.warn("[cron/twitter] TWITTER_BEARER_TOKEN not set — skipping Twitter rounds");
+    return rounds.map(r => ({ roundId: r.id, status: "skipped" as const, detail: "no bearer token" }));
+  }
+
+  // Group rounds by twitterUserId to batch API calls
+  const byUser = new Map<string, typeof rounds>();
+  for (const r of rounds) {
+    if (!r.twitterUserId) continue;
+    const list = byUser.get(r.twitterUserId) ?? [];
+    list.push(r);
+    byUser.set(r.twitterUserId, list);
+  }
+
+  const summary: { roundId: string; status: "resolved" | "skipped" | "no_data" | "error"; winner?: string; detail?: string }[] = [];
+
+  for (const [userId, userRounds] of byUser) {
+    // Find the widest time window needed across all rounds for this user
+    const minStart = userRounds.reduce((min, r) => r.createdAt < min ? r.createdAt : min, userRounds[0].createdAt);
+
+    try {
+      const startTime = minStart.toISOString();
+      const res = await fetch(
+        `https://api.twitter.com/2/users/${userId}/tweets?max_results=100&start_time=${startTime}&tweet.fields=created_at&exclude=retweets,replies`,
+        { headers: { Authorization: `Bearer ${bearerToken}` }, cache: "no-store" }
+      );
+
+      if (!res.ok) {
+        console.error(`[cron/twitter] userId=${userId} → HTTP ${res.status}`);
+        for (const r of userRounds) summary.push({ roundId: r.id, status: "no_data", detail: `Twitter API ${res.status}` });
+        continue;
+      }
+
+      const data = await res.json();
+      const tweets: { id: string; created_at: string }[] = data.data ?? [];
+      console.log(`[cron/twitter] userId=${userId} → ${tweets.length} tweets since ${startTime}`);
+
+      for (const round of userRounds) {
+        const roundStart = round.createdAt;
+        const roundEnd   = round.endsAt;
+        // Only count tweets within this round's window
+        const roundTweets = tweets.filter(t => {
+          const ts = new Date(t.created_at);
+          return ts >= roundStart && ts <= roundEnd;
+        });
+
+        let winner: string;
+        if (round.twitterQuestion === "posts_count") {
+          winner = postsCountOutcome(roundTweets.length);
+        } else if (round.twitterQuestion === "next_post_time") {
+          const first = roundTweets.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0];
+          if (first) {
+            const hoursElapsed = (new Date(first.created_at).getTime() - roundStart.getTime()) / 3_600_000;
+            winner = nextPostTimeOutcome(hoursElapsed);
+          } else {
+            winner = nextPostTimeOutcome(null);
+          }
+        } else {
+          summary.push({ roundId: round.id, status: "skipped", detail: "unknown twitterQuestion type" });
+          continue;
+        }
+
+        try {
+          await resolveRound(round.id, winner);
+          summary.push({ roundId: round.id, status: "resolved", winner });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          summary.push({ roundId: round.id, status: "error", detail: msg });
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[cron/twitter] userId=${userId} fetch error:`, msg);
+      for (const r of userRounds) summary.push({ roundId: r.id, status: "error", detail: msg });
+    }
+  }
+
+  return summary;
+}
+
 // ─── Cron handler ─────────────────────────────────────────────────────────────
 
 async function runCron(): Promise<NextResponse> {
@@ -108,9 +215,13 @@ async function runCron(): Promise<NextResponse> {
     where: { status: "open", endsAt: { lte: now } },
   });
 
+  // Split by resolution type
+  const twitterRounds = endedRounds.filter(r => r.category === "twitter");
+  const cryptoRounds  = endedRounds.filter(r => r.category !== "twitter");
+
   // Fetch crypto prices once — reused for all crypto rounds
   let cryptoPrices: CoinGeckoPrices = {};
-  const needsCrypto = endedRounds.some(r => r.category === "crypto");
+  const needsCrypto = cryptoRounds.some(r => r.category === "crypto");
   if (needsCrypto) {
     try {
       cryptoPrices = await fetchCryptoPrices();
@@ -126,7 +237,13 @@ async function runCron(): Promise<NextResponse> {
     detail?: string;
   }[] = [];
 
-  for (const round of endedRounds) {
+  // ── Resolve Twitter rounds (batched by user) ───────────────────────────────
+  if (twitterRounds.length > 0) {
+    const twitterSummary = await resolveTwitterRounds(twitterRounds);
+    summary.push(...twitterSummary);
+  }
+
+  for (const round of cryptoRounds) {
     let winner: string | null;
 
     try {

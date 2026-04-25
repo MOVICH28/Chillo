@@ -37,6 +37,13 @@ model Round {
   tokenAddress    String?    // contract address for custom tokens
   tokenSymbol     String?    // e.g. "BONK", "WIF"
   tokenLogo       String?    // logo URL
+  // Twitter market fields
+  twitterUsername    String?   // @username being tracked
+  twitterUserId      String?   // Twitter user ID for API calls
+  twitterQuestion    String?   // "posts_count" | "next_post_time"
+  twitterPeriodHours Int?      // period in hours (24 for posts count)
+  twitterLastChecked DateTime? // last time we checked Twitter API
+  twitterPostCount   Int?      // cached post count (for posts_count type)
   creator         User?      @relation("CreatedRounds", fields: [creatorId], references: [id])
   positions       Position[]
   trades          Trade[]

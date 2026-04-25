@@ -16,16 +16,26 @@ function getPayload(req: NextRequest): { userId: string } | null {
 }
 
 export async function POST(req: NextRequest) {
+  console.log("[markets/create] POST request received");
   const payload = getPayload(req);
-  if (!payload) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!payload) {
+    console.warn("[markets/create] Unauthorized — missing or invalid token");
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const body = await req.json();
-  const { tokenAddress, question, outcomes, duration, description, twitterUrl, customImage } = body;
+  const {
+    tokenAddress, question, outcomes, duration, description, twitterUrl, customImage,
+    // Twitter market fields
+    twitterUsername, twitterUserId, twitterQuestion, twitterPeriodHours,
+  } = body;
+
+  const isTwitterMarket = !!twitterUsername;
 
   if (!question?.trim())
     return NextResponse.json({ error: "Question is required" }, { status: 400 });
-  if (question.length > 100)
-    return NextResponse.json({ error: "Question too long (max 100 chars)" }, { status: 400 });
+  if (question.length > 150)
+    return NextResponse.json({ error: "Question too long (max 150 chars)" }, { status: 400 });
   if (!Array.isArray(outcomes) || outcomes.length < 2 || outcomes.length > 6)
     return NextResponse.json({ error: "2–6 outcomes required" }, { status: 400 });
   for (const o of outcomes) {
@@ -35,6 +45,13 @@ export async function POST(req: NextRequest) {
   const durationMinutes = Number(duration);
   if (!durationMinutes || durationMinutes < 15 || durationMinutes > 10080)
     return NextResponse.json({ error: "Duration must be 15 min–7 days" }, { status: 400 });
+
+  if (isTwitterMarket) {
+    if (!twitterUserId)
+      return NextResponse.json({ error: "Twitter user ID required" }, { status: 400 });
+    if (!["posts_count", "next_post_time"].includes(twitterQuestion))
+      return NextResponse.json({ error: "Invalid twitterQuestion type" }, { status: 400 });
+  }
 
   const user = await prisma.user.findUnique({ where: { id: payload.userId } });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -83,28 +100,33 @@ export async function POST(req: NextRequest) {
     }),
     prisma.round.create({
       data: {
-        question:       question.trim(),
-        category:       "custom",
-        status:         "open",
+        question:          question.trim(),
+        category:          isTwitterMarket ? "twitter" : "custom",
+        status:            "open",
         endsAt,
         bettingClosesAt,
-        outcomes:       outcomes.map((o: { id: string; label: string }) => ({
+        outcomes:          outcomes.map((o: { id: string; label: string }) => ({
           id: o.id, label: o.label.trim(), minPrice: null, maxPrice: null, pool: 0,
         })),
-        shares:         sharesInit,
-        lmsrB:          100,
-        isCustom:       true,
-        creatorId:      payload.userId,
-        creatorFee:     0.01,
-        description:    description?.trim() || null,
-        twitterUrl:     twitterUrl?.trim()  || null,
-        customImage:    customImage?.trim() || null,
-        tokenAddress:   tokenAddress        || null,
+        shares:            sharesInit,
+        lmsrB:             100,
+        isCustom:          true,
+        creatorId:         payload.userId,
+        creatorFee:        0.01,
+        description:       description?.trim()    || null,
+        twitterUrl:        twitterUrl?.trim()     || null,
+        customImage:       customImage?.trim()    || null,
+        tokenAddress:      tokenAddress           || null,
         tokenSymbol,
         tokenLogo,
+        twitterUsername:    twitterUsername?.replace(/^@/, "").trim() || null,
+        twitterUserId:      twitterUserId          || null,
+        twitterQuestion:    twitterQuestion        || null,
+        twitterPeriodHours: twitterPeriodHours     || null,
       },
     }),
   ]);
 
+  console.log(`[markets/create] user=${payload.userId} round=${round.id} category=${round.category} q="${round.question.slice(0, 60)}"`);
   return NextResponse.json({ id: round.id, question: round.question }, { status: 201 });
 }

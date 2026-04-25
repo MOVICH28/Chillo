@@ -48,6 +48,11 @@ export interface Round {
   tokenAddress?: string | null;
   tokenSymbol?: string | null;
   tokenLogo?: string | null;
+  // Twitter market fields
+  twitterUsername?: string | null;
+  twitterUserId?: string | null;
+  twitterQuestion?: string | null;
+  twitterPeriodHours?: number | null;
 }
 
 export interface Bet {

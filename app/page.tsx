@@ -9,6 +9,7 @@ import RoundCard from "@/components/RoundCard";
 import RangeCard from "@/components/RangeCard";
 import RightPanel from "@/components/RightPanel";
 import BetModal from "@/components/BetModal";
+import TwitterMarketCard from "@/components/TwitterMarketCard";
 import { Round, Outcome } from "@/lib/types";
 import { useLiveData } from "@/lib/useLiveData";
 
@@ -154,9 +155,13 @@ const openRounds     = rounds.filter((r) => r.status !== "resolved" && !r.isCust
                 <a href="/create" className="text-xs text-brand hover:text-brand-dim transition-colors">+ Create yours →</a>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {customRounds.map((round) => (
-                  <RangeCard key={round.id} round={round} liveData={liveData} />
-                ))}
+                {customRounds.map((round) =>
+                  round.twitterUsername ? (
+                    <TwitterMarketCard key={round.id} round={round} />
+                  ) : (
+                    <RangeCard key={round.id} round={round} liveData={liveData} />
+                  )
+                )}
               </div>
             </div>
           )}
