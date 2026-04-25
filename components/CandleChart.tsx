@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createChart, ColorType, LineStyle,
   CandlestickSeries, LineSeries, HistogramSeries,
@@ -20,24 +20,35 @@ interface Props {
   label:       string;
 }
 
-export default function CandleChart({ data, chartType, isKline, priceToBeat, status, label }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
+export default function CandleChart({ data, chartType, isKline, priceToBeat, timeframe, status, label }: Props) {
+  const containerRef    = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const chartRef  = useRef<any>(null);
+  const chartRef        = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const lineRef   = useRef<any>(null);   // LineSeries — always present
+  const lineRef         = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const candleRef = useRef<any>(null);   // CandlestickSeries — always present
+  const candleRef       = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const volRef    = useRef<any>(null);   // HistogramSeries — always present
+  const volRef          = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const priceLineRef       = useRef<any>(null);
-  const prevPriceToBeat    = useRef<number | null | undefined>(undefined);
-  const mountedRef         = useRef(false);
+  const priceLineRef    = useRef<any>(null);
+  const prevPriceToBeat = useRef<number | null | undefined>(undefined);
+  const mountedRef      = useRef(false);
 
-  // ── Effect 1: create chart + all series once ────────────────────────────────
-  // All three series are created upfront. Data effect switches between them by
-  // calling setData([]) on the inactive one — no remove/re-add, no flicker.
+  // Pan / auto-scroll state
+  const userPannedRef   = useRef(false);
+  const programmaticRef = useRef(false); // true while we call chart APIs ourselves
+  const fittedRef       = useRef(false); // true after first fitContent per timeframe
+  const [showLiveBtn, setShowLiveBtn] = useState(false);
+
+  // Wrap every chart API call so the subscription ignores it
+  const prog = (fn: () => void) => {
+    programmaticRef.current = true;
+    try { fn(); } catch { /**/ }
+    programmaticRef.current = false;
+  };
+
+  // ── Effect 1: create chart + all series ─────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current) return;
     mountedRef.current = true;
@@ -73,7 +84,6 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, sta
       });
       chartRef.current = chart;
 
-      // Volume histogram on its own price scale
       volRef.current = chart.addSeries(HistogramSeries, {
         color:        "rgba(255,255,255,0.07)",
         priceFormat:  { type: "volume" },
@@ -81,7 +91,6 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, sta
       });
       try { chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } }); } catch { /**/ }
 
-      // Line series (active in line mode)
       lineRef.current = chart.addSeries(LineSeries, {
         color:                  "#22c55e",
         lineWidth:              2,
@@ -92,7 +101,6 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, sta
         lastValueVisible:       true,
       });
 
-      // Candlestick series (active in candles mode)
       candleRef.current = chart.addSeries(CandlestickSeries, {
         upColor:         "#22c55e",
         downColor:       "#ef4444",
@@ -103,15 +111,24 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, sta
         priceScaleId:    "right",
       });
 
+      // Detect user pan — ignored when we're making programmatic changes
+      const onRangeChange = () => {
+        if (programmaticRef.current || !mountedRef.current) return;
+        userPannedRef.current = true;
+        setShowLiveBtn(true);
+      };
+      chart.timeScale().subscribeVisibleTimeRangeChange(onRangeChange);
+
       const ro = new ResizeObserver(() => {
         if (!mountedRef.current || !containerRef.current || !chartRef.current) return;
-        try { chartRef.current.applyOptions({ width: containerRef.current.clientWidth }); } catch { /**/ }
+        prog(() => chartRef.current.applyOptions({ width: containerRef.current!.clientWidth }));
       });
       ro.observe(containerRef.current);
 
       return () => {
         mountedRef.current = false;
         ro.disconnect();
+        try { chart.timeScale().unsubscribeVisibleTimeRangeChange(onRangeChange); } catch { /**/ }
         lineRef.current   = null;
         candleRef.current = null;
         volRef.current    = null;
@@ -123,23 +140,18 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, sta
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Effect 2: push data + sync visibility + manage price line ───────────────
-  // Runs whenever data, chartType, isKline, or priceToBeat changes.
-  // Never removes/re-adds series — just calls setData() on the active one.
+  // ── Effect 2: push data ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!mountedRef.current || !lineRef.current || !candleRef.current || !volRef.current) return;
 
-    // isKline:true for both REST klines and streaming candles — candles always available for BTC/SOL
-    const effectiveType = chartType;
-    const showCandles   = effectiveType === "candles";
+    const showCandles = chartType === "candles";
 
     try {
-      // ── Price line: recreate only when priceToBeat changes ─────────────────
+      // Price line — recreate only when priceToBeat changes
       if (prevPriceToBeat.current !== priceToBeat) {
         prevPriceToBeat.current = priceToBeat;
-        // Always attach to lineRef so it stays visible regardless of chart mode
         if (priceLineRef.current) {
-          try { lineRef.current.removePriceLine(priceLineRef.current); } catch { /**/ }
+          prog(() => lineRef.current.removePriceLine(priceLineRef.current));
           priceLineRef.current = null;
         }
         if (priceToBeat != null) {
@@ -156,8 +168,7 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, sta
         }
       }
 
-      // ── secondsVisible ──────────────────────────────────────────────────────
-      try { chartRef.current?.applyOptions({ timeScale: { secondsVisible: !isKline } }); } catch { /**/ }
+      prog(() => chartRef.current?.applyOptions({ timeScale: { secondsVisible: !isKline } }));
 
       if (!data.length) return;
 
@@ -167,60 +178,87 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, sta
         ? (last >= priceToBeat ? "#22c55e" : "#ef4444")
         : (last >= first       ? "#22c55e" : "#ef4444");
 
-      // ── Candles mode ────────────────────────────────────────────────────────
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const toSec = (ms: number) => Math.floor(ms / 1000) as any;
+
       if (showCandles && isKline) {
-        // Clear line series so its price scale doesn't interfere
-        try { lineRef.current.setData([]); } catch { /**/ }
+        prog(() => lineRef.current.setData([]));
 
         const candleData = data
           .filter(p => p.open != null && p.high != null && p.low != null)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .map(p => ({ time: Math.floor(p.time / 1000) as any, open: p.open!, high: p.high!, low: p.low!, close: p.price }));
-        if (candleData.length) try { candleRef.current.setData(candleData); } catch { /**/ }
+          .map(p => ({ time: toSec(p.time), open: p.open!, high: p.high!, low: p.low!, close: p.price }));
+        if (candleData.length) prog(() => candleRef.current.setData(candleData));
 
         const volData = data
           .filter(p => p.volume != null)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .map(p => ({ time: Math.floor(p.time / 1000) as any, value: p.volume!, color: (p.price >= (p.open ?? p.price)) ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)" }));
-        if (volData.length) try { volRef.current.setData(volData); } catch { /**/ }
+          .map(p => ({ time: toSec(p.time), value: p.volume!, color: p.price >= (p.open ?? p.price) ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)" }));
+        if (volData.length) prog(() => volRef.current.setData(volData));
+      } else {
+        prog(() => candleRef.current.setData([]));
+        prog(() => lineRef.current.applyOptions({ color }));
+        const lineData = data.map(p => ({ time: toSec(p.time), value: p.price }));
+        prog(() => lineRef.current.setData(lineData));
 
-        if (chartRef.current) try { chartRef.current.timeScale().fitContent(); } catch { /**/ }
-      }
-
-      // ── Line mode ───────────────────────────────────────────────────────────
-      else {
-        // Clear candle series so its price scale doesn't interfere
-        try { candleRef.current.setData([]); } catch { /**/ }
-
-        try { lineRef.current.applyOptions({ color }); } catch { /**/ }
-        const lineData = data.map(p => ({
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          time:  Math.floor(p.time / 1000) as any,
-          value: p.price,
-        }));
-        try { lineRef.current.setData(lineData); } catch { /**/ }
-
-        // Volume only meaningful for kline data
         if (isKline) {
           const volData = data
             .filter(p => p.volume != null)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .map(p => ({ time: Math.floor(p.time / 1000) as any, value: p.volume!, color: (p.price >= (p.open ?? p.price)) ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)" }));
-          if (volData.length) try { volRef.current.setData(volData); } catch { /**/ }
-          if (chartRef.current) try { chartRef.current.timeScale().fitContent(); } catch { /**/ }
+            .map(p => ({ time: toSec(p.time), value: p.volume!, color: p.price >= (p.open ?? p.price) ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)" }));
+          if (volData.length) prog(() => volRef.current.setData(volData));
         } else {
-          try { volRef.current.setData([]); } catch { /**/ }
+          prog(() => volRef.current.setData([]));
         }
       }
+
+      // ── Scroll control ────────────────────────────────────────────────────────
+      if (!chartRef.current) return;
+
+      if (!fittedRef.current) {
+        // First data load for this timeframe: fit all history into view
+        fittedRef.current = true;
+        prog(() => chartRef.current.timeScale().fitContent());
+      } else if (!userPannedRef.current) {
+        // User is at live edge — keep tracking the newest candle
+        prog(() => chartRef.current.timeScale().scrollToRealTime());
+      }
+      // If userPannedRef is true: do nothing — user is browsing history
     } catch { /**/ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, chartType, isKline, priceToBeat]);
+
+  // ── Effect 3: reset pan state on timeframe change ────────────────────────────
+  useEffect(() => {
+    userPannedRef.current = false;
+    fittedRef.current     = false;
+    setShowLiveBtn(false);
+  }, [timeframe]);
+
+  // "▶ Live" button — jump back to newest data
+  const handleGoLive = () => {
+    userPannedRef.current = false;
+    setShowLiveBtn(false);
+    prog(() => chartRef.current?.timeScale().scrollToRealTime());
+  };
 
   const loading = data.length < 2 && status !== "live";
 
   return (
     <div className="relative w-full rounded-xl overflow-hidden" style={{ height: H, background: CHART_BG }}>
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+
+      {/* Back-to-live button */}
+      {showLiveBtn && !loading && (
+        <button
+          onClick={handleGoLive}
+          className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-1 rounded text-[11px] font-mono font-semibold transition-opacity hover:opacity-80"
+          style={{
+            background: "rgba(34,197,94,0.15)",
+            border:     "1px solid rgba(34,197,94,0.4)",
+            color:      "#22c55e",
+          }}
+        >
+          ▶ Live
+        </button>
+      )}
 
       {loading && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
