@@ -133,7 +133,7 @@ function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat, timefr
   tokenSymbol?:  string | null;
   priceToBeat:   number | null;
   timeframe:     Timeframe;
-  chartType:     "line" | "candles";
+  chartType:     "line" | "candles" | "live";
 }) {
   const { history, status, label, isKline } = useTokenPrice({
     targetToken, tokenAddress, tokenSymbol, timeframe,
@@ -142,7 +142,7 @@ function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat, timefr
   return (
     <CandleChart
       data={history}
-      chartType={chartType}
+      chartType={chartType as "line" | "candles" | "live"}
       isKline={isKline}
       priceToBeat={priceToBeat}
       timeframe={timeframe}
@@ -359,7 +359,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
   const [copied, setCopied]             = useState(false);
   const [activeTab, setActiveTab]       = useState<"discussion" | "activity">("discussion");
   const [timeframe, setTimeframe]       = useState<Timeframe>("1s");
-  const [chartType, setChartType]       = useState<"line" | "candles">("line");
+  const [chartType, setChartType]       = useState<"line" | "candles" | "live">("live");
   const [tfOpen, setTfOpen]             = useState(false);
   const tfRef                           = useRef<HTMLDivElement>(null);
   const [lmsrPrices, setLmsrPrices]     = useState<Record<string, number>>(() => {
@@ -514,24 +514,21 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                 {(() => {
                   return (
                     <div className="flex items-center justify-between mb-1">
-                      {/* Line / Candles toggle */}
+                      {/* Live / Line / Candles toggle */}
                       <div className="flex items-center gap-0.5 rounded-md overflow-hidden border border-white/8"
                            style={{ background: "#0d0f14" }}>
-                        {(["line", "candles"] as const).map(ct => {
-                          return (
-                            <button
-                              key={ct}
-                              disabled={false}
-                              onClick={() => setChartType(ct)}
-                              className={`px-2.5 py-1 text-[11px] font-semibold transition-colors capitalize
-                                ${chartType === ct
-                                  ? "bg-white/10 text-white"
-                                  : "text-white/30 hover:text-white/60"}`}
-                            >
-                              {ct === "line" ? "Line" : "Candles"}
-                            </button>
-                          );
-                        })}
+                        {(["live", "line", "candles"] as const).map(ct => (
+                          <button
+                            key={ct}
+                            onClick={() => setChartType(ct)}
+                            className={`px-2.5 py-1 text-[11px] font-semibold transition-colors
+                              ${chartType === ct
+                                ? "bg-white/10 text-white"
+                                : "text-white/30 hover:text-white/60"}`}
+                          >
+                            {ct === "live" ? "Live" : ct === "line" ? "Line" : "Candles"}
+                          </button>
+                        ))}
                       </div>
 
                       {/* Timeframe dropdown */}

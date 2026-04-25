@@ -105,7 +105,7 @@ async function fetchKlinesStream(
  *           1. Pre-fetch klines for historical backdrop
  *           2. Open aggTrade WebSocket
  *           3. Aggregate ticks into OHLCV candles per candle period
- *           Returns isKline:true so CandleChart can show candles for all timeframes
+ *           Emission: 1s = every raw tick; 5s/30s = only on period close
  * Mode C  custom tokenAddress                → DexScreener polling every 5s
  */
 export function useTokenPrice(opts: {
@@ -154,8 +154,8 @@ export function useTokenPrice(opts: {
 
     // ── Mode B: Binance WebSocket + candle aggregation ─────────────────────────
     else if (binanceSymbol) {
-      const prefetch     = STREAM_PREFETCH[timeframe] ?? null;
-      const periodMs     = CANDLE_PERIOD_MS[timeframe] ?? 1_000;
+      const prefetch = STREAM_PREFETCH[timeframe] ?? null;
+      const periodMs = CANDLE_PERIOD_MS[timeframe] ?? 1_000;
 
       // Mutable candle state — mutated in-place to avoid closure staleness
       let completedCandles: OHLCPoint[] = [];
@@ -176,27 +176,33 @@ export function useTokenPrice(opts: {
             const vol = parseFloat(msg.q ?? "0");
             if (!isFinite(p)) return;
 
-            const now        = Date.now();
+            const now         = Date.now();
             const periodStart = Math.floor(now / periodMs) * periodMs;
+            let   periodChanged = false;
 
             if (!currentCandle) {
-              // First tick
               currentCandle = { time: periodStart, price: p, open: p, high: p, low: p, volume: vol };
+              periodChanged = true; // first tick always emits
             } else if (periodStart > currentCandle.time) {
-              // Candle period closed — archive it and open a new one
+              // Candle period closed — archive and open new
               completedCandles.push({ ...currentCandle });
               if (completedCandles.length >= MAX_STREAM_HISTORY) completedCandles.shift();
               currentCandle = { time: periodStart, price: p, open: p, high: p, low: p, volume: vol };
+              periodChanged = true;
             } else {
-              // Same period — update OHLCV
+              // Same period — update OHLCV in place
               currentCandle.high   = Math.max(currentCandle.high!, p);
               currentCandle.low    = Math.min(currentCandle.low!, p);
               currentCandle.price  = p;
               currentCandle.volume = (currentCandle.volume ?? 0) + vol;
             }
 
-            const combined = [...completedCandles, { ...currentCandle }];
-            setState({ price: p, history: combined, status: "live", label, isKline: true });
+            // 1s: emit every tick for smooth snake animation
+            // 5s/30s: emit only on period close (one point per interval)
+            if (periodMs === 1_000 || periodChanged) {
+              const combined = [...completedCandles, { ...currentCandle }];
+              setState({ price: p, history: combined, status: "live", label, isKline: true });
+            }
           };
 
           ws.onerror = () => { if (!cancelled) setState(s => ({ ...s, status: "error" })); };
@@ -216,11 +222,9 @@ export function useTokenPrice(opts: {
           const klines = await fetchKlinesStream(binanceSymbol, prefetch.interval, prefetch.limit, ac.signal);
           if (cancelled) return;
           if (klines.length) {
-            // Exclude any kline whose period overlaps the current streaming period
             const nowMs = Date.now();
             const currentPeriodStart = Math.floor(nowMs / periodMs) * periodMs;
             completedCandles = klines.filter(k => k.time < currentPeriodStart);
-            // Show historical data immediately — user sees chart before WS connects
             setState(s => ({ ...s, history: [...completedCandles], isKline: true }));
           }
           openWS();
