@@ -141,7 +141,7 @@ async function resolveTwitterRounds(
 
   const summary: { roundId: string; status: "resolved" | "skipped" | "no_data" | "error"; winner?: string; detail?: string }[] = [];
 
-  for (const [userId, userRounds] of byUser) {
+  for (const [userId, userRounds] of Array.from(byUser.entries())) {
     // Find the widest time window needed across all rounds for this user
     const minStart = userRounds.reduce((min, r) => r.createdAt < min ? r.createdAt : min, userRounds[0].createdAt);
 
