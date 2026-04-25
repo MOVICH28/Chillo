@@ -144,7 +144,6 @@ export default function CreatePage() {
   }
 
   // Validation per step
-  const step1Valid = true; // token is optional
   const step2Valid = question.trim().length >= 5 && question.trim().length <= 100;
   const step3Valid = outcomes.every(o => o.label.trim().length > 0);
 
