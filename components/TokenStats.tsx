@@ -36,6 +36,30 @@ const BINANCE_WS: Record<string, string> = {
   solana:  "solusdt",
 };
 
+const BINANCE_REST: Record<string, string> = {
+  bitcoin: "BTCUSDT",
+  solana:  "SOLUSDT",
+};
+
+// Fetch change % for one kline interval: (currentPrice - prevCandleOpen) / prevCandleOpen * 100
+async function fetchBinanceChange(
+  symbol: string, interval: string, currentPrice: number, signal: AbortSignal
+): Promise<number | null> {
+  try {
+    const res = await fetch(
+      `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=2`,
+      { signal, cache: "no-store" }
+    );
+    if (!res.ok) return null;
+    const candles = await res.json() as unknown[][];
+    if (!candles.length) return null;
+    // candles[0] = the last completed candle; c[1] = open price
+    const open = parseFloat(candles[0][1] as string);
+    if (!isFinite(open) || open === 0) return null;
+    return (currentPrice - open) / open * 100;
+  } catch { return null; }
+}
+
 // ── Formatters ────────────────────────────────────────────────────────────────
 
 function fmtLarge(n: number | null): string {
@@ -128,29 +152,53 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
     };
     connect();
 
-    // Price changes + supply + volume: CoinGecko markets (every 30s)
+    const binanceRest = BINANCE_REST[cgId];
+    let pollAc: AbortController | null = null;
+
+    // Volume, 24h change, circulating supply: CoinGecko (every 30s)
+    // 5m / 1h / 6h changes: Binance klines, calculated vs current live price
     const fetchMarkets = async () => {
       if (cancelled) return;
+      pollAc?.abort();
+      pollAc = new AbortController();
+      const { signal } = pollAc;
+
       try {
-        const res = await fetch(
+        // CoinGecko: volume, 24h change, supply (no 5m/1h/6h — those are gated on free tier)
+        const cgRes = await fetch(
           `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${cgId}` +
-          `&price_change_percentage=5m,1h,6h,24h`,
-          { cache: "no-store" }
+          `&price_change_percentage=24h`,
+          { cache: "no-store", signal }
         );
-        if (!res.ok || cancelled) return;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const arr: any[] = await res.json();
-        const d = arr[0];
-        if (!d || cancelled) return;
-        setCgData({
-          volume24h:         d.total_volume                              ?? null,
-          change5m:          d.price_change_percentage_5m_in_currency   ?? null,
-          change1h:          d.price_change_percentage_1h_in_currency   ?? null,
-          change6h:          d.price_change_percentage_6h_in_currency   ?? null,
-          change24h:         d.price_change_percentage_24h_in_currency  ?? null,
-          circulatingSupply: d.circulating_supply                       ?? null,
-        });
-        if (!cancelled) setLoading(false);
+
+        // Binance klines for 5m / 1h / 6h — run in parallel, use latest live price
+        const currentPrice = livePrice ?? 0;
+        const [c5m, c1h, c6h] = await Promise.all([
+          fetchBinanceChange(binanceRest, "5m",  currentPrice, signal),
+          fetchBinanceChange(binanceRest, "1h",  currentPrice, signal),
+          fetchBinanceChange(binanceRest, "6h",  currentPrice, signal),
+        ]);
+
+        if (cancelled) return;
+
+        let volume24h:         number | null = null;
+        let change24h:         number | null = null;
+        let circulatingSupply: number | null = null;
+
+        if (cgRes.ok) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const arr: any[] = await cgRes.json();
+          const d = arr[0];
+          if (d) {
+            volume24h         = d.total_volume                             ?? null;
+            change24h         = d.price_change_percentage_24h_in_currency ?? null;
+            circulatingSupply = d.circulating_supply                       ?? null;
+          }
+        }
+
+        if (cancelled) return;
+        setCgData({ volume24h, change5m: c5m, change1h: c1h, change6h: c6h, change24h, circulatingSupply });
+        setLoading(false);
       } catch { /**/ }
     };
     fetchMarkets();
@@ -159,6 +207,7 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
     return () => {
       cancelled = true;
       ws?.close();
+      pollAc?.abort();
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (pollInterval)   clearInterval(pollInterval);
     };
