@@ -500,7 +500,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
 
             <div className="flex items-start gap-3 mb-4">
               {round.targetToken && TOKEN_LOGOS[round.targetToken] && (
-                <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-7 h-7 rounded-full shrink-0 mt-0.5" />
+                <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-10 h-10 rounded-full shrink-0 mt-0.5" />
               )}
               <h1 className="text-xl font-semibold text-white leading-snug">{round.question}</h1>
             </div>
