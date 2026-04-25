@@ -277,6 +277,7 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const priceLineRef    = useRef<any>(null);
   const prevPriceToBeat = useRef<number | null | undefined>(undefined);
+  const isKlineRef      = useRef<boolean | null>(null);
   const mountedRef      = useRef(false);
 
   // Pan / auto-scroll state (for Line/Candles modes)
@@ -418,7 +419,10 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
         }
       }
 
-      prog(() => chartRef.current?.applyOptions({ timeScale: { secondsVisible: !isKline } }));
+      if (isKlineRef.current !== isKline) {
+        isKlineRef.current = isKline;
+        prog(() => chartRef.current?.applyOptions({ timeScale: { secondsVisible: !isKline } }));
+      }
 
       if (!data.length) return;
 
