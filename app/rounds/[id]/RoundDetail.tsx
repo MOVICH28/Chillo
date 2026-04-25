@@ -7,8 +7,9 @@ import Avatar from "@/components/Avatar";
 import LMSRBetPanel from "@/components/LMSRBetPanel";
 import { getAllPrices } from "@/lib/lmsr";
 import {
-  ComposedChart, LineChart, Line, Bar,
-  XAxis, YAxis, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip,
+  ComposedChart, Line, Bar,
+  XAxis, YAxis, CartesianGrid, ReferenceArea, ReferenceLine,
+  ResponsiveContainer, Tooltip,
 } from "recharts";
 import { Outcome } from "@/lib/types";
 import { useTokenPrice, Timeframe } from "@/lib/useTokenPrice";
@@ -128,6 +129,8 @@ const TIMEFRAMES: { key: Timeframe; label: string }[] = [
 
 // ── Live chart ────────────────────────────────────────────────────────────────
 
+const CHART_BG = "#0d0f14";
+
 function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat, timeframe }: {
   targetToken?:  string | null;
   tokenAddress?: string | null;
@@ -139,48 +142,54 @@ function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat, timefr
     targetToken, tokenAddress, tokenSymbol, timeframe,
   });
 
-  const isBtc = label.startsWith("BTC");
   const fmtY = (v: number) => {
     if (v >= 1000) return `$${Math.round(v).toLocaleString("en-US")}`;
-    if (v >= 1)    return `$${v.toFixed(isBtc ? 2 : 4)}`;
-    if (v >= 0.01) return `$${v.toFixed(6)}`;
-    return `$${v.toFixed(8)}`;
+    if (v >= 1)    return `$${v.toFixed(2)}`;
+    if (v >= 0.01) return `$${v.toFixed(4)}`;
+    return `$${v.toFixed(6)}`;
   };
 
   if (history.length < 2) {
     return (
-      <div className="h-[400px] flex flex-col items-center justify-center gap-3 bg-surface-2 rounded-xl border border-white/5">
-        <svg className="animate-spin w-5 h-5 text-white/20" fill="none" viewBox="0 0 24 24">
+      <div className="w-full flex flex-col items-center justify-center gap-3 rounded-xl"
+           style={{ height: 350, background: CHART_BG }}>
+        <svg className="animate-spin w-4 h-4 text-white/20" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
         </svg>
-        <span className="text-xs text-white/30">
-          {status === "connecting" ? "Connecting…" : "Waiting for price data…"}
+        <span className="text-xs" style={{ color: "rgba(255,255,255,0.2)" }}>
+          {status === "connecting" ? "Connecting to " + label + "…" : "Waiting for price data…"}
         </span>
       </div>
     );
   }
 
   const currentPrice = price ?? history[history.length - 1].price;
-  const isAbove   = priceToBeat !== null ? currentPrice >= priceToBeat : true;
-  const lineColor = priceToBeat !== null ? (isAbove ? "#22c55e" : "#ef4444") : "#22c55e";
+  const firstPrice   = history[0].price;
 
-  const allPrices = [...history.map(p => p.price), ...(priceToBeat != null ? [priceToBeat] : [])];
+  // Green if price is above start (or above target); red otherwise
+  const lineColor = priceToBeat != null
+    ? (currentPrice >= priceToBeat ? "#22c55e" : "#ef4444")
+    : (currentPrice >= firstPrice  ? "#22c55e" : "#ef4444");
+
+  const allPrices = history.map(p => p.price);
+  if (priceToBeat != null) allPrices.push(priceToBeat);
   const rawMin  = Math.min(...allPrices);
   const rawMax  = Math.max(...allPrices);
   const rawSpan = rawMax - rawMin;
-  const pad     = Math.max(rawSpan * 0.18, rawMax * 0.001, 0.000001);
+  const pad     = Math.max(rawSpan * 0.15, rawMax * 0.001, 0.0001);
   const domainMin = rawMin - pad;
-  const domainMax = rawMax + pad;
+  // Keep volume bars in bottom 20%: volume yAxis domain = [0, maxVol*5]
+  // So price domain ceiling needs room → add extra top pad
+  const domainMax = rawMax + pad * 1.5;
 
-  // X-axis label: elapsed time for streaming, human time for klines
   const t0   = history[0].time;
   const fmtX = isKline
     ? (t: number) => {
         const d = new Date(t);
-        if (timeframe === "1m" || timeframe === "5m" || timeframe === "15m" || timeframe === "30m")
+        if (["1m","5m","15m","30m"].includes(timeframe))
           return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
-        return d.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+        return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
       }
     : (t: number) => {
         const elapsed = Math.round((t - t0) / 1000);
@@ -190,106 +199,92 @@ function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat, timefr
       };
 
   const data   = history.map(p => ({ t: p.time, price: p.price, volume: p.volume ?? 0 }));
-  const yWidth = isBtc ? 72 : 64;
+  const maxVol = isKline ? Math.max(...data.map(d => d.volume), 1) : 1;
 
-  // Kline view: ComposedChart with price line + volume bars
-  if (isKline) {
-    const maxVol = Math.max(...data.map(d => d.volume), 1);
-    return (
-      <div className="w-full select-none bg-surface-2 rounded-xl border border-white/5 overflow-hidden">
-        <div className="flex items-center gap-1.5 px-4 pt-3 pb-0">
-          <span className={`w-1.5 h-1.5 rounded-full ${status === "live" ? "bg-[#22c55e]" : "bg-white/20"}`} />
-          <span className="text-[10px] uppercase tracking-widest font-bold text-white/40">{label}</span>
-          <span className="ml-auto text-xs font-mono font-semibold text-white/80">{fmtY(currentPrice)}</span>
-        </div>
-        {/* Price chart: 75% height */}
-        <div style={{ height: 280 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={data} margin={{ top: 8, right: yWidth, left: 0, bottom: 0 }}>
-              {priceToBeat != null && (
-                <>
-                  <ReferenceArea y1={priceToBeat} y2={domainMax} fill="rgba(34,197,94,0.05)" strokeOpacity={0} />
-                  <ReferenceArea y1={domainMin} y2={priceToBeat} fill="rgba(239,68,68,0.05)" strokeOpacity={0} />
-                </>
-              )}
-              {priceToBeat != null && (
-                <ReferenceLine y={priceToBeat} stroke="#4b5563" strokeDasharray="6 3" strokeWidth={1}
-                  label={{ value: `Start ${fmtY(priceToBeat)}`, position: "insideTopLeft", fill: "#6b7280", fontSize: 9, dy: -4 }} />
-              )}
-              <ReferenceLine y={currentPrice} stroke={lineColor} strokeWidth={1} strokeOpacity={0.6} strokeDasharray="3 3"
-                label={{ value: fmtY(currentPrice), position: "right", fill: lineColor, fontSize: 11, fontWeight: 700, dx: 6 }} />
-              <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={fmtX}
-                tick={{ fontSize: 9, fill: "#374151" }} axisLine={{ stroke: "#1f2937" }} tickLine={false}
-                interval="preserveStartEnd" tickCount={6} hide />
-              <YAxis domain={[domainMin, domainMax]} tickFormatter={fmtY} width={yWidth}
-                tick={{ fontSize: 9, fill: "#374151" }} axisLine={false} tickLine={false} tickCount={5} />
-              <Tooltip
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                formatter={(v: any, name: any) => name === "price" ? [fmtY(v as number), "Price"] : null}
-                labelFormatter={(t) => fmtX(t as number)}
-                contentStyle={{ background: "#0f0f1a", border: "1px solid #1f2937", borderRadius: 6, fontSize: 11, padding: "4px 10px" }}
-                itemStyle={{ color: lineColor }}
-                cursor={{ stroke: "#1f2937", strokeWidth: 1 }}
-              />
-              <Line type="linear" dataKey="price" stroke={lineColor} strokeWidth={2} dot={false}
-                activeDot={{ r: 3, fill: lineColor, stroke: "#0f0f1a", strokeWidth: 2 }} isAnimationActive={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-        {/* Volume bars: 25% height */}
-        <div style={{ height: 80 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={data} margin={{ top: 0, right: yWidth, left: 0, bottom: 8 }}>
-              <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={fmtX}
-                tick={{ fontSize: 9, fill: "#374151" }} axisLine={{ stroke: "#1f2937" }} tickLine={false}
-                interval="preserveStartEnd" tickCount={6} />
-              <YAxis domain={[0, maxVol * 1.1]} width={yWidth} tick={false} axisLine={false} tickLine={false} />
-              <Bar dataKey="volume" fill="rgba(255,255,255,0.12)" isAnimationActive={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-    );
-  }
-
-  // Streaming view: simple LineChart
   return (
-    <div className="h-[400px] w-full select-none bg-surface-2 rounded-xl border border-white/5 overflow-hidden">
-      <div className="flex items-center gap-1.5 px-4 pt-3 pb-0">
-        <span className={`w-1.5 h-1.5 rounded-full ${status === "live" ? "bg-[#22c55e]" : "bg-white/20"}`} />
-        <span className="text-[10px] uppercase tracking-widest font-bold text-white/40">{label}</span>
-        <span className="ml-auto text-xs font-mono font-semibold text-white/80">{fmtY(currentPrice)}</span>
-      </div>
-      <ResponsiveContainer width="100%" height="90%">
-        <LineChart data={data} margin={{ top: 8, right: yWidth, left: 0, bottom: 8 }}>
+    <div className="w-full select-none overflow-hidden rounded-xl"
+         style={{ height: 350, background: CHART_BG }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 5, right: 62, bottom: 22, left: 0 }}>
+          {/* Subtle horizontal grid */}
+          <CartesianGrid
+            strokeDasharray="0"
+            stroke="rgba(255,255,255,0.04)"
+            vertical={false}
+          />
+
+          {/* X axis */}
+          <XAxis
+            dataKey="t" type="number" domain={["dataMin", "dataMax"]}
+            tickFormatter={fmtX}
+            tick={{ fontSize: 9, fill: "rgba(255,255,255,0.2)" }}
+            axisLine={false} tickLine={false}
+            interval="preserveStartEnd" tickCount={5}
+          />
+
+          {/* Price Y axis (hidden — label comes from ReferenceLine) */}
+          <YAxis yAxisId="price" domain={[domainMin, domainMax]} hide />
+
+          {/* Volume Y axis: domain [0, maxVol*5] keeps bars in bottom 20% */}
+          <YAxis yAxisId="vol" domain={[0, maxVol * 5]} hide orientation="right" />
+
+          {/* Price-to-beat zones */}
           {priceToBeat != null && (
             <>
-              <ReferenceArea y1={priceToBeat} y2={domainMax} fill="rgba(34,197,94,0.05)" strokeOpacity={0} />
-              <ReferenceArea y1={domainMin} y2={priceToBeat} fill="rgba(239,68,68,0.05)" strokeOpacity={0} />
+              <ReferenceArea yAxisId="price" y1={priceToBeat} y2={domainMax}
+                fill="rgba(34,197,94,0.04)" strokeOpacity={0} />
+              <ReferenceArea yAxisId="price" y1={domainMin} y2={priceToBeat}
+                fill="rgba(239,68,68,0.04)" strokeOpacity={0} />
+              <ReferenceLine yAxisId="price" y={priceToBeat}
+                stroke="rgba(255,255,255,0.15)" strokeDasharray="4 3" strokeWidth={1}
+                label={{ value: `Target ${fmtY(priceToBeat)}`, position: "insideTopLeft",
+                  fill: "rgba(255,255,255,0.25)", fontSize: 9, dy: 4, dx: 4 }} />
             </>
           )}
-          {priceToBeat != null && (
-            <ReferenceLine y={priceToBeat} stroke="#4b5563" strokeDasharray="6 3" strokeWidth={1}
-              label={{ value: `Start ${fmtY(priceToBeat)}`, position: "insideTopLeft", fill: "#6b7280", fontSize: 9, dy: -4 }} />
+
+          {/* Floating current-price label on right edge */}
+          <ReferenceLine yAxisId="price" y={currentPrice}
+            stroke={lineColor} strokeWidth={1} strokeOpacity={0.4} strokeDasharray="3 3"
+            label={{ value: fmtY(currentPrice), position: "right",
+              fill: lineColor, fontSize: 11, fontWeight: 700, dx: 4 }} />
+
+          {/* Volume bars (kline only) — rendered before price line so line sits on top */}
+          {isKline && (
+            <Bar
+              yAxisId="vol" dataKey="volume"
+              fill="rgba(255,255,255,0.07)"
+              isAnimationActive={false}
+            />
           )}
-          <ReferenceLine y={currentPrice} stroke={lineColor} strokeWidth={1} strokeOpacity={0.6} strokeDasharray="3 3"
-            label={{ value: fmtY(currentPrice), position: "right", fill: lineColor, fontSize: 11, fontWeight: 700, dx: 6 }} />
-          <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={fmtX}
-            tick={{ fontSize: 9, fill: "#374151" }} axisLine={{ stroke: "#1f2937" }} tickLine={false}
-            interval="preserveStartEnd" tickCount={6} />
-          <YAxis domain={[domainMin, domainMax]} tickFormatter={fmtY} width={yWidth}
-            tick={{ fontSize: 9, fill: "#374151" }} axisLine={false} tickLine={false} tickCount={6} />
+
+          {/* Price line */}
+          <Line
+            yAxisId="price"
+            type="monotone"
+            dataKey="price"
+            stroke={lineColor}
+            strokeWidth={1.5}
+            dot={false}
+            activeDot={{ r: 3, fill: lineColor, stroke: CHART_BG, strokeWidth: 2 }}
+            isAnimationActive={false}
+          />
+
           <Tooltip
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            formatter={(v: any) => [fmtY(v as number), "Price"]}
+            formatter={(v: any, name: any) =>
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              name === "price" ? [fmtY(v as number), "Price"] : (null as any)
+            }
             labelFormatter={(t) => fmtX(t as number)}
-            contentStyle={{ background: "#0f0f1a", border: "1px solid #1f2937", borderRadius: 6, fontSize: 11, padding: "4px 10px" }}
+            contentStyle={{
+              background: "#0d0f14",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 6, fontSize: 11, padding: "4px 10px",
+            }}
             itemStyle={{ color: lineColor }}
-            cursor={{ stroke: "#1f2937", strokeWidth: 1 }}
+            cursor={{ stroke: "rgba(255,255,255,0.08)", strokeWidth: 1 }}
           />
-          <Line type="linear" dataKey="price" stroke={lineColor} strokeWidth={2} dot={false}
-            activeDot={{ r: 3, fill: lineColor, stroke: "#0f0f1a", strokeWidth: 2 }} isAnimationActive={false} />
-        </LineChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
@@ -642,15 +637,15 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
             {hasToken && outcomes.length > 0 ? (
               <>
                 {/* Timeframe selector */}
-                <div className="flex items-center gap-1 flex-wrap mb-2">
+                <div className="flex items-center gap-0.5 flex-wrap mb-1">
                   {TIMEFRAMES.map(tf => (
                     <button
                       key={tf.key}
                       onClick={() => setTimeframe(tf.key)}
-                      className={`px-2 py-0.5 rounded text-[11px] font-mono font-semibold transition-colors
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold transition-colors
                         ${timeframe === tf.key
                           ? "bg-brand/20 text-brand border border-brand/40"
-                          : "text-white/30 hover:text-white/60 border border-transparent"}`}
+                          : "text-white/25 hover:text-white/50 border border-transparent"}`}
                     >
                       {tf.label}
                     </button>
@@ -666,7 +661,8 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                 <PoolBar outcomes={outcomes} prices={lmsrPrices} />
               </>
             ) : (
-              <div className="h-[400px] flex items-center justify-center bg-surface-2 rounded-xl border border-white/5">
+              <div className="flex items-center justify-center rounded-xl"
+                   style={{ height: 350, background: "#0d0f14" }}>
                 <span className="text-white/20 text-sm">No chart available</span>
               </div>
             )}
