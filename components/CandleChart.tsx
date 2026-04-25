@@ -129,7 +129,8 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, sta
   useEffect(() => {
     if (!mountedRef.current || !lineRef.current || !candleRef.current || !volRef.current) return;
 
-    const effectiveType = isKline ? chartType : "line";
+    // isKline:true for both REST klines and streaming candles — candles always available for BTC/SOL
+    const effectiveType = chartType;
     const showCandles   = effectiveType === "candles";
 
     try {

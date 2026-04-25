@@ -512,24 +512,21 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
               <>
                 {/* Chart controls: Line/Candles toggle + timeframe dropdown */}
                 {(() => {
-                  const isStreaming = ["1s","5s","30s"].includes(timeframe);
                   return (
                     <div className="flex items-center justify-between mb-1">
                       {/* Line / Candles toggle */}
                       <div className="flex items-center gap-0.5 rounded-md overflow-hidden border border-white/8"
                            style={{ background: "#0d0f14" }}>
                         {(["line", "candles"] as const).map(ct => {
-                          const disabled = ct === "candles" && isStreaming;
                           return (
                             <button
                               key={ct}
-                              disabled={disabled}
+                              disabled={false}
                               onClick={() => setChartType(ct)}
                               className={`px-2.5 py-1 text-[11px] font-semibold transition-colors capitalize
-                                ${chartType === ct && !disabled
+                                ${chartType === ct
                                   ? "bg-white/10 text-white"
-                                  : "text-white/30 hover:text-white/60"}
-                                ${disabled ? "opacity-30 cursor-not-allowed" : ""}`}
+                                  : "text-white/30 hover:text-white/60"}`}
                             >
                               {ct === "line" ? "Line" : "Candles"}
                             </button>
@@ -563,7 +560,6 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                                 key={tf.key}
                                 onClick={() => {
                                   setTimeframe(tf.key);
-                                  if (["1s","5s","30s"].includes(tf.key)) setChartType("line");
                                   setTfOpen(false);
                                 }}
                                 className={`w-full text-left px-3 py-1.5 text-[11px] font-mono transition-colors hover:bg-white/5
