@@ -6,15 +6,11 @@ import Link from "next/link";
 import Avatar from "@/components/Avatar";
 import LMSRBetPanel from "@/components/LMSRBetPanel";
 import { getAllPrices } from "@/lib/lmsr";
-import {
-  ComposedChart, Line, Bar, Customized,
-  XAxis, YAxis, CartesianGrid, ReferenceArea, ReferenceLine,
-  ResponsiveContainer, Tooltip,
-} from "recharts";
 import { Outcome } from "@/lib/types";
 import { useTokenPrice, Timeframe } from "@/lib/useTokenPrice";
 import { useAuth } from "@/lib/useAuth";
 import TokenStats from "@/components/TokenStats";
+import CandleChart from "@/components/CandleChart";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -127,55 +123,7 @@ const TIMEFRAMES: { key: Timeframe; label: string }[] = [
   { key: "24h", label: "24h" },
 ];
 
-// ── Candlestick layer (rendered via Recharts Customized) ──────────────────────
-
 const CHART_BG = "#0d0f14";
-
-interface OHLCRow { t: number; price: number; open?: number; high?: number; low?: number; volume?: number }
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CandlestickLayer({ xAxisMap, yAxisMap, ohlcData }: any) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const xAxis: any = xAxisMap?.[0] ?? xAxisMap?.["0"] ?? Object.values(xAxisMap ?? {})[0];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const yAxis: any = yAxisMap?.["price"] ?? yAxisMap?.[0] ?? Object.values(yAxisMap ?? {})[0];
-  if (!xAxis?.scale || !yAxis?.scale || !ohlcData?.length) return null;
-
-  const xs = xAxis.scale;
-  const ys = yAxis.scale;
-  const n  = ohlcData.length;
-  const slotW  = n > 1 ? Math.abs(xs(ohlcData[1].t) - xs(ohlcData[0].t)) : 8;
-  const bodyW  = Math.max(slotW * 0.55, 1.5);
-
-  return (
-    <g>
-      {(ohlcData as OHLCRow[]).map((d, i) => {
-        if (d.open == null || d.high == null || d.low == null) return null;
-
-        const cx   = xs(d.t);
-        const yH   = ys(d.high);
-        const yL   = ys(d.low);
-        const yO   = ys(d.open);
-        const yC   = ys(d.price);
-        const isUp = d.price >= d.open;
-        const clr  = isUp ? "#22c55e" : "#ef4444";
-        const fill = isUp ? "rgba(34,197,94,0.55)" : "rgba(239,68,68,0.65)";
-        const bTop = Math.min(yO, yC);
-        const bH   = Math.max(Math.abs(yC - yO), 1);
-
-        return (
-          <g key={i}>
-            {/* Full wick */}
-            <line x1={cx} x2={cx} y1={yH} y2={yL} stroke={clr} strokeWidth={1} opacity={0.7} />
-            {/* Body */}
-            <rect x={cx - bodyW / 2} y={bTop} width={bodyW} height={bH}
-              fill={fill} stroke={clr} strokeWidth={0.5} />
-          </g>
-        );
-      })}
-    </g>
-  );
-}
 
 // ── Live chart ────────────────────────────────────────────────────────────────
 
@@ -187,175 +135,20 @@ function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat, timefr
   timeframe:     Timeframe;
   chartType:     "line" | "candles";
 }) {
-  const { price, history, status, label, isKline } = useTokenPrice({
+  const { history, status, label, isKline } = useTokenPrice({
     targetToken, tokenAddress, tokenSymbol, timeframe,
   });
 
-  // Candles require OHLCV from klines; force line for streaming timeframes
-  const effectiveChartType = isKline ? chartType : "line";
-
-  const fmtY = (v: number) => {
-    if (v >= 1000) return `$${Math.round(v).toLocaleString("en-US")}`;
-    if (v >= 1)    return `$${v.toFixed(2)}`;
-    if (v >= 0.01) return `$${v.toFixed(4)}`;
-    return `$${v.toFixed(6)}`;
-  };
-
-  if (history.length < 2) {
-    return (
-      <div className="w-full flex flex-col items-center justify-center gap-3 rounded-xl"
-           style={{ height: 350, background: CHART_BG }}>
-        <svg className="animate-spin w-4 h-4 text-white/20" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-        </svg>
-        <span className="text-xs" style={{ color: "rgba(255,255,255,0.2)" }}>
-          {status === "connecting" ? "Connecting to " + label + "…" : "Waiting for price data…"}
-        </span>
-      </div>
-    );
-  }
-
-  const currentPrice = price ?? history[history.length - 1].price;
-  const firstPrice   = history[0].price;
-
-  // Green if price is above start (or above target); red otherwise
-  const lineColor = priceToBeat != null
-    ? (currentPrice >= priceToBeat ? "#22c55e" : "#ef4444")
-    : (currentPrice >= firstPrice  ? "#22c55e" : "#ef4444");
-
-  const allPrices = history.map(p => p.price);
-  if (priceToBeat != null) allPrices.push(priceToBeat);
-  const rawMin  = Math.min(...allPrices);
-  const rawMax  = Math.max(...allPrices);
-  const rawSpan = rawMax - rawMin;
-  const pad     = Math.max(rawSpan * 0.15, rawMax * 0.001, 0.0001);
-  const domainMin = rawMin - pad;
-  // Keep volume bars in bottom 20%: volume yAxis domain = [0, maxVol*5]
-  // So price domain ceiling needs room → add extra top pad
-  const domainMax = rawMax + pad * 1.5;
-
-  const t0   = history[0].time;
-  const fmtX = isKline
-    ? (t: number) => {
-        const d = new Date(t);
-        if (["1m","5m","15m","30m"].includes(timeframe))
-          return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
-        return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      }
-    : (t: number) => {
-        const elapsed = Math.round((t - t0) / 1000);
-        const m = Math.floor(elapsed / 60);
-        const s = elapsed % 60;
-        return `${m}:${String(s).padStart(2, "0")}`;
-      };
-
-  const data   = history.map(p => ({ t: p.time, price: p.price, volume: p.volume ?? 0 }));
-  const maxVol = isKline ? Math.max(...data.map(d => d.volume), 1) : 1;
-
   return (
-    <div className="w-full select-none overflow-hidden rounded-xl"
-         style={{ height: 350, background: CHART_BG }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 5, right: 62, bottom: 22, left: 0 }}>
-          {/* Subtle horizontal grid */}
-          <CartesianGrid
-            strokeDasharray="0"
-            stroke="rgba(255,255,255,0.04)"
-            vertical={false}
-          />
-
-          {/* X axis */}
-          <XAxis
-            dataKey="t" type="number" domain={["dataMin", "dataMax"]}
-            tickFormatter={fmtX}
-            tick={{ fontSize: 9, fill: "rgba(255,255,255,0.2)" }}
-            axisLine={false} tickLine={false}
-            interval="preserveStartEnd" tickCount={5}
-          />
-
-          {/* Price Y axis (hidden — label comes from ReferenceLine) */}
-          <YAxis yAxisId="price" domain={[domainMin, domainMax]} hide />
-
-          {/* Volume Y axis: domain [0, maxVol*5] keeps bars in bottom 20% */}
-          <YAxis yAxisId="vol" domain={[0, maxVol * 5]} hide orientation="right" />
-
-          {/* Price-to-beat zones */}
-          {priceToBeat != null && (
-            <>
-              <ReferenceArea yAxisId="price" y1={priceToBeat} y2={domainMax}
-                fill="rgba(34,197,94,0.04)" strokeOpacity={0} />
-              <ReferenceArea yAxisId="price" y1={domainMin} y2={priceToBeat}
-                fill="rgba(239,68,68,0.04)" strokeOpacity={0} />
-              <ReferenceLine yAxisId="price" y={priceToBeat}
-                stroke="rgba(255,255,255,0.15)" strokeDasharray="4 3" strokeWidth={1}
-                label={{ value: `Target ${fmtY(priceToBeat)}`, position: "insideTopLeft",
-                  fill: "rgba(255,255,255,0.25)", fontSize: 9, dy: 4, dx: 4 }} />
-            </>
-          )}
-
-          {/* Floating current-price label on right edge */}
-          <ReferenceLine yAxisId="price" y={currentPrice}
-            stroke={lineColor} strokeWidth={1} strokeOpacity={0.4} strokeDasharray="3 3"
-            label={{ value: fmtY(currentPrice), position: "right",
-              fill: lineColor, fontSize: 11, fontWeight: 700, dx: 4 }} />
-
-          {/* Volume bars (kline only) */}
-          {isKline && (
-            <Bar yAxisId="vol" dataKey="volume" fill="rgba(255,255,255,0.07)" isAnimationActive={false} />
-          )}
-
-          {/* Candlesticks (kline + candles mode) */}
-          {effectiveChartType === "candles" && (
-            <Customized
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              component={(p: any) => <CandlestickLayer {...p} ohlcData={data} />}
-            />
-          )}
-
-          {/* Price line — always rendered; invisible in candles mode (keeps tooltip tracking) */}
-          <Line
-            yAxisId="price"
-            type="monotone"
-            dataKey="price"
-            stroke={effectiveChartType === "candles" ? "transparent" : lineColor}
-            strokeWidth={1.5}
-            dot={false}
-            activeDot={effectiveChartType === "candles"
-              ? { r: 0 }
-              : { r: 3, fill: lineColor, stroke: CHART_BG, strokeWidth: 2 }}
-            isAnimationActive={false}
-          />
-
-          <Tooltip
-            cursor={{ stroke: "rgba(255,255,255,0.08)", strokeWidth: 1 }}
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            content={({ active, payload }: any) => {
-              if (!active || !payload?.length) return null;
-              const d: OHLCRow = payload[0]?.payload;
-              if (!d) return null;
-              const isUp = d.price >= (d.open ?? d.price);
-              const c    = effectiveChartType === "candles" ? (isUp ? "#22c55e" : "#ef4444") : lineColor;
-              return (
-                <div style={{ background: "#0d0f14", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, fontSize: 11, padding: "5px 10px" }}>
-                  <div style={{ color: "rgba(255,255,255,0.3)", marginBottom: 3, fontSize: 9 }}>{fmtX(d.t)}</div>
-                  {effectiveChartType === "candles" && d.open != null ? (
-                    <div style={{ color: c, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1px 10px" }}>
-                      <span>O {fmtY(d.open)}</span>
-                      <span>H {fmtY(d.high!)}</span>
-                      <span>L {fmtY(d.low!)}</span>
-                      <span>C {fmtY(d.price)}</span>
-                    </div>
-                  ) : (
-                    <span style={{ color: lineColor }}>{fmtY(d.price)}</span>
-                  )}
-                </div>
-              );
-            }}
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
-    </div>
+    <CandleChart
+      data={history}
+      chartType={chartType}
+      isKline={isKline}
+      priceToBeat={priceToBeat}
+      timeframe={timeframe}
+      status={status}
+      label={label}
+    />
   );
 }
 
