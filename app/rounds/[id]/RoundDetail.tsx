@@ -6,11 +6,13 @@ import Link from "next/link";
 import Avatar from "@/components/Avatar";
 import LMSRBetPanel from "@/components/LMSRBetPanel";
 import { getAllPrices } from "@/lib/lmsr";
+import dynamic from "next/dynamic";
 import { Outcome } from "@/lib/types";
 import { useTokenPrice, Timeframe } from "@/lib/useTokenPrice";
 import { useAuth } from "@/lib/useAuth";
 import TokenStats from "@/components/TokenStats";
-import CandleChart from "@/components/CandleChart";
+
+const CandleChart = dynamic(() => import("@/components/CandleChart"), { ssr: false });
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
