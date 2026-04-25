@@ -531,43 +531,45 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                         ))}
                       </div>
 
-                      {/* Timeframe dropdown */}
-                      <div ref={tfRef} className="relative">
-                        <button
-                          onClick={() => setTfOpen(v => !v)}
-                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold transition-colors"
-                          style={{
-                            background: "#0d0f14",
-                            border: "1px solid rgba(34,197,94,0.35)",
-                            color: "#22c55e",
-                          }}
-                        >
-                          {timeframe}
-                          <svg className={`w-3 h-3 transition-transform duration-150 ${tfOpen ? "rotate-180" : ""}`}
-                               fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                          </svg>
-                        </button>
+                      {/* Timeframe dropdown — hidden in Live mode */}
+                      {chartType !== "live" && (
+                        <div ref={tfRef} className="relative">
+                          <button
+                            onClick={() => setTfOpen(v => !v)}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold transition-colors"
+                            style={{
+                              background: "#0d0f14",
+                              border: "1px solid rgba(34,197,94,0.35)",
+                              color: "#22c55e",
+                            }}
+                          >
+                            {timeframe}
+                            <svg className={`w-3 h-3 transition-transform duration-150 ${tfOpen ? "rotate-180" : ""}`}
+                                 fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </button>
 
-                        {tfOpen && (
-                          <div className="absolute right-0 top-full mt-1 z-30 rounded-lg overflow-hidden py-1"
-                               style={{ background: "#0d0f14", border: "1px solid rgba(255,255,255,0.1)", minWidth: 68 }}>
-                            {TIMEFRAMES.map(tf => (
-                              <button
-                                key={tf.key}
-                                onClick={() => {
-                                  setTimeframe(tf.key);
-                                  setTfOpen(false);
-                                }}
-                                className={`w-full text-left px-3 py-1.5 text-[11px] font-mono transition-colors hover:bg-white/5
-                                  ${timeframe === tf.key ? "text-[#22c55e]" : "text-white/45"}`}
-                              >
-                                {tf.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                          {tfOpen && (
+                            <div className="absolute right-0 top-full mt-1 z-30 rounded-lg overflow-hidden py-1"
+                                 style={{ background: "#0d0f14", border: "1px solid rgba(255,255,255,0.1)", minWidth: 68 }}>
+                              {TIMEFRAMES.map(tf => (
+                                <button
+                                  key={tf.key}
+                                  onClick={() => {
+                                    setTimeframe(tf.key);
+                                    setTfOpen(false);
+                                  }}
+                                  className={`w-full text-left px-3 py-1.5 text-[11px] font-mono transition-colors hover:bg-white/5
+                                    ${timeframe === tf.key ? "text-[#22c55e]" : "text-white/45"}`}
+                                >
+                                  {tf.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -577,7 +579,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                   tokenAddress={round.tokenAddress}
                   tokenSymbol={round.tokenSymbol}
                   priceToBeat={round.targetPrice}
-                  timeframe={timeframe}
+                  timeframe={chartType === "live" ? "1s" : timeframe}
                   chartType={chartType}
                 />
                 <PoolBar outcomes={outcomes} prices={lmsrPrices} />

@@ -16,8 +16,6 @@ const LIVE_WINDOW_MS: Partial<Record<Timeframe, number>> = {
   "30s": 900_000,   // last 15 minutes
 };
 
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
 // Axis layout constants
 const Y_AXIS_W = 60; // px reserved on right for price labels
 const X_AXIS_H = 20; // px reserved at bottom for time labels
@@ -38,10 +36,9 @@ function formatTime(ms: number): string {
 
 // ── Canvas snake-line for LIVE mode ──────────────────────────────────────────
 
-function LiveLineCanvas({ data, priceToBeat, timeframe, width, height }: {
+function LiveLineCanvas({ data, priceToBeat, width, height }: {
   data:        OHLCPoint[];
   priceToBeat: number | null;
-  timeframe:   Timeframe;
   width:       number;
   height:      number;
 }) {
@@ -85,40 +82,41 @@ function LiveLineCanvas({ data, priceToBeat, timeframe, width, height }: {
       const ptb          = ptbRef.current;
       const displayPrice = displayPriceRef.current;
       ctx.clearRect(0, 0, width, height);
-      if (pts.length < 2) return;
 
-      // Build price array: historical + velocity-eased live tail
-      const rawPrices = pts.map(d => d.price);
-      const allPrices = [...rawPrices.slice(0, -1), displayPrice];
+      // Time-based x: right edge = now, left edge = now - 60s
+      // Every frame nowMs advances → all points scroll left continuously
+      const nowMs      = Date.now();
+      const windowMs   = 60_000;
+      const startMs    = nowMs - windowMs;
+      const toX        = (ts: number) => ((ts - startMs) / windowMs) * chartW;
 
-      // 5s mode: add 4 intermediate points between each pair for denser bezier anchors
-      const interpFactor = timeframe === "5s" ? 5 : 1;
-      let drawPrices     = allPrices;
-      if (interpFactor > 1 && allPrices.length > 1) {
-        const dense: number[] = [];
-        for (let i = 0; i < allPrices.length - 1; i++) {
-          dense.push(allPrices[i]);
-          for (let j = 1; j < interpFactor; j++)
-            dense.push(lerp(allPrices[i], allPrices[i + 1], j / interpFactor));
-        }
-        dense.push(allPrices[allPrices.length - 1]);
-        drawPrices = dense;
-      }
+      // Visible points within the 60s window (keep a small left buffer for smooth entry)
+      const visiblePts = pts.filter(p => p.time >= startMs - 2_000);
 
-      // Price range across all visible prices
-      const allForRange = [...rawPrices, displayPrice];
-      const minP  = Math.min(...allForRange) * 0.9999;
-      const maxP  = Math.max(...allForRange) * 1.0001;
-      const range = maxP - minP || 1;
+      // Need at least 1 known price to draw anything
+      const liveTailPrice = displayPrice > 0
+        ? displayPrice
+        : (pts.length > 0 ? pts[pts.length - 1].price : 0);
+      if (liveTailPrice === 0) return;
 
-      // Coordinate helpers — chart area only
+      // Price range over visible data + live tail
+      const allPrices = visiblePts.length > 0
+        ? [...visiblePts.map(d => d.price), liveTailPrice]
+        : [liveTailPrice, liveTailPrice];
+      const minP  = Math.min(...allPrices) * 0.9999;
+      const maxP  = Math.max(...allPrices) * 1.0001;
+      const range = maxP - minP || liveTailPrice * 0.0001 || 1;
+
+      // Coordinate helpers — chart drawing area (inset from axes)
       const PAD_T = 10, PAD_B = 5;
       const toY = (p: number) =>
         PAD_T + (chartH - PAD_T - PAD_B) * (1 - (p - minP) / range);
-      const toX = (i: number) =>
-        (i / (drawPrices.length - 1)) * chartW;
-      // Map a real data index → dense index → x
-      const realToX = (ri: number) => toX(ri * interpFactor);
+
+      // Build draw path: historical points + live tail pinned at right edge
+      const drawPts = [
+        ...visiblePts.map(p => ({ x: toX(p.time), y: toY(p.price) })),
+        { x: chartW, y: toY(liveTailPrice) },
+      ];
 
       // ── Y-axis grid + price labels ─────────────────────────────────────────
       ctx.font = "10px monospace";
@@ -127,7 +125,6 @@ function LiveLineCanvas({ data, priceToBeat, timeframe, width, height }: {
         const p = minP + (maxP - minP) * (i / nY);
         const y = toY(p);
         if (y < 0 || y > chartH) continue;
-        // Grid line
         ctx.strokeStyle = "rgba(255,255,255,0.05)";
         ctx.lineWidth   = 1;
         ctx.setLineDash([]);
@@ -135,27 +132,23 @@ function LiveLineCanvas({ data, priceToBeat, timeframe, width, height }: {
         ctx.moveTo(0, y);
         ctx.lineTo(chartW, y);
         ctx.stroke();
-        // Price label
-        ctx.fillStyle  = "rgba(255,255,255,0.35)";
-        ctx.textAlign  = "left";
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        ctx.textAlign = "left";
         ctx.fillText(formatPrice(p), chartW + 4, y + 3);
       }
 
       // ── X-axis grid + time labels ──────────────────────────────────────────
       const nX = 5;
       for (let i = 0; i <= nX; i++) {
-        const realIdx = Math.round((pts.length - 1) * (i / nX));
-        const x       = realToX(realIdx);
-        const ts      = pts[realIdx]?.time ?? 0;
-        if (x < 0 || x > chartW) continue;
-        // Grid line
+        const ts = startMs + (i / nX) * windowMs;
+        const x  = (i / nX) * chartW;
         ctx.strokeStyle = "rgba(255,255,255,0.05)";
         ctx.lineWidth   = 1;
+        ctx.setLineDash([]);
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, chartH);
         ctx.stroke();
-        // Time label
         ctx.fillStyle = "rgba(255,255,255,0.35)";
         ctx.textAlign = i === 0 ? "left" : i === nX ? "right" : "center";
         ctx.fillText(formatTime(ts), x, chartH + 14);
@@ -164,10 +157,8 @@ function LiveLineCanvas({ data, priceToBeat, timeframe, width, height }: {
       // ── priceToBeat line + green zone ──────────────────────────────────────
       if (ptb != null) {
         const y = toY(ptb);
-        // Subtle green zone above the target
         ctx.fillStyle = "rgba(0,255,136,0.04)";
         ctx.fillRect(0, 0, chartW, Math.max(0, y));
-        // White dashed reference line
         ctx.setLineDash([4, 4]);
         ctx.strokeStyle = "rgba(255,255,255,0.3)";
         ctx.lineWidth   = 1;
@@ -179,62 +170,58 @@ function LiveLineCanvas({ data, priceToBeat, timeframe, width, height }: {
       }
 
       // ── Bezier price line with glow ────────────────────────────────────────
-      ctx.strokeStyle = LINE_COLOR;
-      ctx.lineWidth   = 2;
-      ctx.lineJoin    = "round";
-      ctx.lineCap     = "round";
-      ctx.shadowColor = LINE_COLOR;
-      ctx.shadowBlur  = 8;
-      ctx.beginPath();
-      drawPrices.forEach((price, i) => {
-        const x = toX(i);
-        const y = toY(price);
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          const prevX = toX(i - 1);
-          const prevY = toY(drawPrices[i - 1]);
-          const cpX   = (prevX + x) / 2;
-          ctx.bezierCurveTo(cpX, prevY, cpX, y, x, y);
-        }
-      });
-      ctx.stroke();
-      ctx.shadowBlur = 0;
+      if (drawPts.length >= 2) {
+        ctx.strokeStyle = LINE_COLOR;
+        ctx.lineWidth   = 2;
+        ctx.lineJoin    = "round";
+        ctx.lineCap     = "round";
+        ctx.shadowColor = LINE_COLOR;
+        ctx.shadowBlur  = 8;
+        ctx.beginPath();
+        drawPts.forEach((pt, i) => {
+          if (i === 0) {
+            ctx.moveTo(pt.x, pt.y);
+          } else {
+            const prev = drawPts[i - 1];
+            const cpX  = (prev.x + pt.x) / 2;
+            ctx.bezierCurveTo(cpX, prev.y, cpX, pt.y, pt.x, pt.y);
+          }
+        });
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
 
-      // ── Glowing dot at live tail ───────────────────────────────────────────
-      const lastX = toX(drawPrices.length - 1);
-      const lastY = toY(displayPrice);
+      // ── Glowing dot at live tail (right edge) ─────────────────────────────
+      const dotY = toY(liveTailPrice);
       ctx.fillStyle   = LINE_COLOR;
       ctx.shadowColor = LINE_COLOR;
       ctx.shadowBlur  = 10;
       ctx.beginPath();
-      ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+      ctx.arc(chartW, dotY, 4, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
 
       // ── Current price pill label (in Y-axis area) ─────────────────────────
-      const pillText  = formatPrice(displayPrice);
-      ctx.font        = "bold 13px monospace";
-      const pillW     = ctx.measureText(pillText).width + 10;
-      const pillH     = 18;
-      const pillX     = chartW + 2;
-      const pillY     = Math.max(pillH / 2, Math.min(chartH - pillH / 2, lastY)) - pillH / 2;
-      // Rounded rectangle background
-      const r = 4;
-      ctx.fillStyle = LINE_COLOR;
+      const pillText = formatPrice(liveTailPrice);
+      ctx.font       = "bold 13px monospace";
+      const pillW    = ctx.measureText(pillText).width + 10;
+      const pillH    = 18;
+      const pillX    = chartW + 2;
+      const pillY    = Math.max(pillH / 2, Math.min(chartH - pillH / 2, dotY)) - pillH / 2;
+      const r        = 4;
+      ctx.fillStyle  = LINE_COLOR;
       ctx.beginPath();
       ctx.moveTo(pillX + r, pillY);
       ctx.lineTo(pillX + pillW - r, pillY);
-      ctx.quadraticCurveTo(pillX + pillW, pillY,           pillX + pillW, pillY + r);
+      ctx.quadraticCurveTo(pillX + pillW, pillY,          pillX + pillW, pillY + r);
       ctx.lineTo(pillX + pillW, pillY + pillH - r);
-      ctx.quadraticCurveTo(pillX + pillW, pillY + pillH,   pillX + pillW - r, pillY + pillH);
+      ctx.quadraticCurveTo(pillX + pillW, pillY + pillH,  pillX + pillW - r, pillY + pillH);
       ctx.lineTo(pillX + r,    pillY + pillH);
-      ctx.quadraticCurveTo(pillX,          pillY + pillH,  pillX, pillY + pillH - r);
+      ctx.quadraticCurveTo(pillX,         pillY + pillH,  pillX, pillY + pillH - r);
       ctx.lineTo(pillX, pillY + r);
-      ctx.quadraticCurveTo(pillX,          pillY,          pillX + r, pillY);
+      ctx.quadraticCurveTo(pillX,         pillY,          pillX + r, pillY);
       ctx.closePath();
       ctx.fill();
-      // Text inside pill
       ctx.fillStyle = "#000";
       ctx.textAlign = "left";
       ctx.fillText(pillText, pillX + 5, pillY + pillH - 4);
@@ -528,7 +515,6 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
           <LiveLineCanvas
             data={liveData}
             priceToBeat={priceToBeat}
-            timeframe={timeframe}
             width={containerWidth}
             height={H}
           />

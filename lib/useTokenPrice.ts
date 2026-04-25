@@ -133,11 +133,12 @@ export function useTokenPrice(opts: {
 
     if (!binanceSymbol && !tokenAddress) return;
 
-    let cancelled      = false;
-    const ac           = new AbortController();
+    let cancelled        = false;
+    const ac             = new AbortController();
     let ws: WebSocket | null = null;
-    let pollInterval:   ReturnType<typeof setInterval> | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout>  | null = null;
+    let pollInterval:     ReturnType<typeof setInterval> | null = null;
+    let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+    let reconnectTimer:   ReturnType<typeof setTimeout>  | null = null;
 
     // ── Mode A: Binance klines REST (1m+) ─────────────────────────────────────
     if (isKlineMode && binanceSymbol && klineInterval) {
@@ -160,6 +161,7 @@ export function useTokenPrice(opts: {
       // Mutable candle state — mutated in-place to avoid closure staleness
       let completedCandles: OHLCPoint[] = [];
       let currentCandle:   OHLCPoint | null = null;
+      let lastKnownPrice   = 0;
 
       const openWS = () => {
         const connect = () => {
@@ -175,6 +177,7 @@ export function useTokenPrice(opts: {
             const p   = parseFloat(msg.p);
             const vol = parseFloat(msg.q ?? "0");
             if (!isFinite(p)) return;
+            lastKnownPrice = p;
 
             const now         = Date.now();
             const periodStart = Math.floor(now / periodMs) * periodMs;
@@ -232,6 +235,25 @@ export function useTokenPrice(opts: {
       } else {
         openWS();
       }
+
+      // Heartbeat for 1s mode: ensure a point is added every second even during quiet markets
+      if (periodMs === 1_000) {
+        heartbeatInterval = setInterval(() => {
+          if (cancelled || lastKnownPrice <= 0) return;
+          const p   = lastKnownPrice;
+          const now = Date.now();
+          const periodStart = Math.floor(now / periodMs) * periodMs;
+          if (!currentCandle) {
+            currentCandle = { time: periodStart, price: p, open: p, high: p, low: p, volume: 0 };
+          } else if (periodStart > currentCandle.time) {
+            completedCandles.push({ ...currentCandle });
+            if (completedCandles.length >= MAX_STREAM_HISTORY) completedCandles.shift();
+            currentCandle = { time: periodStart, price: p, open: p, high: p, low: p, volume: 0 };
+          }
+          const combined = [...completedCandles, { ...currentCandle }];
+          setState({ price: p, history: combined, status: "live", label, isKline: true });
+        }, 1_000);
+      }
     }
 
     // ── Mode C: DexScreener polling ────────────────────────────────────────────
@@ -267,8 +289,9 @@ export function useTokenPrice(opts: {
       cancelled = true;
       ac.abort();
       ws?.close();
-      if (pollInterval)   clearInterval(pollInterval);
-      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (pollInterval)      clearInterval(pollInterval);
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      if (reconnectTimer)    clearTimeout(reconnectTimer);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sym, tokenAddress, timeframe]);
