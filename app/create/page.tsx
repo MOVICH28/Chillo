@@ -67,7 +67,8 @@ export default function CreatePage() {
   const [tokenError,   setTokenError]   = useState("");
 
   // ── Twitter: Step 1 — account ─────────────────────────────────────────────
-  const [twitterQuery, setTwitterQuery] = useState("");
+  const [twitterQuery,   setTwitterQuery]   = useState("");
+  const [avatarError,    setAvatarError]    = useState(false);
 
   // ── Twitter: Step 2 — question type ──────────────────────────────────────
   const [twitterQuestion, setTwitterQuestion] = useState<"posts_count" | "next_post_time">("posts_count");
@@ -115,6 +116,9 @@ export default function CreatePage() {
 
   // ── Auto-set question text when twitter username/question changes ────────
   const cleanTwitter = twitterQuery.replace(/^@/, "").trim();
+  const twitterAvatarUrl = cleanTwitter ? `https://unavatar.io/twitter/${cleanTwitter}` : null;
+  useEffect(() => { setAvatarError(false); }, [cleanTwitter]);
+
   useEffect(() => {
     if (!cleanTwitter) return;
     if (twitterQuestion === "posts_count") {
@@ -161,6 +165,7 @@ export default function CreatePage() {
         body.twitterUserId      = null;
         body.twitterQuestion    = twitterQuestion;
         body.twitterPeriodHours = 24;
+        body.tokenLogo          = `https://unavatar.io/twitter/${cleanTwitter}`;
       } else {
         body.tokenAddress = tokenInfo?.address && tokenInfo.address !== tokenInfo.symbol
           ? tokenInfo.address : null;
@@ -461,11 +466,20 @@ export default function CreatePage() {
             {/* Account preview (no API call) */}
             {validTwitterUsername(twitterQuery) && cleanTwitter && (
               <div className="flex items-center gap-3 p-4 rounded-xl bg-surface-2 border border-[#1d9bf0]/30">
-                <div className="w-12 h-12 rounded-full bg-[#1d9bf0] flex items-center justify-center shrink-0">
-                  <span className="text-white font-bold text-xl leading-none">
-                    {cleanTwitter[0]?.toUpperCase() ?? "?"}
-                  </span>
-                </div>
+                {twitterAvatarUrl && !avatarError ? (
+                  <img
+                    src={twitterAvatarUrl}
+                    alt={cleanTwitter}
+                    className="w-12 h-12 rounded-full shrink-0 object-cover"
+                    onError={() => setAvatarError(true)}
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-[#1d9bf0] flex items-center justify-center shrink-0">
+                    <span className="text-white font-bold text-xl leading-none">
+                      {cleanTwitter[0]?.toUpperCase() ?? "?"}
+                    </span>
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-[#1d9bf0] text-sm font-mono font-semibold">@{cleanTwitter}</p>
                   <a
@@ -595,11 +609,20 @@ export default function CreatePage() {
             {/* Preview */}
             <div className="rounded-xl border border-white/8 bg-[#0d0f14] overflow-hidden">
               <div className="flex items-center gap-3 p-4">
-                <div className="w-10 h-10 rounded-full bg-[#1d9bf0] flex items-center justify-center shrink-0">
-                  <span className="text-white font-bold text-base leading-none">
-                    {cleanTwitter[0]?.toUpperCase() ?? "?"}
-                  </span>
-                </div>
+                {twitterAvatarUrl && !avatarError ? (
+                  <img
+                    src={twitterAvatarUrl}
+                    alt={cleanTwitter}
+                    className="w-10 h-10 rounded-full shrink-0 object-cover"
+                    onError={() => setAvatarError(true)}
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-[#1d9bf0] flex items-center justify-center shrink-0">
+                    <span className="text-white font-bold text-base leading-none">
+                      {cleanTwitter[0]?.toUpperCase() ?? "?"}
+                    </span>
+                  </div>
+                )}
                 <div>
                   <p className="text-white font-semibold text-sm">@{cleanTwitter}</p>
                   <p className="text-white/60 text-xs">{question}</p>

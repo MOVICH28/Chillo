@@ -28,6 +28,8 @@ export async function POST(req: NextRequest) {
     tokenAddress, question, outcomes, duration, description, twitterUrl, customImage,
     // Twitter market fields
     twitterUsername, twitterUserId, twitterQuestion, twitterPeriodHours,
+    // Optional logo override (e.g. unavatar.io URL for Twitter markets)
+    tokenLogo: tokenLogoOverride,
   } = body;
 
   const isTwitterMarket = !!twitterUsername;
@@ -66,7 +68,7 @@ export async function POST(req: NextRequest) {
 
   // If tokenAddress given, look up token info
   let tokenSymbol: string | null = null;
-  let tokenLogo: string | null = null;
+  let tokenLogo: string | null = tokenLogoOverride ?? null;
   if (tokenAddress) {
     try {
       const res = await fetch(

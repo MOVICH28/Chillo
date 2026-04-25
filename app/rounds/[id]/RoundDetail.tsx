@@ -38,10 +38,11 @@ interface RoundData {
   totalPool: number;
   realPool: number;
   roundNumber:  number | null;
-  tokenAddress: string | null;
-  tokenSymbol:  string | null;
-  tokenLogo:    string | null;
-  isCustom:     boolean;
+  tokenAddress:    string | null;
+  tokenSymbol:     string | null;
+  tokenLogo:       string | null;
+  isCustom:        boolean;
+  twitterUsername: string | null;
 }
 
 interface RecentTrade {
@@ -78,6 +79,35 @@ const OUTCOME_COLORS: Record<string, { bg: string; border: string; text: string;
   E: { bg: "bg-sky-500/10",    border: "border-sky-500/40",    text: "text-sky-400",    dot: "bg-sky-400",    hex: "#38bdf8" },
   F: { bg: "bg-purple-500/10", border: "border-purple-500/40", text: "text-purple-400", dot: "bg-purple-400", hex: "#c084fc" },
 };
+
+// ── Twitter avatar with unavatar.io + letter fallback ────────────────────────
+
+function TwitterAvatar({ username, logoUrl, size }: { username: string; logoUrl: string | null; size: number }) {
+  const [errored, setErrored] = useState(false);
+  const src = logoUrl ?? `https://unavatar.io/twitter/${username}`;
+  if (!errored) {
+    return (
+      <img
+        src={src}
+        alt={username}
+        width={size}
+        height={size}
+        className="rounded-full shrink-0 object-cover"
+        onError={() => setErrored(true)}
+      />
+    );
+  }
+  return (
+    <div
+      className="rounded-full bg-[#1d9bf0] flex items-center justify-center shrink-0"
+      style={{ width: size, height: size }}
+    >
+      <span className="text-white font-bold leading-none" style={{ fontSize: size * 0.4 }}>
+        {username[0]?.toUpperCase() ?? "?"}
+      </span>
+    </div>
+  );
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -470,10 +500,24 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
             </div>
 
             <div className="flex items-center gap-3 mb-4">
-              {round.targetToken && TOKEN_LOGOS[round.targetToken] && (
+              {round.category === "twitter" && round.twitterUsername ? (
+                <TwitterAvatar username={round.twitterUsername} logoUrl={round.tokenLogo} size={40} />
+              ) : round.targetToken && TOKEN_LOGOS[round.targetToken] ? (
                 <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-10 h-10 rounded-full shrink-0" />
-              )}
-              <h1 className="text-xl font-semibold text-white leading-snug">{round.question}</h1>
+              ) : null}
+              <div className="flex-1 min-w-0">
+                {round.category === "twitter" && round.twitterUsername && (
+                  <a
+                    href={`https://twitter.com/${round.twitterUsername}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#1d9bf0] text-xs font-mono hover:underline"
+                  >
+                    @{round.twitterUsername}
+                  </a>
+                )}
+                <h1 className="text-xl font-semibold text-white leading-snug">{round.question}</h1>
+              </div>
             </div>
 
             {/* Countdown timers */}
