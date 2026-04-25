@@ -11,27 +11,45 @@ const CHART_BG = "#0d0f14";
 const H = 350;
 
 const LIVE_WINDOW_MS: Partial<Record<Timeframe, number>> = {
-  "1s":  150_000,
-  "5s":  300_000,
-  "30s": 900_000,
+  "1s":  300_000,   // last 300 seconds (~200 points at 1s cadence)
+  "5s":  300_000,   // last 5 minutes
+  "30s": 900_000,   // last 15 minutes
 };
+
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 // ── Canvas snake-line for LIVE mode ──────────────────────────────────────────
 
-function LiveLineCanvas({ data, priceToBeat, width, height }: {
+function LiveLineCanvas({ data, priceToBeat, timeframe, width, height }: {
   data:        OHLCPoint[];
   priceToBeat: number | null;
+  timeframe:   Timeframe;
   width:       number;
   height:      number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef   = useRef<number>(0);
 
-  // Refs so the animation loop always reads the latest values without restarting
+  // Mutable refs read every frame — no effect restarts on data changes
   const dataRef = useRef(data);
   const ptbRef  = useRef(priceToBeat);
   dataRef.current = data;
   ptbRef.current  = priceToBeat;
+
+  // Lerp state: displayPrice eases toward targetPrice each frame
+  const targetPriceRef  = useRef(0);
+  const displayPriceRef = useRef(0);
+  const initializedRef  = useRef(false);
+
+  // Sync target with latest data point on every render
+  if (data.length > 0) {
+    const latest = data[data.length - 1].price;
+    targetPriceRef.current = latest;
+    if (!initializedRef.current) {
+      displayPriceRef.current = latest;
+      initializedRef.current  = true;
+    }
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -45,20 +63,36 @@ function LiveLineCanvas({ data, priceToBeat, width, height }: {
       ctx.clearRect(0, 0, width, height);
       if (pts.length < 2) return;
 
-      const prices = pts.map(d => d.price);
-      const minP   = Math.min(...prices) * 0.9999;
-      const maxP   = Math.max(...prices) * 1.0001;
-      const range  = maxP - minP || 1;
+      // Build price array: historical points + lerped live price at tail
+      const rawPrices    = pts.map(d => d.price);
+      const displayPrice = displayPriceRef.current;
+      const allPrices    = [...rawPrices.slice(0, -1), displayPrice];
+
+      // For sparse 5s data: add 4 linear intermediate points between each pair
+      // so the bezier curve has more anchors and looks denser
+      let drawPrices = allPrices;
+      if (timeframe === "5s" && allPrices.length > 1) {
+        const dense: number[] = [];
+        for (let i = 0; i < allPrices.length - 1; i++) {
+          dense.push(allPrices[i]);
+          for (let j = 1; j <= 4; j++) dense.push(lerp(allPrices[i], allPrices[i + 1], j / 5));
+        }
+        dense.push(allPrices[allPrices.length - 1]);
+        drawPrices = dense;
+      }
+
+      const minP  = Math.min(...drawPrices) * 0.9999;
+      const maxP  = Math.max(...drawPrices) * 1.0001;
+      const range = maxP - minP || 1;
 
       const toY = (p: number) => height - ((p - minP) / range) * height * 0.85 - height * 0.05;
-      const toX = (i: number) => (i / (pts.length - 1)) * width;
+      const toX = (i: number) => (i / (drawPrices.length - 1)) * width;
 
-      const currentPrice = prices[prices.length - 1];
       const lineColor = ptb != null
-        ? (currentPrice >= ptb ? "#22c55e" : "#ef4444")
+        ? (displayPrice >= ptb ? "#22c55e" : "#ef4444")
         : "#22c55e";
 
-      // Above/below zones relative to priceToBeat
+      // Above/below color zones
       if (ptb != null) {
         const y = toY(ptb);
         ctx.fillStyle = "rgba(34,197,94,0.04)";
@@ -67,7 +101,7 @@ function LiveLineCanvas({ data, priceToBeat, width, height }: {
         ctx.fillRect(0, y, width, height - y);
       }
 
-      // Dashed priceToBeat reference line
+      // Dashed target price reference line
       if (ptb != null) {
         const y = toY(ptb);
         ctx.setLineDash([4, 4]);
@@ -80,7 +114,7 @@ function LiveLineCanvas({ data, priceToBeat, width, height }: {
         ctx.setLineDash([]);
       }
 
-      // Smooth price line with glow
+      // Bezier curve price line with glow
       ctx.strokeStyle = lineColor;
       ctx.lineWidth = 2;
       ctx.lineJoin = "round";
@@ -88,40 +122,48 @@ function LiveLineCanvas({ data, priceToBeat, width, height }: {
       ctx.shadowColor = lineColor;
       ctx.shadowBlur = 6;
       ctx.beginPath();
-      pts.forEach((_, i) => {
+      drawPrices.forEach((price, i) => {
         const x = toX(i);
-        const y = toY(prices[i]);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        const y = toY(price);
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          const prevX = toX(i - 1);
+          const prevY = toY(drawPrices[i - 1]);
+          const cpX   = (prevX + x) / 2;
+          ctx.bezierCurveTo(cpX, prevY, cpX, y, x, y);
+        }
       });
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      // Glowing dot at current price
-      const lastX = toX(pts.length - 1);
-      const lastY = toY(currentPrice);
+      // Glowing dot at lerped live position
+      const lastX = toX(drawPrices.length - 1);
+      const lastY = toY(displayPrice);
       ctx.fillStyle = lineColor;
       ctx.shadowColor = lineColor;
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 10;
       ctx.beginPath();
       ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
 
-      // Current price label
+      // Floating price label
       ctx.fillStyle = lineColor;
       ctx.font = "11px monospace";
       ctx.textAlign = "right";
-      ctx.fillText(currentPrice.toFixed(2), width - 4, lastY - 6);
+      ctx.fillText(displayPrice.toFixed(2), width - 4, lastY - 6);
     };
 
     const animate = () => {
+      // Ease display price toward the latest WebSocket target each frame
+      displayPriceRef.current = lerp(displayPriceRef.current, targetPriceRef.current, 0.15);
       draw();
       animRef.current = requestAnimationFrame(animate);
     };
     animate();
     return () => cancelAnimationFrame(animRef.current);
-  // Restart only when canvas dimensions change; data/ptb are read via refs
+  // Restart only on dimension changes; data/price are read via refs at 60fps
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [width, height]);
 
@@ -398,6 +440,7 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
           <LiveLineCanvas
             data={liveData}
             priceToBeat={priceToBeat}
+            timeframe={timeframe}
             width={containerWidth}
             height={H}
           />
