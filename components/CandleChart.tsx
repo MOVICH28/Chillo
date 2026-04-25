@@ -398,7 +398,7 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
     const toSec = (ms: number) => Math.floor(ms / 1000) as any;
 
     try {
-      // Price line — recreate only when priceToBeat changes
+      // Price line — no viewport effect, always safe to run
       if (prevPriceToBeat.current !== priceToBeat) {
         prevPriceToBeat.current = priceToBeat;
         if (priceLineRef.current) {
@@ -419,6 +419,7 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
         }
       }
 
+      // isKline display option — no viewport effect, run only when it changes
       if (isKlineRef.current !== isKline) {
         isKlineRef.current = isKline;
         prog(() => chartRef.current?.applyOptions({ timeScale: { secondsVisible: !isKline } }));
@@ -435,45 +436,8 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
       const last    = data[data.length - 1];
       const lastSec = toSec(last.time);
 
-      if (!fittedRef.current) {
-        // ── First load for this timeframe/chartType: populate all data and fit once ──
-        fittedRef.current = true;
-
-        if (chartType === "candles" && isKline) {
-          prog(() => lineRef.current.setData([]));
-          const candleData = data
-            .filter(p => p.open != null && p.high != null && p.low != null)
-            .map(p => ({ time: toSec(p.time), open: p.open!, high: p.high!, low: p.low!, close: p.price }));
-          if (candleData.length) prog(() => candleRef.current.setData(candleData));
-          const volData = data
-            .filter(p => p.volume != null)
-            .map(p => ({
-              time:  toSec(p.time), value: p.volume!,
-              color: p.price >= (p.open ?? p.price) ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)",
-            }));
-          if (volData.length) prog(() => volRef.current.setData(volData));
-        } else {
-          prog(() => candleRef.current.setData([]));
-          prog(() => lineRef.current.applyOptions({ color: lineColor }));
-          const lineData = data.map(p => ({ time: toSec(p.time), value: p.price }));
-          prog(() => lineRef.current.setData(lineData));
-          if (isKline) {
-            const volData = data
-              .filter(p => p.volume != null)
-              .map(p => ({
-                time:  toSec(p.time), value: p.volume!,
-                color: p.price >= (p.open ?? p.price) ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)",
-              }));
-            if (volData.length) prog(() => volRef.current.setData(volData));
-          } else {
-            prog(() => volRef.current.setData([]));
-          }
-        }
-
-        // Fit exactly once — never auto-scroll again after this
-        prog(() => chartRef.current.timeScale().fitContent());
-      } else {
-        // ── Incremental update: push only the latest point, no viewport movement ──
+      // ── INCREMENTAL PATH: already fitted — update last point only, NEVER touch viewport ──
+      if (fittedRef.current) {
         prog(() => lineRef.current.applyOptions({ color: lineColor }));
 
         if (chartType === "candles" && isKline && last.open != null) {
@@ -495,7 +459,44 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
             }));
           }
         }
+        return; // explicit: nothing below runs, viewport is never touched again
       }
+
+      // ── FIRST LOAD: populate full dataset and fitContent exactly once ─────────
+      fittedRef.current = true;
+
+      if (chartType === "candles" && isKline) {
+        prog(() => lineRef.current.setData([]));
+        const candleData = data
+          .filter(p => p.open != null && p.high != null && p.low != null)
+          .map(p => ({ time: toSec(p.time), open: p.open!, high: p.high!, low: p.low!, close: p.price }));
+        if (candleData.length) prog(() => candleRef.current.setData(candleData));
+        const volData = data
+          .filter(p => p.volume != null)
+          .map(p => ({
+            time:  toSec(p.time), value: p.volume!,
+            color: p.price >= (p.open ?? p.price) ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)",
+          }));
+        if (volData.length) prog(() => volRef.current.setData(volData));
+      } else {
+        prog(() => candleRef.current.setData([]));
+        prog(() => lineRef.current.applyOptions({ color: lineColor }));
+        const lineData = data.map(p => ({ time: toSec(p.time), value: p.price }));
+        prog(() => lineRef.current.setData(lineData));
+        if (isKline) {
+          const volData = data
+            .filter(p => p.volume != null)
+            .map(p => ({
+              time:  toSec(p.time), value: p.volume!,
+              color: p.price >= (p.open ?? p.price) ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)",
+            }));
+          if (volData.length) prog(() => volRef.current.setData(volData));
+        } else {
+          prog(() => volRef.current.setData([]));
+        }
+      }
+
+      prog(() => chartRef.current.timeScale().fitContent());
     } catch { /**/ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, chartType, isKline, priceToBeat]);
