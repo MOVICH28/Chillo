@@ -30,6 +30,10 @@ export async function POST(req: NextRequest) {
     twitterUsername, twitterUserId, twitterQuestion, twitterPeriodHours,
     // Optional logo override (e.g. unavatar.io URL for Twitter markets)
     tokenLogo: tokenLogoOverride,
+    // Crypto question type: "price" | "ath_mcap" | "mcap"
+    questionType,
+    // Separate betting duration (minutes) — when present, endsAt = now + betDuration + 5min
+    betDuration,
   } = body;
 
   const isTwitterMarket = !!twitterUsername;
@@ -44,9 +48,11 @@ export async function POST(req: NextRequest) {
     if (!o.label?.trim())
       return NextResponse.json({ error: `Outcome ${o.id} label is required` }, { status: 400 });
   }
-  const durationMinutes = Number(duration);
-  if (!durationMinutes || durationMinutes < 15 || durationMinutes > 10080)
-    return NextResponse.json({ error: "Duration must be 15 min–7 days" }, { status: 400 });
+
+  // Duration validation — accept betDuration or legacy duration
+  const bettingMinutes = Number(betDuration ?? duration);
+  if (!bettingMinutes || bettingMinutes < 5 || bettingMinutes > 10080)
+    return NextResponse.json({ error: "Duration must be 5 min–7 days" }, { status: 400 });
 
   if (isTwitterMarket) {
     if (!["posts_count", "next_post_time"].includes(twitterQuestion))
@@ -78,14 +84,23 @@ export async function POST(req: NextRequest) {
       if (res.ok) {
         const info = await res.json();
         tokenSymbol = info.symbol ?? null;
-        tokenLogo   = info.logoUrl ?? null;
+        if (!tokenLogo) tokenLogo = info.logoUrl ?? null;
       }
     } catch { /* proceed without token metadata */ }
   }
 
   const now = new Date();
-  const endsAt = new Date(now.getTime() + durationMinutes * 60 * 1000);
-  const bettingClosesAt = new Date(endsAt.getTime() - 5 * 60 * 1000);
+  // When betDuration provided: betting closes at now+betDuration, result 5min later
+  // When using legacy duration field: keep old behaviour (endsAt=now+duration, bettingClosesAt=endsAt-5min)
+  let endsAt: Date;
+  let bettingClosesAt: Date;
+  if (betDuration) {
+    bettingClosesAt = new Date(now.getTime() + bettingMinutes * 60_000);
+    endsAt          = new Date(bettingClosesAt.getTime() + 5 * 60_000);
+  } else {
+    endsAt          = new Date(now.getTime() + bettingMinutes * 60_000);
+    bettingClosesAt = new Date(endsAt.getTime() - 5 * 60_000);
+  }
 
   // Initialise LMSR shares to 0 for each outcome
   const sharesInit = Object.fromEntries(outcomes.map((o: { id: string }) => [o.id, 0]));
@@ -105,8 +120,12 @@ export async function POST(req: NextRequest) {
         status:            "open",
         endsAt,
         bettingClosesAt,
-        outcomes:          outcomes.map((o: { id: string; label: string }) => ({
-          id: o.id, label: o.label.trim(), minPrice: null, maxPrice: null, pool: 0,
+        outcomes:          outcomes.map((o: { id: string; label: string; minPrice?: number | null; maxPrice?: number | null }) => ({
+          id: o.id,
+          label: o.label.trim(),
+          minPrice: o.minPrice ?? null,
+          maxPrice: o.maxPrice ?? null,
+          pool: 0,
         })),
         shares:            sharesInit,
         lmsrB:             100,
@@ -115,7 +134,7 @@ export async function POST(req: NextRequest) {
         creatorFee:        0.01,
         description:       description?.trim()    || null,
         twitterUrl:        twitterUrl?.trim()     || null,
-        customImage:       customImage?.trim()    || null,
+        customImage:       customImage            || null,
         tokenAddress:      tokenAddress           || null,
         tokenSymbol,
         tokenLogo,
@@ -123,10 +142,11 @@ export async function POST(req: NextRequest) {
         twitterUserId:      twitterUserId          || null,
         twitterQuestion:    twitterQuestion        || null,
         twitterPeriodHours: twitterPeriodHours     || null,
+        questionType:       questionType           || null,
       },
     }),
   ]);
 
-  console.log(`[markets/create] user=${payload.userId} round=${round.id} category=${round.category} q="${round.question.slice(0, 60)}"`);
+  console.log(`[markets/create] user=${payload.userId} round=${round.id} category=${round.category} questionType=${round.questionType ?? "none"} q="${round.question.slice(0, 60)}"`);
   return NextResponse.json({ id: round.id, question: round.question }, { status: 201 });
 }

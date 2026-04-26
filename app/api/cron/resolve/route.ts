@@ -49,6 +49,8 @@ type RoundRow = {
   targetPrice: number | null;
   targetToken: string | null;
   tokenList: string | null;
+  tokenAddress: string | null;
+  questionType: string | null;
   outcomes: unknown; // Prisma.JsonValue | null
 };
 
@@ -96,6 +98,52 @@ async function determineYesNoWinner(
 
   console.warn(`[cron] ${round.id}: no resolution rule matched for "${round.question}"`);
   return null;
+}
+
+// ─── Custom crypto round resolution (DexScreener) ────────────────────────────
+
+async function fetchDexScreenerData(tokenAddress: string): Promise<{ priceUsd: number; mcapUsd: number } | null> {
+  try {
+    const res = await fetch(
+      `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`,
+      { cache: "no-store" }
+    );
+    if (!res.ok) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = await res.json();
+    const pair = data?.pairs?.[0];
+    if (!pair) return null;
+    const priceUsd = parseFloat(pair.priceUsd ?? "0");
+    const mcapUsd  = pair.marketCap ?? pair.fdv ?? 0;
+    return { priceUsd, mcapUsd };
+  } catch {
+    return null;
+  }
+}
+
+function matchOutcomeBracket(value: number, outcomes: Outcome[]): string | null {
+  for (const o of outcomes) {
+    const aboveMin = o.minPrice === null || value >= o.minPrice;
+    const belowMax = o.maxPrice === null || value <  o.maxPrice;
+    if (aboveMin && belowMax) return o.id;
+  }
+  return outcomes[outcomes.length - 1]?.id ?? null;
+}
+
+async function resolveCustomCryptoRound(round: RoundRow): Promise<string | null> {
+  if (!round.tokenAddress || !round.questionType) return null;
+
+  const data = await fetchDexScreenerData(round.tokenAddress);
+  if (!data) {
+    console.warn(`[cron] ${round.id}: DexScreener data unavailable for ${round.tokenAddress}`);
+    return null;
+  }
+
+  const outcomes = round.outcomes as Outcome[];
+  const value = round.questionType === "price" ? data.priceUsd : data.mcapUsd;
+
+  console.log(`[cron] ${round.id}: questionType=${round.questionType} value=${value}`);
+  return matchOutcomeBracket(value, outcomes);
 }
 
 // ─── Twitter resolution ───────────────────────────────────────────────────────
@@ -296,7 +344,12 @@ async function runCron(): Promise<NextResponse> {
 
     try {
       if (round.outcomes !== null) {
-        winner = determineRangeOutcome(round, cryptoPrices);
+        // Custom crypto rounds with questionType use DexScreener
+        if (round.questionType && round.tokenAddress) {
+          winner = await resolveCustomCryptoRound(round);
+        } else {
+          winner = determineRangeOutcome(round, cryptoPrices);
+        }
         if (winner === null) {
           console.warn(`[cron] ${round.id}: could not determine range outcome (price data missing)`);
           summary.push({ roundId: round.id, status: "no_data", detail: "crypto price unavailable" });

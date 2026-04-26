@@ -44,6 +44,7 @@ model Round {
   twitterPeriodHours Int?      // period in hours (24 for posts count)
   twitterLastChecked DateTime? // last time we checked Twitter API
   twitterPostCount   Int?      // cached post count (for posts_count type)
+  questionType       String?   // "price" | "ath_mcap" | "mcap" — for custom crypto markets
   creator         User?      @relation("CreatedRounds", fields: [creatorId], references: [id])
   positions       Position[]
   trades          Trade[]

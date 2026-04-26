@@ -53,6 +53,7 @@ export interface Round {
   twitterUserId?: string | null;
   twitterQuestion?: string | null;
   twitterPeriodHours?: number | null;
+  questionType?: string | null;
 }
 
 export interface Bet {
