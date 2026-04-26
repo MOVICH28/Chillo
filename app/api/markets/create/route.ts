@@ -51,8 +51,8 @@ export async function POST(req: NextRequest) {
 
   // Duration validation — accept betDuration or legacy duration
   const bettingMinutes = Number(betDuration ?? duration);
-  if (!bettingMinutes || bettingMinutes < 5 || bettingMinutes > 10080)
-    return NextResponse.json({ error: "Duration must be 5 min–7 days" }, { status: 400 });
+  if (!bettingMinutes || bettingMinutes < 1 || bettingMinutes > 10080)
+    return NextResponse.json({ error: "Duration must be 1 min–7 days" }, { status: 400 });
 
   if (isTwitterMarket) {
     if (!["posts_count", "next_post_time"].includes(twitterQuestion))
@@ -90,16 +90,16 @@ export async function POST(req: NextRequest) {
   }
 
   const now = new Date();
-  // When betDuration provided: betting closes at now+betDuration, result 5min later
-  // When using legacy duration field: keep old behaviour (endsAt=now+duration, bettingClosesAt=endsAt-5min)
+  // Short rounds (≤3 min): 2-min result buffer. Longer rounds: 5-min buffer.
+  const resultBufferMs = bettingMinutes <= 3 ? 2 * 60_000 : 5 * 60_000;
   let endsAt: Date;
   let bettingClosesAt: Date;
   if (betDuration) {
     bettingClosesAt = new Date(now.getTime() + bettingMinutes * 60_000);
-    endsAt          = new Date(bettingClosesAt.getTime() + 5 * 60_000);
+    endsAt          = new Date(bettingClosesAt.getTime() + resultBufferMs);
   } else {
     endsAt          = new Date(now.getTime() + bettingMinutes * 60_000);
-    bettingClosesAt = new Date(endsAt.getTime() - 5 * 60_000);
+    bettingClosesAt = new Date(endsAt.getTime() - resultBufferMs);
   }
 
   // Initialise LMSR shares to 0 for each outcome

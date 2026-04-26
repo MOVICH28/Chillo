@@ -6,8 +6,7 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/lib/useAuth";
 
-
-const SNAP_POINTS = [1, 5, 10, 15, 30, 45, 60, 90, 120, 180, 240, 360, 480, 720, 1440];
+const SNAP_POINTS = [1, 3, 5, 10, 15, 30, 45, 60, 90, 120, 180, 240, 360, 480, 720, 1440];
 
 function formatDuration(min: number): string {
   if (min < 60) return `${min} minute${min === 1 ? "" : "s"}`;
@@ -42,24 +41,22 @@ const NEXT_POST_OUTCOMES = [
 ];
 
 const MCAP_OUTCOME_DEFAULTS = [
-  { id: "A", label: "Below $100K",      minPrice: null,      maxPrice: 100_000    },
-  { id: "B", label: "$100K – $500K",    minPrice: 100_000,   maxPrice: 500_000    },
-  { id: "C", label: "$500K – $1M",      minPrice: 500_000,   maxPrice: 1_000_000  },
-  { id: "D", label: "$1M – $5M",        minPrice: 1_000_000, maxPrice: 5_000_000  },
-  { id: "E", label: "$5M – $10M",       minPrice: 5_000_000, maxPrice: 10_000_000 },
-  { id: "F", label: "Above $10M",       minPrice: 10_000_000,maxPrice: null       },
+  { id: "A", label: "Below $100K",      minPrice: null,       maxPrice: 100_000    },
+  { id: "B", label: "$100K – $500K",    minPrice: 100_000,    maxPrice: 500_000    },
+  { id: "C", label: "$500K – $1M",      minPrice: 500_000,    maxPrice: 1_000_000  },
+  { id: "D", label: "$1M – $5M",        minPrice: 1_000_000,  maxPrice: 5_000_000  },
+  { id: "E", label: "$5M – $10M",       minPrice: 5_000_000,  maxPrice: 10_000_000 },
+  { id: "F", label: "Above $10M",       minPrice: 10_000_000, maxPrice: null       },
 ];
 
 type CryptoQType = "price" | "ath_mcap" | "mcap";
 
 // ── Smart builder constants ───────────────────────────────────────────────────
 
-const MCAP_SPREADS     = [1.5, 2, 3, 5, 10];
-const MCAP_SPREAD_LBLS = ["1.5×", "2×", "3×", "5×", "10×"];
-const MCAP_CENTER_MULTS     = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
-const MCAP_CENTER_LBLS      = ["0.5×", "0.75×", "1×", "1.25×", "1.5×", "2×"];
-const ATH_TARGETS      = [2, 5, 10, 50, 100, 500];
-const ATH_TARGET_LBLS  = ["2×", "5×", "10×", "50×", "100×", "500×"];
+// Multipliers for the "starting point" slider (relative to current mcap)
+const MCAP_START_MULTS = [0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0];
+// Multipliers for the "ending point" slider (relative to current mcap)
+const MCAP_END_MULTS   = [1, 2, 5, 10, 50, 100, 500, 1000, 5000, 10000];
 
 function getPriceSteps(p: number): number[] {
   if (p >= 10_000) return [100, 500, 1_000, 5_000, 10_000];
@@ -73,57 +70,48 @@ function defaultStepIdx(p: number): number {
 }
 
 function formatMcap(v: number): string {
-  if (v <= 0)           return "$0";
-  if (v < 1_000)        return `$${v.toFixed(0)}`;
-  if (v < 1_000_000)    return `$${(v / 1_000).toFixed(1)}K`;
+  if (v <= 0)            return "$0";
+  if (v < 1_000)         return `$${v.toFixed(0)}`;
+  if (v < 1_000_000)     return `$${(v / 1_000).toFixed(1)}K`;
   if (v < 1_000_000_000) return `$${(v / 1_000_000).toFixed(2)}M`;
   return `$${(v / 1_000_000_000).toFixed(2)}B`;
 }
 
 function buildPriceOutcomes(price: number, stepIdx: number, centerOff: number): OutcomeInput[] {
-  const steps = getPriceSteps(price);
+  const steps  = getPriceSteps(price);
   const step   = steps[Math.min(stepIdx, steps.length - 1)];
   const center = Math.max(step * 2, price + centerOff * step);
-  const fmt = (n: number) => fmtPrice(Math.max(0, n), price);
+  const fmt    = (n: number) => fmtPrice(Math.max(0, n), price);
   return [
-    { id: "A", label: `Below ${fmt(center - step * 2)}`,                               minPrice: null,            maxPrice: center - step * 2 },
-    { id: "B", label: `${fmt(center - step * 2)} – ${fmt(center - step)}`,             minPrice: center - step*2, maxPrice: center - step     },
-    { id: "C", label: `${fmt(center - step)} – ${fmt(center)}`,                        minPrice: center - step,   maxPrice: center             },
-    { id: "D", label: `${fmt(center)} – ${fmt(center + step)}`,                        minPrice: center,          maxPrice: center + step      },
-    { id: "E", label: `${fmt(center + step)} – ${fmt(center + step * 2)}`,             minPrice: center + step,   maxPrice: center + step * 2  },
-    { id: "F", label: `Above ${fmt(center + step * 2)}`,                               minPrice: center + step*2, maxPrice: null               },
+    { id: "A", label: `Below ${fmt(center - step * 2)}`,                           minPrice: null,            maxPrice: center - step * 2 },
+    { id: "B", label: `${fmt(center - step * 2)} – ${fmt(center - step)}`,         minPrice: center - step*2, maxPrice: center - step     },
+    { id: "C", label: `${fmt(center - step)} – ${fmt(center)}`,                    minPrice: center - step,   maxPrice: center             },
+    { id: "D", label: `${fmt(center)} – ${fmt(center + step)}`,                    minPrice: center,          maxPrice: center + step      },
+    { id: "E", label: `${fmt(center + step)} – ${fmt(center + step * 2)}`,         minPrice: center + step,   maxPrice: center + step * 2  },
+    { id: "F", label: `Above ${fmt(center + step * 2)}`,                           minPrice: center + step*2, maxPrice: null               },
   ];
 }
 
-function buildMcapOutcomes(mcap: number, spreadIdx: number, centerIdx: number): OutcomeInput[] {
-  const spread  = MCAP_SPREADS[spreadIdx];
-  const center  = mcap * MCAP_CENTER_MULTS[centerIdx];
-  const step    = (center * spread) / 3;
-  const c0 = Math.max(0, center - step * 2);
-  const c1 = Math.max(0, center - step);
-  return [
-    { id: "A", label: `Below ${formatMcap(c0)}`,                       minPrice: null,   maxPrice: c0              },
-    { id: "B", label: `${formatMcap(c0)} – ${formatMcap(c1)}`,         minPrice: c0,     maxPrice: c1              },
-    { id: "C", label: `${formatMcap(c1)} – ${formatMcap(center)}`,     minPrice: c1,     maxPrice: center          },
-    { id: "D", label: `${formatMcap(center)} – ${formatMcap(center + step)}`,            minPrice: center, maxPrice: center + step   },
-    { id: "E", label: `${formatMcap(center + step)} – ${formatMcap(center + step * 2)}`, minPrice: center + step, maxPrice: center + step * 2 },
-    { id: "F", label: `Above ${formatMcap(center + step * 2)}`,        minPrice: center + step * 2, maxPrice: null },
-  ];
-}
-
-function buildAthOutcomes(mcap: number, targetIdx: number): OutcomeInput[] {
-  const mult    = ATH_TARGETS[targetIdx];
-  const ceiling = mcap * mult;
-  const q1 = ceiling / 4;
-  const q2 = ceiling / 2;
-  return [
-    { id: "A", label: `Won't exceed ${formatMcap(mcap)}`,                minPrice: null,       maxPrice: mcap       },
-    { id: "B", label: `${formatMcap(mcap)} – ${formatMcap(mcap + q1)}`,  minPrice: mcap,       maxPrice: mcap + q1  },
-    { id: "C", label: `${formatMcap(mcap + q1)} – ${formatMcap(mcap + q2)}`, minPrice: mcap + q1, maxPrice: mcap + q2 },
-    { id: "D", label: `${formatMcap(mcap + q2)} – ${formatMcap(mcap + ceiling)}`,  minPrice: mcap + q2,     maxPrice: mcap + ceiling     },
-    { id: "E", label: `${formatMcap(mcap + ceiling)} – ${formatMcap(mcap + ceiling * 2)}`, minPrice: mcap + ceiling, maxPrice: mcap + ceiling * 2 },
-    { id: "F", label: `Above ${formatMcap(mcap + ceiling * 2)}`,          minPrice: mcap + ceiling * 2, maxPrice: null },
-  ];
+/** Shared log-scale builder for both mcap and ath_mcap question types. */
+function buildLogOutcomes(startValue: number, endValue: number): OutcomeInput[] {
+  const safeStart = Math.max(1, startValue);
+  const safeEnd   = Math.max(safeStart * 2, endValue);
+  const logStart  = Math.log10(safeStart);
+  const logEnd    = Math.log10(safeEnd);
+  const step      = (logEnd - logStart) / 6;
+  return Array.from({ length: 6 }, (_, i) => {
+    const minV = i === 0 ? 0 : Math.pow(10, logStart + step * i);
+    const maxV = i === 5 ? null : Math.pow(10, logStart + step * (i + 1));
+    return {
+      id: ["A","B","C","D","E","F"][i],
+      label:
+        i === 0 ? `Below ${formatMcap(Math.pow(10, logStart + step))}` :
+        i === 5 ? `Above ${formatMcap(minV)}` :
+        `${formatMcap(minV)} – ${formatMcap(maxV!)}`,
+      minPrice: minV === 0 ? null : minV,
+      maxPrice: maxV,
+    };
+  });
 }
 
 interface TokenInfo {
@@ -154,7 +142,7 @@ function fmtPrice(n: number, ref: number): string {
   return `$${n.toFixed(ref < 0.01 ? 6 : 4)}`;
 }
 
-// ── Image upload helpers ──────────────────────────────────────────────────────
+// ── Image upload ──────────────────────────────────────────────────────────────
 
 function resizeToSquare(file: File): Promise<string> {
   return new Promise((resolve) => {
@@ -175,8 +163,6 @@ function resizeToSquare(file: File): Promise<string> {
     img.src = url;
   });
 }
-
-// ── Image upload zone component ───────────────────────────────────────────────
 
 function ImageUploadZone({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -201,14 +187,17 @@ function ImageUploadZone({ value, onChange }: { value: string; onChange: (v: str
 
   if (value) {
     return (
-      <div className="relative">
-        <img src={value} alt="Market" className="w-full h-32 object-cover rounded-lg border border-white/10" />
-        <button
-          onClick={() => onChange("")}
-          className="absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] bg-black/70 text-white hover:bg-red-500/80 transition-colors"
-        >
-          Remove
-        </button>
+      <div className="flex flex-col items-center gap-1.5">
+        <div className="relative w-[200px] h-[200px] shrink-0">
+          <img src={value} alt="Market" className="w-full h-full object-cover rounded-lg border border-white/10" />
+          <button
+            onClick={() => onChange("")}
+            className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded text-[10px] bg-black/70 text-white hover:bg-red-500/80 transition-colors"
+          >
+            Remove
+          </button>
+        </div>
+        <p className="text-white/30 text-[10px]">1000 × 1000 · JPEG</p>
       </div>
     );
   }
@@ -225,8 +214,10 @@ function ImageUploadZone({ value, onChange }: { value: string; onChange: (v: str
       >
         <span className="text-2xl">🖼</span>
         <span className="text-white/40 text-xs">Drop image here or click to upload</span>
-        <span className="text-white/25 text-[10px]">PNG, JPG, WebP · max 2MB</span>
       </div>
+      <p className="text-white/25 text-[10px] mt-1.5 text-center">
+        Square format required · 1000×1000px recommended · Max 2MB
+      </p>
       {err && <p className="text-red-400 text-xs mt-1">{err}</p>}
       <input
         ref={inputRef}
@@ -256,22 +247,21 @@ export default function CreatePage() {
   const [tokenError,   setTokenError]   = useState("");
 
   // ── Crypto: Step 2 — question type + timeframe ────────────────────────────
-  const [cryptoQType,  setCryptoQType]  = useState<CryptoQType>("price");
-  const [betDuration,  setBetDuration]  = useState(60); // betting window in minutes
-  const [description,  setDescription]  = useState("");
-  const [uploadedImage,setUploadedImage]= useState("");
-  const [twitterUrl,   setTwitterUrl]   = useState("");
+  const [cryptoQType,   setCryptoQType]   = useState<CryptoQType>("price");
+  const [betDuration,   setBetDuration]   = useState(60);
+  const [description,   setDescription]   = useState("");
+  const [uploadedImage, setUploadedImage] = useState("");
+  const [twitterUrl,    setTwitterUrl]    = useState("");
 
   // ── Crypto: Step 3 — smart builder sliders ────────────────────────────────
   const [priceStepIdx,   setPriceStepIdx]   = useState(2);
-  const [priceCenterOff, setPriceCenterOff] = useState(0);  // units of step, -5..+5
-  const [mcapSpreadIdx,  setMcapSpreadIdx]  = useState(1);
-  const [mcapCenterIdx,  setMcapCenterIdx]  = useState(2);
-  const [athTargetIdx,   setAthTargetIdx]   = useState(2);
+  const [priceCenterOff, setPriceCenterOff] = useState(0);
+  const [mcapStartIdx,   setMcapStartIdx]   = useState(3); // default 1× current mcap
+  const [mcapEndIdx,     setMcapEndIdx]     = useState(3); // default 10× current mcap
 
   // ── Twitter: Step 1 — account ─────────────────────────────────────────────
-  const [twitterQuery,  setTwitterQuery]  = useState("");
-  const [avatarError,   setAvatarError]   = useState(false);
+  const [twitterQuery,    setTwitterQuery]    = useState("");
+  const [avatarError,     setAvatarError]     = useState(false);
   const [twitterDuration, setTwitterDuration] = useState(1440);
 
   // ── Twitter: Step 2 — question type ──────────────────────────────────────
@@ -324,37 +314,36 @@ export default function CreatePage() {
     }
   }, [cryptoQType, tokenInfo, tokenQuery, betDuration, category]);
 
-  // ── Reset slider indices when question type or token changes ─────────────
+  // ── Reset sliders when question type or token changes ────────────────────
   useEffect(() => {
     if (category !== "crypto") return;
     if (cryptoQType === "price" && tokenInfo?.priceUsd) {
       setPriceStepIdx(defaultStepIdx(tokenInfo.priceUsd));
       setPriceCenterOff(0);
     }
-    setMcapCenterIdx(2);
-    setAthTargetIdx(2);
+    setMcapStartIdx(3);
+    setMcapEndIdx(3);
   }, [cryptoQType, tokenInfo, category]);
 
-  // ── Recompute outcomes from smart builder state (Step 3) ─────────────────
+  // ── Recompute outcomes from smart builder state ───────────────────────────
   useEffect(() => {
     if (category !== "crypto") return;
     const price = tokenInfo?.priceUsd ?? 0;
     const mcap  = tokenInfo?.mcapUsd  ?? 0;
     if (cryptoQType === "price" && price > 0) {
       setOutcomes(buildPriceOutcomes(price, priceStepIdx, priceCenterOff));
-    } else if (cryptoQType === "mcap" && mcap > 0) {
-      setOutcomes(buildMcapOutcomes(mcap, mcapSpreadIdx, mcapCenterIdx));
-    } else if (cryptoQType === "ath_mcap" && mcap > 0) {
-      setOutcomes(buildAthOutcomes(mcap, athTargetIdx));
+    } else if ((cryptoQType === "mcap" || cryptoQType === "ath_mcap") && mcap > 0) {
+      const startV = mcap * MCAP_START_MULTS[mcapStartIdx];
+      const endV   = mcap * MCAP_END_MULTS[mcapEndIdx];
+      setOutcomes(buildLogOutcomes(startV, endV));
     } else if (cryptoQType !== "price") {
       setOutcomes(MCAP_OUTCOME_DEFAULTS.map(o => ({ ...o })));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cryptoQType, priceStepIdx, priceCenterOff, mcapSpreadIdx, mcapCenterIdx, athTargetIdx, tokenInfo, category]);
-
+  }, [cryptoQType, priceStepIdx, priceCenterOff, mcapStartIdx, mcapEndIdx, tokenInfo, category]);
 
   // ── Twitter auto-question ─────────────────────────────────────────────────
-  const cleanTwitter = twitterQuery.replace(/^@/, "").trim();
+  const cleanTwitter     = twitterQuery.replace(/^@/, "").trim();
   const twitterAvatarUrl = cleanTwitter ? `https://unavatar.io/twitter/${cleanTwitter}` : null;
   useEffect(() => { setAvatarError(false); }, [cleanTwitter]);
 
@@ -385,12 +374,12 @@ export default function CreatePage() {
         body.twitterPeriodHours = 24;
         body.tokenLogo          = `https://unavatar.io/twitter/${cleanTwitter}`;
       } else {
-        body.betDuration   = betDuration;
-        body.questionType  = cryptoQType;
-        body.tokenAddress  = tokenInfo?.address && tokenInfo.address !== tokenInfo.symbol
+        body.betDuration  = betDuration;
+        body.questionType = cryptoQType;
+        body.tokenAddress = tokenInfo?.address && tokenInfo.address !== tokenInfo.symbol
           ? tokenInfo.address : null;
-        body.twitterUrl    = twitterUrl;
-        body.customImage   = uploadedImage || null;
+        body.twitterUrl   = twitterUrl;
+        body.customImage  = uploadedImage || null;
       }
 
       const res = await fetch("/api/markets/create", {
@@ -418,11 +407,10 @@ export default function CreatePage() {
     setStep(1);
   }
 
-  const tfLabel = formatDuration(betDuration);
+  // For ≤3 min rounds use 2-min buffer; otherwise 5 min
+  const resultBuffer    = betDuration <= 3 ? 2 : 5;
+  const tfLabel         = formatDuration(betDuration);
   const bettingClosesIn = tfLabel;
-  const resultIn = betDuration + 5 < 60
-    ? `${betDuration + 5} minutes`
-    : formatDuration(betDuration + 5);
 
   if (!user) {
     return (
@@ -455,7 +443,7 @@ export default function CreatePage() {
           <span className="text-muted text-xs">Balance: {Math.floor(user.doraBalance).toLocaleString()} DORA</span>
         </div>
 
-        {/* Step progress (only after category selected) */}
+        {/* Step progress */}
         {step >= 1 && (
           <div className="flex items-center gap-2 mb-8">
             {stepLabels.map((label, i) => {
@@ -522,7 +510,7 @@ export default function CreatePage() {
                 value={tokenQuery} onChange={e => setTokenQuery(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-lg bg-surface-2 border border-surface-3 text-white text-sm placeholder:text-muted focus:outline-none focus:border-brand transition-colors font-mono" />
               {tokenLoading && <p className="text-muted text-xs mt-1.5">Looking up token…</p>}
-              {tokenError  && <p className="text-red-400 text-xs mt-1.5">{tokenError}</p>}
+              {tokenError   && <p className="text-red-400 text-xs mt-1.5">{tokenError}</p>}
             </div>
             {tokenInfo && (
               <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-2 border border-surface-3">
@@ -564,13 +552,13 @@ export default function CreatePage() {
               <p className="text-muted text-xs mb-4">Add an image and choose what you want to predict.</p>
             </div>
 
-            {/* Image upload — first */}
+            {/* Image upload — top of step */}
             <div>
               <label className="block text-xs text-muted mb-2">Market image <span className="text-white/30">(optional)</span></label>
               <ImageUploadZone value={uploadedImage} onChange={setUploadedImage} />
             </div>
 
-            {/* Question type cards */}
+            {/* Question type */}
             <div>
               <label className="block text-xs text-muted mb-2">Question type</label>
               <div className="space-y-2">
@@ -581,9 +569,7 @@ export default function CreatePage() {
                 ]).map(opt => (
                   <button key={opt.value} onClick={() => setCryptoQType(opt.value)}
                     className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all
-                      ${cryptoQType === opt.value
-                        ? "border-brand/50 bg-brand/5"
-                        : "border-white/8 bg-surface-2 hover:border-white/15"}`}>
+                      ${cryptoQType === opt.value ? "border-brand/50 bg-brand/5" : "border-white/8 bg-surface-2 hover:border-white/15"}`}>
                     <span className="text-xl shrink-0">{opt.icon}</span>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
@@ -597,7 +583,7 @@ export default function CreatePage() {
               </div>
             </div>
 
-            {/* Generated question preview */}
+            {/* Question preview */}
             <div className="px-3 py-2.5 rounded-lg bg-surface-2 border border-surface-3">
               <p className="text-white/40 text-[10px] uppercase tracking-wider mb-1">Question preview</p>
               <p className="text-white text-sm font-medium">{question || "…"}</p>
@@ -618,8 +604,8 @@ export default function CreatePage() {
                 className="w-full accent-brand cursor-pointer"
               />
               <p className="mt-1.5 text-[11px] text-white/40">
-                Betting closes in <span className="text-white">{bettingClosesIn}</span>
-                {" · "}Result in <span className="text-brand">{resultIn}</span>
+                Betting: <span className="text-white">{bettingClosesIn}</span>
+                {" · "}Result: <span className="text-brand">+{resultBuffer}min after close</span>
               </p>
             </div>
 
@@ -641,8 +627,7 @@ export default function CreatePage() {
 
             <div className="flex justify-between pt-2">
               <button onClick={() => setStep(1)} className="px-4 py-2 rounded-lg bg-surface-2 border border-surface-3 text-muted hover:text-white text-sm transition-colors">← Back</button>
-              <button onClick={() => setStep(3)}
-                disabled={!step2Valid}
+              <button onClick={() => setStep(3)} disabled={!step2Valid}
                 className="px-4 py-2 rounded-lg bg-brand hover:bg-brand-dim text-black font-semibold text-sm transition-colors disabled:opacity-40">
                 Next →
               </button>
@@ -655,21 +640,20 @@ export default function CreatePage() {
           <div className="space-y-5">
             <div>
               <h2 className="text-white font-semibold mb-1">Outcome Ranges</h2>
-              <p className="text-muted text-xs">Adjust the sliders to set betting ranges. Outcomes update live.</p>
+              <p className="text-muted text-xs">Adjust the sliders to set ranges. Outcomes update live.</p>
             </div>
 
             {/* ── Price builder ── */}
             {cryptoQType === "price" && tokenInfo && tokenInfo.priceUsd > 0 && (() => {
-              const steps   = getPriceSteps(tokenInfo.priceUsd);
-              const step    = steps[Math.min(priceStepIdx, steps.length - 1)];
-              const center  = Math.max(step * 2, tokenInfo.priceUsd + priceCenterOff * step);
+              const steps  = getPriceSteps(tokenInfo.priceUsd);
+              const step   = steps[Math.min(priceStepIdx, steps.length - 1)];
+              const center = Math.max(step * 2, tokenInfo.priceUsd + priceCenterOff * step);
               return (
                 <div className="space-y-4 p-4 rounded-xl bg-surface-2 border border-surface-3">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted">Current price</span>
                     <span className="text-brand font-mono font-semibold">{fmtPrice(tokenInfo.priceUsd, tokenInfo.priceUsd)}</span>
                   </div>
-
                   <div>
                     <div className="flex justify-between mb-1.5 text-xs">
                       <span className="text-muted">Step size</span>
@@ -682,7 +666,6 @@ export default function CreatePage() {
                       <span>narrow</span><span>wide</span>
                     </div>
                   </div>
-
                   <div>
                     <div className="flex justify-between mb-1.5 text-xs">
                       <span className="text-muted">Center point</span>
@@ -699,9 +682,11 @@ export default function CreatePage() {
               );
             })()}
 
-            {/* ── Mcap builder ── */}
-            {cryptoQType === "mcap" && (() => {
-              const mcap = tokenInfo?.mcapUsd ?? 0;
+            {/* ── Mcap / ATH mcap builder (shared two-slider UI) ── */}
+            {(cryptoQType === "mcap" || cryptoQType === "ath_mcap") && (() => {
+              const mcap   = tokenInfo?.mcapUsd ?? 0;
+              const startV = mcap > 0 ? mcap * MCAP_START_MULTS[mcapStartIdx] : 0;
+              const endV   = mcap > 0 ? mcap * MCAP_END_MULTS[mcapEndIdx]   : 0;
               return (
                 <div className="space-y-4 p-4 rounded-xl bg-surface-2 border border-surface-3">
                   <div className="flex items-center justify-between text-xs">
@@ -711,65 +696,41 @@ export default function CreatePage() {
                     </span>
                   </div>
                   {mcap === 0 && (
-                    <p className="text-yellow-400/80 text-xs">Mcap data not available — ranges will use defaults.</p>
+                    <p className="text-yellow-400/80 text-xs">Mcap data unavailable — ranges will use defaults.</p>
                   )}
 
+                  {/* Starting point */}
                   <div>
                     <div className="flex justify-between mb-1.5 text-xs">
-                      <span className="text-muted">Range spread</span>
-                      <span className="text-white font-mono">{MCAP_SPREAD_LBLS[mcapSpreadIdx]}</span>
-                    </div>
-                    <input type="range" min={0} max={MCAP_SPREADS.length - 1} value={mcapSpreadIdx}
-                      onChange={e => setMcapSpreadIdx(Number(e.target.value))}
-                      className="w-full accent-brand cursor-pointer" />
-                    <div className="flex justify-between text-[10px] text-muted/60 mt-0.5">
-                      <span>tight</span><span>wide</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between mb-1.5 text-xs">
-                      <span className="text-muted">Center point</span>
+                      <span className="text-muted">Starting point</span>
                       <span className="text-white font-mono">
-                        {MCAP_CENTER_LBLS[mcapCenterIdx]} current {mcap > 0 ? `(${formatMcap(mcap * MCAP_CENTER_MULTS[mcapCenterIdx])})` : ""}
+                        {MCAP_START_MULTS[mcapStartIdx]}× current
+                        {mcap > 0 ? ` (${formatMcap(startV)})` : ""}
                       </span>
                     </div>
-                    <input type="range" min={0} max={MCAP_CENTER_MULTS.length - 1} value={mcapCenterIdx}
-                      onChange={e => setMcapCenterIdx(Number(e.target.value))}
+                    <input type="range" min={0} max={MCAP_START_MULTS.length - 1} value={mcapStartIdx}
+                      onChange={e => setMcapStartIdx(Number(e.target.value))}
                       className="w-full accent-brand cursor-pointer" />
-                    <div className="flex justify-between text-[10px] text-muted/60 mt-0.5">
-                      <span>lower</span><span>higher</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* ── ATH mcap builder ── */}
-            {cryptoQType === "ath_mcap" && (() => {
-              const mcap = tokenInfo?.mcapUsd ?? 0;
-              return (
-                <div className="space-y-4 p-4 rounded-xl bg-surface-2 border border-surface-3">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted">Current market cap</span>
-                    <span className={`font-mono font-semibold ${mcap > 0 ? "text-brand" : "text-muted"}`}>
-                      {mcap > 0 ? formatMcap(mcap) : "unavailable"}
-                    </span>
+                    <p className="text-[10px] text-muted/60 mt-0.5">
+                      Range starts at: <span className="text-white/60">{mcap > 0 ? formatMcap(startV) : "—"}</span>
+                    </p>
                   </div>
 
+                  {/* Ending point */}
                   <div>
                     <div className="flex justify-between mb-1.5 text-xs">
-                      <span className="text-muted">Target ceiling</span>
+                      <span className="text-muted">Ending point</span>
                       <span className="text-white font-mono">
-                        {ATH_TARGET_LBLS[athTargetIdx]} {mcap > 0 ? `(${formatMcap(mcap * ATH_TARGETS[athTargetIdx])})` : ""}
+                        {MCAP_END_MULTS[mcapEndIdx]}× current
+                        {mcap > 0 ? ` (${formatMcap(endV)})` : ""}
                       </span>
                     </div>
-                    <input type="range" min={0} max={ATH_TARGETS.length - 1} value={athTargetIdx}
-                      onChange={e => setAthTargetIdx(Number(e.target.value))}
+                    <input type="range" min={0} max={MCAP_END_MULTS.length - 1} value={mcapEndIdx}
+                      onChange={e => setMcapEndIdx(Number(e.target.value))}
                       className="w-full accent-brand cursor-pointer" />
-                    <div className="flex justify-between text-[10px] text-muted/60 mt-0.5">
-                      <span>conservative</span><span>moonshot</span>
-                    </div>
+                    <p className="text-[10px] text-muted/60 mt-0.5">
+                      Range ends at: <span className="text-white/60">{mcap > 0 ? formatMcap(endV) : "—"}</span>
+                    </p>
                   </div>
                 </div>
               );
@@ -820,13 +781,9 @@ export default function CreatePage() {
             <div>
               <h2 className="text-white font-semibold mb-1">Twitter Account</h2>
               <p className="text-muted text-xs mb-3">Enter a public Twitter/X username to track.</p>
-              <input
-                type="text"
-                placeholder="@elonmusk"
-                value={twitterQuery}
+              <input type="text" placeholder="@elonmusk" value={twitterQuery}
                 onChange={e => setTwitterQuery(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg bg-surface-2 border border-surface-3 text-white text-sm placeholder:text-muted focus:outline-none focus:border-[#1d9bf0] transition-colors font-mono"
-              />
+                className="w-full px-3 py-2.5 rounded-lg bg-surface-2 border border-surface-3 text-white text-sm placeholder:text-muted focus:outline-none focus:border-[#1d9bf0] transition-colors font-mono" />
               {twitterQuery.trim() && !validTwitterUsername(twitterQuery) && (
                 <p className="text-red-400 text-xs mt-1.5">Invalid username — only letters, numbers, underscores (max 15 chars)</p>
               )}
@@ -874,7 +831,7 @@ export default function CreatePage() {
             </div>
             <div className="space-y-3">
               {([
-                { value: "posts_count"   as const, label: "Post count in 24 hours",
+                { value: "posts_count"    as const, label: "Post count in 24 hours",
                   desc: `How many posts will @${cleanTwitter} make in the next 24 hours?`, icon: "📊" },
                 { value: "next_post_time" as const, label: "Time until next post",
                   desc: `When will @${cleanTwitter} make their next post?`, icon: "⏱" },
@@ -930,7 +887,6 @@ export default function CreatePage() {
         {category === "twitter" && step === 4 && (
           <div className="space-y-4">
             <h2 className="text-white font-semibold">Details &amp; Review</h2>
-
             <div>
               <label className="block text-xs text-muted mb-2">Duration</label>
               <div className="flex gap-2">
@@ -943,15 +899,12 @@ export default function CreatePage() {
                 ))}
               </div>
             </div>
-
             <div>
               <label className="block text-xs text-muted mb-1">Description <span className="text-white/30">(optional)</span></label>
               <textarea maxLength={500} rows={2} placeholder="Add resolution criteria or context…"
                 value={description} onChange={e => setDescription(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-lg bg-surface-2 border border-surface-3 text-white text-sm placeholder:text-muted focus:outline-none focus:border-brand transition-colors resize-none" />
             </div>
-
-            {/* Preview */}
             <div className="rounded-xl border border-white/8 bg-[#0d0f14] overflow-hidden">
               <div className="flex items-center gap-3 p-4">
                 {twitterAvatarUrl && !avatarError ? (
@@ -980,14 +933,11 @@ export default function CreatePage() {
                 <span>{TWITTER_DURATIONS.find(d => d.value === twitterDuration)?.label} · {outcomes.length} outcomes</span>
               </div>
             </div>
-
             <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-surface-2 border border-surface-3 text-sm">
               <span className="text-muted">Creation fee</span>
               <span className="font-mono font-bold text-white">10 DORA</span>
             </div>
-
             {createError && <p className="text-red-400 text-sm px-1">{createError}</p>}
-
             <div className="flex justify-between pt-1">
               <button onClick={() => setStep(3)} disabled={creating}
                 className="px-4 py-2 rounded-lg bg-surface-2 border border-surface-3 text-muted hover:text-white text-sm transition-colors disabled:opacity-40">← Back</button>
@@ -1007,9 +957,9 @@ export default function CreatePage() {
 // ── Crypto review step ────────────────────────────────────────────────────────
 
 const QTYPE_LABELS: Record<string, string> = {
-  price: "📈 Price",
+  price:    "📈 Price",
   ath_mcap: "🏆 ATH Market Cap",
-  mcap: "💰 End Market Cap",
+  mcap:     "💰 End Market Cap",
 };
 
 function ReviewStep({
@@ -1021,13 +971,18 @@ function ReviewStep({
   tokenInfo: TokenInfo | null; cryptoQType: CryptoQType;
   creating: boolean; createError: string; onBack: () => void; onCreate: () => void;
 }) {
-  const tfLabel = formatDuration(betDuration);
+  const tfLabel      = formatDuration(betDuration);
+  const resultBuffer = betDuration <= 3 ? 2 : 5;
 
   return (
     <div className="space-y-4">
       <h2 className="text-white font-semibold">Review &amp; Create</h2>
       <div className="rounded-xl border border-surface-3 bg-surface overflow-hidden">
-        {uploadedImage && <img src={uploadedImage} alt="Market" className="w-full h-28 object-cover" />}
+        {uploadedImage && (
+          <div className="flex justify-center p-4 border-b border-surface-3/50">
+            <img src={uploadedImage} alt="Market" className="w-[200px] h-[200px] object-cover rounded-lg" />
+          </div>
+        )}
         <div className="p-4">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">Community</span>
@@ -1053,7 +1008,7 @@ function ReviewStep({
         </div>
         <div className="px-4 pb-3 flex items-center justify-between text-[10px] text-muted border-t border-surface-3/50 pt-2">
           <span>Created by <span className="text-white">{username}</span></span>
-          <span>{outcomes.length} outcomes · result {betDuration + 5}min in</span>
+          <span>{outcomes.length} outcomes · result +{resultBuffer}min after close</span>
         </div>
       </div>
       <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-surface-2 border border-surface-3 text-sm">
