@@ -8,15 +8,13 @@ import { useAuth } from "@/lib/useAuth";
 
 const OUTCOME_IDS = ["A", "B", "C", "D", "E", "F"];
 
-const TIMEFRAMES = [
-  { label: "5min",  minutes: 5  },
-  { label: "15min", minutes: 15 },
-  { label: "30min", minutes: 30 },
-  { label: "1h",    minutes: 60 },
-  { label: "4h",    minutes: 240 },
-  { label: "12h",   minutes: 720 },
-  { label: "24h",   minutes: 1440 },
-];
+const SNAP_POINTS = [1, 5, 10, 15, 30, 45, 60, 90, 120, 180, 240, 360, 480, 720, 1440];
+
+function formatDuration(min: number): string {
+  if (min < 60) return `${min} minute${min === 1 ? "" : "s"}`;
+  if (min < 120) return `1 hour${min > 60 ? ` ${min - 60} min` : ""}`;
+  return `${Math.round(min / 60)} hours`;
+}
 
 // Twitter durations (legacy — betting closes = ends - 5min)
 const TWITTER_DURATIONS = [
@@ -84,17 +82,24 @@ function fmtPrice(n: number, ref: number): string {
 
 // ── Image upload helpers ──────────────────────────────────────────────────────
 
-async function resizeImageToBase64(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  const size = 300;
-  const canvas = document.createElement("canvas");
-  canvas.width = size; canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  const side = Math.min(bitmap.width, bitmap.height);
-  const sx = (bitmap.width - side) / 2;
-  const sy = (bitmap.height - side) / 2;
-  ctx.drawImage(bitmap, sx, sy, side, side, 0, 0, size, size);
-  return canvas.toDataURL("image/jpeg", 0.82);
+function resizeToSquare(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1000;
+      canvas.height = 1000;
+      const ctx = canvas.getContext("2d")!;
+      const size = Math.min(img.width, img.height);
+      const x = (img.width - size) / 2;
+      const y = (img.height - size) / 2;
+      ctx.drawImage(img, x, y, size, size, 0, 0, 1000, 1000);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  });
 }
 
 // ── Image upload zone component ───────────────────────────────────────────────
@@ -109,7 +114,7 @@ function ImageUploadZone({ value, onChange }: { value: string; onChange: (v: str
     if (!file.type.startsWith("image/")) { setErr("Only image files allowed"); return; }
     if (file.size > 2 * 1024 * 1024)    { setErr("Max 2MB"); return; }
     try {
-      const b64 = await resizeImageToBase64(file);
+      const b64 = await resizeToSquare(file);
       onChange(b64);
     } catch { setErr("Failed to process image"); }
   }
@@ -230,7 +235,7 @@ export default function CreatePage() {
   useEffect(() => {
     if (category !== "crypto") return;
     const sym = tokenInfo?.symbol ?? (tokenQuery.trim() || "Token");
-    const tf  = TIMEFRAMES.find(t => t.minutes === betDuration)?.label ?? `${betDuration}min`;
+    const tf  = formatDuration(betDuration);
     switch (cryptoQType) {
       case "price":    setQuestion(`What price will ${sym} reach in ${tf}?`); break;
       case "ath_mcap": setQuestion(`What ATH market cap will ${sym} reach in ${tf}?`); break;
@@ -334,11 +339,11 @@ export default function CreatePage() {
     setStep(1);
   }
 
-  const tfLabel = TIMEFRAMES.find(t => t.minutes === betDuration)?.label ?? `${betDuration}min`;
-  const bettingClosesIn = `${tfLabel}`;
-  const resultIn        = betDuration >= 60
-    ? TIMEFRAMES.find(t => t.minutes === betDuration)?.label + " + 5min"
-    : `${betDuration + 5}min`;
+  const tfLabel = formatDuration(betDuration);
+  const bettingClosesIn = tfLabel;
+  const resultIn = betDuration + 5 < 60
+    ? `${betDuration + 5} minutes`
+    : formatDuration(betDuration + 5);
 
   if (!user) {
     return (
@@ -472,36 +477,45 @@ export default function CreatePage() {
           </div>
         )}
 
-        {/* Crypto Step 2: Question Type + Timeframe + Image */}
+        {/* Crypto Step 2: Image + Question Type + Timeframe */}
         {category === "crypto" && step === 2 && (
           <div className="space-y-5">
             <div>
-              <h2 className="text-white font-semibold mb-1">Question Type</h2>
-              <p className="text-muted text-xs mb-4">Choose what you want to predict.</p>
+              <h2 className="text-white font-semibold mb-1">Market Setup</h2>
+              <p className="text-muted text-xs mb-4">Add an image and choose what you want to predict.</p>
+            </div>
+
+            {/* Image upload — first */}
+            <div>
+              <label className="block text-xs text-muted mb-2">Market image <span className="text-white/30">(optional)</span></label>
+              <ImageUploadZone value={uploadedImage} onChange={setUploadedImage} />
             </div>
 
             {/* Question type cards */}
-            <div className="space-y-2">
-              {([
-                { value: "price"    as CryptoQType, icon: "📈", label: "Price",          desc: `What price will ${tokenInfo?.symbol ?? "the token"} reach?` },
-                { value: "ath_mcap" as CryptoQType, icon: "🏆", label: "ATH Market Cap", desc: `What's the highest market cap it will hit in the window?` },
-                { value: "mcap"     as CryptoQType, icon: "💰", label: "End Market Cap",  desc: `What will market cap be when betting closes?` },
-              ]).map(opt => (
-                <button key={opt.value} onClick={() => setCryptoQType(opt.value)}
-                  className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all
-                    ${cryptoQType === opt.value
-                      ? "border-brand/50 bg-brand/5"
-                      : "border-white/8 bg-surface-2 hover:border-white/15"}`}>
-                  <span className="text-xl shrink-0">{opt.icon}</span>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className={`text-sm font-semibold ${cryptoQType === opt.value ? "text-brand" : "text-white"}`}>{opt.label}</p>
-                      {cryptoQType === opt.value && <span className="text-[10px] text-brand">✓</span>}
+            <div>
+              <label className="block text-xs text-muted mb-2">Question type</label>
+              <div className="space-y-2">
+                {([
+                  { value: "price"    as CryptoQType, icon: "📈", label: "Price",          desc: `What price will ${tokenInfo?.symbol ?? "the token"} reach?` },
+                  { value: "ath_mcap" as CryptoQType, icon: "🏆", label: "ATH Market Cap", desc: `What's the highest market cap it will hit in the window?` },
+                  { value: "mcap"     as CryptoQType, icon: "💰", label: "End Market Cap",  desc: `What will market cap be when betting closes?` },
+                ]).map(opt => (
+                  <button key={opt.value} onClick={() => setCryptoQType(opt.value)}
+                    className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all
+                      ${cryptoQType === opt.value
+                        ? "border-brand/50 bg-brand/5"
+                        : "border-white/8 bg-surface-2 hover:border-white/15"}`}>
+                    <span className="text-xl shrink-0">{opt.icon}</span>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className={`text-sm font-semibold ${cryptoQType === opt.value ? "text-brand" : "text-white"}`}>{opt.label}</p>
+                        {cryptoQType === opt.value && <span className="text-[10px] text-brand">✓</span>}
+                      </div>
+                      <p className="text-muted text-xs mt-0.5">{opt.desc}</p>
                     </div>
-                    <p className="text-muted text-xs mt-0.5">{opt.desc}</p>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Generated question preview */}
@@ -510,22 +524,24 @@ export default function CreatePage() {
               <p className="text-white text-sm font-medium">{question || "…"}</p>
             </div>
 
-            {/* Timeframe */}
+            {/* Betting window slider */}
             <div>
-              <label className="block text-xs text-muted mb-2">Betting window</label>
-              <div className="flex flex-wrap gap-2">
-                {TIMEFRAMES.map(tf => (
-                  <button key={tf.minutes} onClick={() => setBetDuration(tf.minutes)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors
-                      ${betDuration === tf.minutes ? "bg-brand/10 border-brand/40 text-brand" : "bg-surface-2 border-surface-3 text-muted hover:text-white"}`}>
-                    {tf.label}
-                  </button>
-                ))}
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs text-muted">Betting window</label>
+                <span className="text-xs font-semibold text-white">{bettingClosesIn}</span>
               </div>
-              <div className="mt-2 flex items-center gap-4 text-[11px]">
-                <span className="text-white/40">Betting closes: <span className="text-white">{bettingClosesIn}</span></span>
-                <span className="text-white/40">Result in: <span className="text-brand">{resultIn}</span></span>
-              </div>
+              <input
+                type="range"
+                min={0}
+                max={SNAP_POINTS.length - 1}
+                value={SNAP_POINTS.indexOf(betDuration) !== -1 ? SNAP_POINTS.indexOf(betDuration) : 6}
+                onChange={e => setBetDuration(SNAP_POINTS[Number(e.target.value)])}
+                className="w-full accent-brand cursor-pointer"
+              />
+              <p className="mt-1.5 text-[11px] text-white/40">
+                Betting closes in <span className="text-white">{bettingClosesIn}</span>
+                {" · "}Result in <span className="text-brand">{resultIn}</span>
+              </p>
             </div>
 
             {/* Description */}
@@ -534,12 +550,6 @@ export default function CreatePage() {
               <textarea maxLength={500} rows={2} placeholder="Add context or resolution criteria…"
                 value={description} onChange={e => setDescription(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-lg bg-surface-2 border border-surface-3 text-white text-sm placeholder:text-muted focus:outline-none focus:border-brand transition-colors resize-none" />
-            </div>
-
-            {/* Image upload */}
-            <div>
-              <label className="block text-xs text-muted mb-2">Market image <span className="text-white/30">(optional)</span></label>
-              <ImageUploadZone value={uploadedImage} onChange={setUploadedImage} />
             </div>
 
             {/* Twitter link */}
@@ -830,7 +840,7 @@ function ReviewStep({
   tokenInfo: TokenInfo | null; cryptoQType: CryptoQType;
   creating: boolean; createError: string; onBack: () => void; onCreate: () => void;
 }) {
-  const tfLabel = TIMEFRAMES.find(t => t.minutes === betDuration)?.label ?? `${betDuration}min`;
+  const tfLabel = formatDuration(betDuration);
 
   return (
     <div className="space-y-4">
