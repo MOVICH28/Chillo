@@ -51,6 +51,7 @@ type RoundRow = {
   tokenList: string | null;
   tokenAddress: string | null;
   questionType: string | null;
+  maxObservedMcap: number | null;
   outcomes: unknown; // Prisma.JsonValue | null
 };
 
@@ -140,10 +141,38 @@ async function resolveCustomCryptoRound(round: RoundRow): Promise<string | null>
   }
 
   const outcomes = round.outcomes as Outcome[];
-  const value = round.questionType === "price" ? data.priceUsd : data.mcapUsd;
+  let value: number;
+  if (round.questionType === "price") {
+    value = data.priceUsd;
+  } else if (round.questionType === "ath_mcap") {
+    // Use the highest mcap seen during the round; fall back to current if not tracked yet
+    value = Math.max(round.maxObservedMcap ?? 0, data.mcapUsd);
+  } else {
+    value = data.mcapUsd;
+  }
 
   console.log(`[cron] ${round.id}: questionType=${round.questionType} value=${value}`);
   return matchOutcomeBracket(value, outcomes);
+}
+
+/** For open ath_mcap rounds: fetch current mcap and update maxObservedMcap if higher. */
+async function trackAthMcap(now: Date): Promise<void> {
+  const openAthRounds = await prisma.round.findMany({
+    where: { status: "open", questionType: "ath_mcap", endsAt: { gt: now } },
+    select: { id: true, tokenAddress: true, maxObservedMcap: true },
+  });
+  if (openAthRounds.length === 0) return;
+
+  await Promise.all(openAthRounds.map(async (r) => {
+    if (!r.tokenAddress) return;
+    const data = await fetchDexScreenerData(r.tokenAddress);
+    if (!data) return;
+    const current = data.mcapUsd;
+    if (current > (r.maxObservedMcap ?? 0)) {
+      await prisma.round.update({ where: { id: r.id }, data: { maxObservedMcap: current } });
+      console.log(`[cron/ath] ${r.id}: new ATH mcap=${current}`);
+    }
+  }));
 }
 
 // ─── Twitter resolution ───────────────────────────────────────────────────────
@@ -303,7 +332,10 @@ async function sendAdminNotifications(now: Date): Promise<void> {
 async function runCron(): Promise<NextResponse> {
   const now = new Date();
 
-  // ── Step 0: send admin notifications for Twitter rounds closing soon / stuck ──
+  // ── Step 0a: track ATH mcap for open ath_mcap rounds ─────────────────────────
+  await trackAthMcap(now);
+
+  // ── Step 0b: send admin notifications for Twitter rounds closing soon / stuck ─
   await sendAdminNotifications(now);
 
   // ── Step 1: resolve ended open rounds ─────────────────────────────────────

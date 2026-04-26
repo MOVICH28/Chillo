@@ -33,6 +33,7 @@ async function fetchDexScreener(query: string, isAddress: boolean) {
     name:          pair.baseToken?.name    ?? query,
     symbol:        pair.baseToken?.symbol  ?? query.toUpperCase(),
     priceUsd:      parseFloat(pair.priceUsd ?? "0"),
+    mcapUsd:       pair.marketCap ?? pair.fdv ?? 0,
     priceChange24h: pair.priceChange?.h24   ?? 0,
     volume24h:     pair.volume?.h24         ?? 0,
     logoUrl:       pair.info?.imageUrl      ?? null,
@@ -40,15 +41,17 @@ async function fetchDexScreener(query: string, isAddress: boolean) {
   };
 }
 
-async function fetchCoinGeckoPrice(cgId: string): Promise<number | null> {
+async function fetchCoinGeckoData(cgId: string): Promise<{ price: number; mcapUsd: number } | null> {
   try {
     const res = await fetch(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd&include_24hr_change=true`,
+      `https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd&include_market_cap=true`,
       { next: { revalidate: 30 } }
     );
     if (!res.ok) return null;
     const data = await res.json();
-    return data[cgId]?.usd ?? null;
+    const entry = data[cgId];
+    if (!entry) return null;
+    return { price: entry.usd ?? 0, mcapUsd: entry.usd_market_cap ?? 0 };
   } catch { return null; }
 }
 
@@ -61,11 +64,12 @@ export async function GET(req: NextRequest) {
   // Well-known symbol shortcut
   if (KNOWN_TOKENS[upper]) {
     const known = KNOWN_TOKENS[upper];
-    const price = await fetchCoinGeckoPrice(known.cgId);
+    const cg = await fetchCoinGeckoData(known.cgId);
     return NextResponse.json({
       name:          known.name,
       symbol:        known.symbol,
-      priceUsd:      price ?? 0,
+      priceUsd:      cg?.price ?? 0,
+      mcapUsd:       cg?.mcapUsd ?? 0,
       priceChange24h: 0,
       volume24h:     0,
       logoUrl:       known.logoUrl,

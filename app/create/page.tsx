@@ -6,7 +6,6 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/lib/useAuth";
 
-const OUTCOME_IDS = ["A", "B", "C", "D", "E", "F"];
 
 const SNAP_POINTS = [1, 5, 10, 15, 30, 45, 60, 90, 120, 180, 240, 360, 480, 720, 1440];
 
@@ -53,10 +52,85 @@ const MCAP_OUTCOME_DEFAULTS = [
 
 type CryptoQType = "price" | "ath_mcap" | "mcap";
 
+// ── Smart builder constants ───────────────────────────────────────────────────
+
+const MCAP_SPREADS     = [1.5, 2, 3, 5, 10];
+const MCAP_SPREAD_LBLS = ["1.5×", "2×", "3×", "5×", "10×"];
+const MCAP_CENTER_MULTS     = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+const MCAP_CENTER_LBLS      = ["0.5×", "0.75×", "1×", "1.25×", "1.5×", "2×"];
+const ATH_TARGETS      = [2, 5, 10, 50, 100, 500];
+const ATH_TARGET_LBLS  = ["2×", "5×", "10×", "50×", "100×", "500×"];
+
+function getPriceSteps(p: number): number[] {
+  if (p >= 10_000) return [100, 500, 1_000, 5_000, 10_000];
+  if (p >= 1)      return [0.5, 1, 2, 5, 10];
+  return [0.00001, 0.0001, 0.001, 0.01];
+}
+
+function defaultStepIdx(p: number): number {
+  const steps = getPriceSteps(p);
+  return Math.floor(steps.length / 2);
+}
+
+function formatMcap(v: number): string {
+  if (v <= 0)           return "$0";
+  if (v < 1_000)        return `$${v.toFixed(0)}`;
+  if (v < 1_000_000)    return `$${(v / 1_000).toFixed(1)}K`;
+  if (v < 1_000_000_000) return `$${(v / 1_000_000).toFixed(2)}M`;
+  return `$${(v / 1_000_000_000).toFixed(2)}B`;
+}
+
+function buildPriceOutcomes(price: number, stepIdx: number, centerOff: number): OutcomeInput[] {
+  const steps = getPriceSteps(price);
+  const step   = steps[Math.min(stepIdx, steps.length - 1)];
+  const center = Math.max(step * 2, price + centerOff * step);
+  const fmt = (n: number) => fmtPrice(Math.max(0, n), price);
+  return [
+    { id: "A", label: `Below ${fmt(center - step * 2)}`,                               minPrice: null,            maxPrice: center - step * 2 },
+    { id: "B", label: `${fmt(center - step * 2)} – ${fmt(center - step)}`,             minPrice: center - step*2, maxPrice: center - step     },
+    { id: "C", label: `${fmt(center - step)} – ${fmt(center)}`,                        minPrice: center - step,   maxPrice: center             },
+    { id: "D", label: `${fmt(center)} – ${fmt(center + step)}`,                        minPrice: center,          maxPrice: center + step      },
+    { id: "E", label: `${fmt(center + step)} – ${fmt(center + step * 2)}`,             minPrice: center + step,   maxPrice: center + step * 2  },
+    { id: "F", label: `Above ${fmt(center + step * 2)}`,                               minPrice: center + step*2, maxPrice: null               },
+  ];
+}
+
+function buildMcapOutcomes(mcap: number, spreadIdx: number, centerIdx: number): OutcomeInput[] {
+  const spread  = MCAP_SPREADS[spreadIdx];
+  const center  = mcap * MCAP_CENTER_MULTS[centerIdx];
+  const step    = (center * spread) / 3;
+  const c0 = Math.max(0, center - step * 2);
+  const c1 = Math.max(0, center - step);
+  return [
+    { id: "A", label: `Below ${formatMcap(c0)}`,                       minPrice: null,   maxPrice: c0              },
+    { id: "B", label: `${formatMcap(c0)} – ${formatMcap(c1)}`,         minPrice: c0,     maxPrice: c1              },
+    { id: "C", label: `${formatMcap(c1)} – ${formatMcap(center)}`,     minPrice: c1,     maxPrice: center          },
+    { id: "D", label: `${formatMcap(center)} – ${formatMcap(center + step)}`,            minPrice: center, maxPrice: center + step   },
+    { id: "E", label: `${formatMcap(center + step)} – ${formatMcap(center + step * 2)}`, minPrice: center + step, maxPrice: center + step * 2 },
+    { id: "F", label: `Above ${formatMcap(center + step * 2)}`,        minPrice: center + step * 2, maxPrice: null },
+  ];
+}
+
+function buildAthOutcomes(mcap: number, targetIdx: number): OutcomeInput[] {
+  const mult    = ATH_TARGETS[targetIdx];
+  const ceiling = mcap * mult;
+  const q1 = ceiling / 4;
+  const q2 = ceiling / 2;
+  return [
+    { id: "A", label: `Won't exceed ${formatMcap(mcap)}`,                minPrice: null,       maxPrice: mcap       },
+    { id: "B", label: `${formatMcap(mcap)} – ${formatMcap(mcap + q1)}`,  minPrice: mcap,       maxPrice: mcap + q1  },
+    { id: "C", label: `${formatMcap(mcap + q1)} – ${formatMcap(mcap + q2)}`, minPrice: mcap + q1, maxPrice: mcap + q2 },
+    { id: "D", label: `${formatMcap(mcap + q2)} – ${formatMcap(mcap + ceiling)}`,  minPrice: mcap + q2,     maxPrice: mcap + ceiling     },
+    { id: "E", label: `${formatMcap(mcap + ceiling)} – ${formatMcap(mcap + ceiling * 2)}`, minPrice: mcap + ceiling, maxPrice: mcap + ceiling * 2 },
+    { id: "F", label: `Above ${formatMcap(mcap + ceiling * 2)}`,          minPrice: mcap + ceiling * 2, maxPrice: null },
+  ];
+}
+
 interface TokenInfo {
   name: string;
   symbol: string;
   priceUsd: number;
+  mcapUsd: number;
   priceChange24h: number;
   volume24h: number;
   logoUrl: string | null;
@@ -188,6 +262,13 @@ export default function CreatePage() {
   const [uploadedImage,setUploadedImage]= useState("");
   const [twitterUrl,   setTwitterUrl]   = useState("");
 
+  // ── Crypto: Step 3 — smart builder sliders ────────────────────────────────
+  const [priceStepIdx,   setPriceStepIdx]   = useState(2);
+  const [priceCenterOff, setPriceCenterOff] = useState(0);  // units of step, -5..+5
+  const [mcapSpreadIdx,  setMcapSpreadIdx]  = useState(1);
+  const [mcapCenterIdx,  setMcapCenterIdx]  = useState(2);
+  const [athTargetIdx,   setAthTargetIdx]   = useState(2);
+
   // ── Twitter: Step 1 — account ─────────────────────────────────────────────
   const [twitterQuery,  setTwitterQuery]  = useState("");
   const [avatarError,   setAvatarError]   = useState(false);
@@ -243,26 +324,34 @@ export default function CreatePage() {
     }
   }, [cryptoQType, tokenInfo, tokenQuery, betDuration, category]);
 
-  // ── Auto-generate outcomes when question type changes ─────────────────────
+  // ── Reset slider indices when question type or token changes ─────────────
   useEffect(() => {
     if (category !== "crypto") return;
     if (cryptoQType === "price" && tokenInfo?.priceUsd) {
-      generatePriceOutcomes(tokenInfo.priceUsd);
+      setPriceStepIdx(defaultStepIdx(tokenInfo.priceUsd));
+      setPriceCenterOff(0);
+    }
+    setMcapCenterIdx(2);
+    setAthTargetIdx(2);
+  }, [cryptoQType, tokenInfo, category]);
+
+  // ── Recompute outcomes from smart builder state (Step 3) ─────────────────
+  useEffect(() => {
+    if (category !== "crypto") return;
+    const price = tokenInfo?.priceUsd ?? 0;
+    const mcap  = tokenInfo?.mcapUsd  ?? 0;
+    if (cryptoQType === "price" && price > 0) {
+      setOutcomes(buildPriceOutcomes(price, priceStepIdx, priceCenterOff));
+    } else if (cryptoQType === "mcap" && mcap > 0) {
+      setOutcomes(buildMcapOutcomes(mcap, mcapSpreadIdx, mcapCenterIdx));
+    } else if (cryptoQType === "ath_mcap" && mcap > 0) {
+      setOutcomes(buildAthOutcomes(mcap, athTargetIdx));
     } else if (cryptoQType !== "price") {
       setOutcomes(MCAP_OUTCOME_DEFAULTS.map(o => ({ ...o })));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cryptoQType, category]);
+  }, [cryptoQType, priceStepIdx, priceCenterOff, mcapSpreadIdx, mcapCenterIdx, athTargetIdx, tokenInfo, category]);
 
-  function generatePriceOutcomes(p: number) {
-    setOutcomes([
-      { id: "A", label: `Below ${fmtPrice(p * 0.90, p)}`,                           minPrice: null,    maxPrice: p * 0.90 },
-      { id: "B", label: `${fmtPrice(p * 0.90, p)} – ${fmtPrice(p * 0.97, p)}`,     minPrice: p * 0.90, maxPrice: p * 0.97 },
-      { id: "C", label: `${fmtPrice(p * 0.97, p)} – ${fmtPrice(p * 1.03, p)}`,     minPrice: p * 0.97, maxPrice: p * 1.03 },
-      { id: "D", label: `${fmtPrice(p * 1.03, p)} – ${fmtPrice(p * 1.10, p)}`,     minPrice: p * 1.03, maxPrice: p * 1.10 },
-      { id: "E", label: `Above ${fmtPrice(p * 1.10, p)}`,                           minPrice: p * 1.10, maxPrice: null     },
-    ]);
-  }
 
   // ── Twitter auto-question ─────────────────────────────────────────────────
   const cleanTwitter = twitterQuery.replace(/^@/, "").trim();
@@ -279,16 +368,6 @@ export default function CreatePage() {
       setOutcomes(NEXT_POST_OUTCOMES.map(o => ({ ...o })));
     }
   }, [cleanTwitter, twitterQuestion]);
-
-  // ── Outcome helpers ───────────────────────────────────────────────────────
-  function addOutcome() {
-    if (outcomes.length >= 6) return;
-    setOutcomes(prev => [...prev, { id: OUTCOME_IDS[prev.length], label: "" }]);
-  }
-  function removeOutcome(idx: number) {
-    if (outcomes.length <= 2) return;
-    setOutcomes(prev => prev.filter((_, i) => i !== idx).map((o, i) => ({ ...o, id: OUTCOME_IDS[i] })));
-  }
 
   // ── Submit ────────────────────────────────────────────────────────────────
   async function handleCreate() {
@@ -562,11 +641,7 @@ export default function CreatePage() {
 
             <div className="flex justify-between pt-2">
               <button onClick={() => setStep(1)} className="px-4 py-2 rounded-lg bg-surface-2 border border-surface-3 text-muted hover:text-white text-sm transition-colors">← Back</button>
-              <button onClick={() => {
-                  if (cryptoQType === "price" && tokenInfo?.priceUsd) generatePriceOutcomes(tokenInfo.priceUsd);
-                  else if (cryptoQType !== "price") setOutcomes(MCAP_OUTCOME_DEFAULTS.map(o => ({ ...o })));
-                  setStep(3);
-                }}
+              <button onClick={() => setStep(3)}
                 disabled={!step2Valid}
                 className="px-4 py-2 rounded-lg bg-brand hover:bg-brand-dim text-black font-semibold text-sm transition-colors disabled:opacity-40">
                 Next →
@@ -575,40 +650,146 @@ export default function CreatePage() {
           </div>
         )}
 
-        {/* Crypto Step 3: Outcomes */}
+        {/* Crypto Step 3: Smart Outcome Builder */}
         {category === "crypto" && step === 3 && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-white font-semibold">Outcomes</h2>
-              <button
-                onClick={() => {
-                  if (cryptoQType === "price" && tokenInfo?.priceUsd) generatePriceOutcomes(tokenInfo.priceUsd);
-                  else setOutcomes(MCAP_OUTCOME_DEFAULTS.map(o => ({ ...o })));
-                }}
-                className="text-xs text-brand hover:text-brand-dim transition-colors">
-                ✦ Auto-generate
-              </button>
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-white font-semibold mb-1">Outcome Ranges</h2>
+              <p className="text-muted text-xs">Adjust the sliders to set betting ranges. Outcomes update live.</p>
             </div>
-            <p className="text-muted text-xs">Edit labels if needed. Add 2–6 outcomes (A–F).</p>
-            <div className="space-y-2">
-              {outcomes.map((o, idx) => (
-                <div key={o.id} className="flex items-center gap-2">
-                  <span className="w-7 h-7 rounded flex items-center justify-center text-[10px] font-bold bg-surface-3 text-muted shrink-0">{o.id}</span>
-                  <input type="text" maxLength={80} placeholder={`Outcome ${o.id} label…`}
-                    value={o.label} onChange={e => setOutcomes(prev => prev.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))}
-                    className="flex-1 px-3 py-2 rounded-lg bg-surface-2 border border-surface-3 text-white text-sm placeholder:text-muted focus:outline-none focus:border-brand transition-colors" />
-                  {outcomes.length > 2 && (
-                    <button onClick={() => removeOutcome(idx)} className="text-muted hover:text-red-400 transition-colors text-sm shrink-0">✕</button>
-                  )}
+
+            {/* ── Price builder ── */}
+            {cryptoQType === "price" && tokenInfo && tokenInfo.priceUsd > 0 && (() => {
+              const steps   = getPriceSteps(tokenInfo.priceUsd);
+              const step    = steps[Math.min(priceStepIdx, steps.length - 1)];
+              const center  = Math.max(step * 2, tokenInfo.priceUsd + priceCenterOff * step);
+              return (
+                <div className="space-y-4 p-4 rounded-xl bg-surface-2 border border-surface-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted">Current price</span>
+                    <span className="text-brand font-mono font-semibold">{fmtPrice(tokenInfo.priceUsd, tokenInfo.priceUsd)}</span>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between mb-1.5 text-xs">
+                      <span className="text-muted">Step size</span>
+                      <span className="text-white font-mono">{fmtPrice(step, tokenInfo.priceUsd)}</span>
+                    </div>
+                    <input type="range" min={0} max={steps.length - 1} value={priceStepIdx}
+                      onChange={e => setPriceStepIdx(Number(e.target.value))}
+                      className="w-full accent-brand cursor-pointer" />
+                    <div className="flex justify-between text-[10px] text-muted/60 mt-0.5">
+                      <span>narrow</span><span>wide</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between mb-1.5 text-xs">
+                      <span className="text-muted">Center point</span>
+                      <span className="text-white font-mono">{fmtPrice(center, tokenInfo.priceUsd)}</span>
+                    </div>
+                    <input type="range" min={-5} max={5} value={priceCenterOff}
+                      onChange={e => setPriceCenterOff(Number(e.target.value))}
+                      className="w-full accent-brand cursor-pointer" />
+                    <div className="flex justify-between text-[10px] text-muted/60 mt-0.5">
+                      <span>bearish</span><span>bullish</span>
+                    </div>
+                  </div>
                 </div>
-              ))}
+              );
+            })()}
+
+            {/* ── Mcap builder ── */}
+            {cryptoQType === "mcap" && (() => {
+              const mcap = tokenInfo?.mcapUsd ?? 0;
+              return (
+                <div className="space-y-4 p-4 rounded-xl bg-surface-2 border border-surface-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted">Current market cap</span>
+                    <span className={`font-mono font-semibold ${mcap > 0 ? "text-brand" : "text-muted"}`}>
+                      {mcap > 0 ? formatMcap(mcap) : "unavailable"}
+                    </span>
+                  </div>
+                  {mcap === 0 && (
+                    <p className="text-yellow-400/80 text-xs">Mcap data not available — ranges will use defaults.</p>
+                  )}
+
+                  <div>
+                    <div className="flex justify-between mb-1.5 text-xs">
+                      <span className="text-muted">Range spread</span>
+                      <span className="text-white font-mono">{MCAP_SPREAD_LBLS[mcapSpreadIdx]}</span>
+                    </div>
+                    <input type="range" min={0} max={MCAP_SPREADS.length - 1} value={mcapSpreadIdx}
+                      onChange={e => setMcapSpreadIdx(Number(e.target.value))}
+                      className="w-full accent-brand cursor-pointer" />
+                    <div className="flex justify-between text-[10px] text-muted/60 mt-0.5">
+                      <span>tight</span><span>wide</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between mb-1.5 text-xs">
+                      <span className="text-muted">Center point</span>
+                      <span className="text-white font-mono">
+                        {MCAP_CENTER_LBLS[mcapCenterIdx]} current {mcap > 0 ? `(${formatMcap(mcap * MCAP_CENTER_MULTS[mcapCenterIdx])})` : ""}
+                      </span>
+                    </div>
+                    <input type="range" min={0} max={MCAP_CENTER_MULTS.length - 1} value={mcapCenterIdx}
+                      onChange={e => setMcapCenterIdx(Number(e.target.value))}
+                      className="w-full accent-brand cursor-pointer" />
+                    <div className="flex justify-between text-[10px] text-muted/60 mt-0.5">
+                      <span>lower</span><span>higher</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── ATH mcap builder ── */}
+            {cryptoQType === "ath_mcap" && (() => {
+              const mcap = tokenInfo?.mcapUsd ?? 0;
+              return (
+                <div className="space-y-4 p-4 rounded-xl bg-surface-2 border border-surface-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted">Current market cap</span>
+                    <span className={`font-mono font-semibold ${mcap > 0 ? "text-brand" : "text-muted"}`}>
+                      {mcap > 0 ? formatMcap(mcap) : "unavailable"}
+                    </span>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between mb-1.5 text-xs">
+                      <span className="text-muted">Target ceiling</span>
+                      <span className="text-white font-mono">
+                        {ATH_TARGET_LBLS[athTargetIdx]} {mcap > 0 ? `(${formatMcap(mcap * ATH_TARGETS[athTargetIdx])})` : ""}
+                      </span>
+                    </div>
+                    <input type="range" min={0} max={ATH_TARGETS.length - 1} value={athTargetIdx}
+                      onChange={e => setAthTargetIdx(Number(e.target.value))}
+                      className="w-full accent-brand cursor-pointer" />
+                    <div className="flex justify-between text-[10px] text-muted/60 mt-0.5">
+                      <span>conservative</span><span>moonshot</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Live outcome preview ── */}
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted uppercase tracking-wider">Live preview</p>
+              {outcomes.map((o, i) => {
+                const colors = ["#f87171","#fb923c","#facc15","#4ade80","#38bdf8","#c084fc"];
+                return (
+                  <div key={o.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-surface-2 border border-surface-3">
+                    <span className="w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center shrink-0 text-black"
+                      style={{ backgroundColor: colors[i] }}>{o.id}</span>
+                    <span className="text-white text-xs">{o.label || "—"}</span>
+                  </div>
+                );
+              })}
             </div>
-            {outcomes.length < 6 && (
-              <button onClick={addOutcome}
-                className="w-full py-2 rounded-lg border border-dashed border-surface-3 text-muted hover:text-white hover:border-surface-2 transition-colors text-xs">
-                + Add outcome ({outcomes.length}/6)
-              </button>
-            )}
+
             <div className="flex justify-between pt-2">
               <button onClick={() => setStep(2)} className="px-4 py-2 rounded-lg bg-surface-2 border border-surface-3 text-muted hover:text-white text-sm transition-colors">← Back</button>
               <button onClick={() => setStep(4)} disabled={!step3Valid}
