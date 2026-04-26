@@ -12,7 +12,8 @@ import { useTokenPrice, Timeframe } from "@/lib/useTokenPrice";
 import { useAuth } from "@/lib/useAuth";
 import TokenStats from "@/components/TokenStats";
 
-const CandleChart = dynamic(() => import("@/components/CandleChart"), { ssr: false });
+const CandleChart   = dynamic(() => import("@/components/CandleChart"),   { ssr: false });
+const BettingChart  = dynamic(() => import("@/components/BettingChart"),  { ssr: false });
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -499,25 +500,23 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
               </button>
             </div>
 
-            <div className="flex items-center gap-3 mb-4">
+            <div className={`flex gap-4 mb-4 ${round.category === "twitter" ? "items-start" : "items-center"}`}>
               {round.category === "twitter" && round.twitterUsername ? (
-                <TwitterAvatar username={round.twitterUsername} logoUrl={round.tokenLogo} size={40} />
-              ) : round.targetToken && TOKEN_LOGOS[round.targetToken] ? (
-                <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-10 h-10 rounded-full shrink-0" />
-              ) : null}
-              <div className="flex-1 min-w-0">
-                {round.category === "twitter" && round.twitterUsername && (
+                <div className="flex flex-col items-center gap-1.5 shrink-0">
+                  <TwitterAvatar username={round.twitterUsername} logoUrl={round.tokenLogo} size={64} />
                   <a
                     href={`https://twitter.com/${round.twitterUsername}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[#1d9bf0] text-xs font-mono hover:underline"
+                    className="text-[#1d9bf0] text-[11px] font-mono hover:underline"
                   >
                     @{round.twitterUsername}
                   </a>
-                )}
-                <h1 className="text-xl font-semibold text-white leading-snug">{round.question}</h1>
-              </div>
+                </div>
+              ) : round.targetToken && TOKEN_LOGOS[round.targetToken] ? (
+                <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-10 h-10 rounded-full shrink-0" />
+              ) : null}
+              <h1 className="text-xl font-semibold text-white leading-snug pt-1">{round.question}</h1>
             </div>
 
             {/* Countdown timers */}
@@ -551,8 +550,16 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
               />
             )}
 
+            {/* Betting probability chart — Twitter rounds */}
+            {round.category === "twitter" && outcomes.length > 0 && (
+              <div className="mb-4">
+                <BettingChart roundId={round.id} outcomes={outcomes as { id: string; label: string }[]} />
+                <PoolBar outcomes={outcomes} prices={lmsrPrices} />
+              </div>
+            )}
+
             {/* Chart + pool bar */}
-            {hasToken && outcomes.length > 0 ? (
+            {round.category !== "twitter" && hasToken && outcomes.length > 0 ? (
               <>
                 {/* Chart controls: Line/Candles toggle + timeframe dropdown */}
                 {(() => {
@@ -628,12 +635,12 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                 />
                 <PoolBar outcomes={outcomes} prices={lmsrPrices} />
               </>
-            ) : (
+            ) : round.category !== "twitter" ? (
               <div className="flex items-center justify-center rounded-xl"
                    style={{ height: 350, background: "#0d0f14" }}>
                 <span className="text-white/20 text-sm">No chart available</span>
               </div>
-            )}
+            ) : null}
 
           </div>
 

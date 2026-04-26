@@ -33,6 +33,27 @@ const OUTCOME_COLORS: Record<string, { bg: string; border: string; text: string;
   F: { bg: "bg-purple-500/10", border: "border-purple-500/30", text: "text-purple-400", dot: "bg-purple-400" },
 };
 
+// ── Twitter avatar (40px) with letter fallback ───────────────────────────────
+
+function TwitterCardAvatar({ username, logoUrl }: { username: string; logoUrl: string }) {
+  const [errored, setErrored] = useState(false);
+  if (!errored) {
+    return (
+      <img
+        src={logoUrl}
+        alt={username}
+        className="w-10 h-10 rounded-full object-cover shrink-0"
+        onError={() => setErrored(true)}
+      />
+    );
+  }
+  return (
+    <div className="w-10 h-10 rounded-full bg-[#1d9bf0] flex items-center justify-center shrink-0">
+      <span className="text-white font-bold text-base leading-none">{username[0]?.toUpperCase() ?? "?"}</span>
+    </div>
+  );
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatCountdown(ms: number): string {
@@ -103,10 +124,15 @@ function ResolvedRangeCard({ round }: { round: Round }) {
           )}
         </div>
 
-        <div className="flex items-center gap-2 mb-2">
-          {round.targetToken && TOKEN_LOGOS[round.targetToken] && (
+        <div className="flex items-center gap-2.5 mb-2">
+          {round.twitterUsername && round.tokenLogo ? (
+            <div className="flex flex-col items-center gap-0.5 shrink-0">
+              <TwitterCardAvatar username={round.twitterUsername} logoUrl={round.tokenLogo} />
+              <span className="text-[9px] text-[#1d9bf0] font-mono leading-none">@{round.twitterUsername}</span>
+            </div>
+          ) : round.targetToken && TOKEN_LOGOS[round.targetToken] ? (
             <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-8 h-8 rounded-full shrink-0" />
-          )}
+          ) : null}
           <p className="text-white/80 text-sm font-medium leading-snug">{round.question}</p>
         </div>
 
@@ -218,10 +244,15 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
         </div>
 
         {/* Question */}
-        <div className="flex items-center gap-2 mb-3">
-          {round.targetToken && TOKEN_LOGOS[round.targetToken] && (
+        <div className="flex items-center gap-2.5 mb-3">
+          {round.twitterUsername && round.tokenLogo ? (
+            <div className="flex flex-col items-center gap-0.5 shrink-0">
+              <TwitterCardAvatar username={round.twitterUsername} logoUrl={round.tokenLogo} />
+              <span className="text-[9px] text-[#1d9bf0] font-mono leading-none">@{round.twitterUsername}</span>
+            </div>
+          ) : round.targetToken && TOKEN_LOGOS[round.targetToken] ? (
             <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-8 h-8 rounded-full shrink-0" />
-          )}
+          ) : null}
           <p className="text-white text-sm font-medium leading-snug">{round.question}</p>
         </div>
 
