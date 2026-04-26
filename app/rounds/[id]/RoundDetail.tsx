@@ -43,6 +43,7 @@ interface RoundData {
   tokenSymbol:     string | null;
   tokenLogo:       string | null;
   isCustom:        boolean;
+  customImage:     string | null;
   twitterUsername: string | null;
 }
 
@@ -513,6 +514,8 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                     @{round.twitterUsername}
                   </a>
                 </div>
+              ) : round.customImage ? (
+                <img src={round.customImage} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
               ) : round.targetToken && TOKEN_LOGOS[round.targetToken] ? (
                 <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-10 h-10 rounded-full shrink-0" />
               ) : null}
