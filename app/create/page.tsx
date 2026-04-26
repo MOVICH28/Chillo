@@ -185,40 +185,52 @@ function ImageUploadZone({ value, onChange }: { value: string; onChange: (v: str
     if (file) handleFile(file);
   }
 
-  if (value) {
-    return (
-      <div className="flex flex-col items-center gap-1.5">
-        <div className="relative w-[200px] h-[200px] shrink-0">
+  return (
+    <div className="flex items-start gap-3">
+      {/* Square zone / preview */}
+      {value ? (
+        <div className="relative w-[120px] h-[120px] shrink-0">
           <img src={value} alt="Market" className="w-full h-full object-cover rounded-lg border border-white/10" />
           <button
             onClick={() => onChange("")}
-            className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded text-[10px] bg-black/70 text-white hover:bg-red-500/80 transition-colors"
-          >
-            Remove
-          </button>
+            className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center text-[10px] bg-black/70 text-white hover:bg-red-500/80 transition-colors"
+          >✕</button>
         </div>
-        <p className="text-white/30 text-[10px]">1000 × 1000 · JPEG</p>
-      </div>
-    );
-  }
+      ) : (
+        <div
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+          onClick={() => inputRef.current?.click()}
+          className={`w-[120px] h-[120px] rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors shrink-0
+            ${dragging ? "border-brand/60 bg-brand/5" : "border-white/15 hover:border-white/30"}`}
+        >
+          <span className="text-2xl">🖼</span>
+          <span className="text-white/30 text-[10px] text-center leading-tight px-1">Click or<br/>drop here</span>
+        </div>
+      )}
 
-  return (
-    <div>
-      <div
-        onDragOver={e => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-        onClick={() => inputRef.current?.click()}
-        className={`w-full h-24 rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors
-          ${dragging ? "border-brand/60 bg-brand/5" : "border-white/15 hover:border-white/30"}`}
-      >
-        <span className="text-2xl">🖼</span>
-        <span className="text-white/40 text-xs">Drop image here or click to upload</span>
+      {/* Instructions on the right */}
+      <div className="flex flex-col gap-1 pt-1 min-w-0">
+        {value ? (
+          <>
+            <p className="text-white/60 text-xs font-medium">Image ready</p>
+            <p className="text-white/30 text-[10px]">1000 × 1000 · JPEG</p>
+            <button onClick={() => onChange("")} className="text-red-400/70 hover:text-red-400 text-xs transition-colors mt-0.5 text-left">Remove</button>
+          </>
+        ) : (
+          <>
+            <p className="text-white/50 text-xs font-medium">Market image <span className="text-white/25 font-normal">(optional)</span></p>
+            <p className="text-white/30 text-[10px] leading-relaxed">
+              Square format required<br/>
+              1000×1000px recommended<br/>
+              PNG, JPG, WebP · max 2MB
+            </p>
+          </>
+        )}
+        {err && <p className="text-red-400 text-xs mt-1">{err}</p>}
       </div>
-      <p className="text-white/25 text-[10px] mt-1.5 text-center">
-        Square format required · 1000×1000px recommended · Max 2MB
-      </p>
-      {err && <p className="text-red-400 text-xs mt-1">{err}</p>}
+
       <input
         ref={inputRef}
         type="file"
@@ -553,10 +565,7 @@ export default function CreatePage() {
             </div>
 
             {/* Image upload — top of step */}
-            <div>
-              <label className="block text-xs text-muted mb-2">Market image <span className="text-white/30">(optional)</span></label>
-              <ImageUploadZone value={uploadedImage} onChange={setUploadedImage} />
-            </div>
+            <ImageUploadZone value={uploadedImage} onChange={setUploadedImage} />
 
             {/* Question type */}
             <div>
@@ -973,16 +982,12 @@ function ReviewStep({
 }) {
   const tfLabel      = formatDuration(betDuration);
   const resultBuffer = betDuration <= 3 ? 2 : 5;
+  console.log("uploadedImage:", uploadedImage ? `${uploadedImage.slice(0, 40)}… (${uploadedImage.length} chars)` : "(empty)");
 
   return (
     <div className="space-y-4">
       <h2 className="text-white font-semibold">Review &amp; Create</h2>
       <div className="rounded-xl border border-surface-3 bg-surface overflow-hidden">
-        {uploadedImage && (
-          <div className="flex justify-center p-4 border-b border-surface-3/50">
-            <img src={uploadedImage} alt="Market" className="w-[200px] h-[200px] object-cover rounded-lg" />
-          </div>
-        )}
         <div className="p-4">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">Community</span>
@@ -995,7 +1000,12 @@ function ReviewStep({
             )}
             <span className="ml-auto text-[10px] text-muted">{tfLabel} betting</span>
           </div>
-          <p className="text-white text-sm font-medium mb-3">{question}</p>
+          <div className="flex items-start gap-3 mb-3">
+            {uploadedImage && (
+              <img src={uploadedImage} alt="Market" className="w-20 h-20 rounded-lg object-cover shrink-0" />
+            )}
+            <p className="text-white text-sm font-medium leading-snug pt-0.5">{question}</p>
+          </div>
           {description && <p className="text-muted text-xs mb-3">{description}</p>}
           <div className="grid grid-cols-2 gap-1.5">
             {outcomes.map(o => (
