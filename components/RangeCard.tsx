@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Round, Outcome } from "@/lib/types";
 import { LiveData } from "@/lib/useLiveData";
-import Sparkline from "@/components/Sparkline";
 
 interface RangeCardProps {
   round: Round;
@@ -23,7 +22,6 @@ const TOKEN_LOGOS: Record<string, string> = {
   solana:  "https://assets.coingecko.com/coins/images/4128/small/solana.png",
 };
 
-// Tailwind classes for outcome buttons / labels
 const OUTCOME_COLORS: Record<string, { bg: string; border: string; text: string; dot: string }> = {
   A: { bg: "bg-red-500/10",    border: "border-red-500/30",    text: "text-red-400",    dot: "bg-red-400" },
   B: { bg: "bg-orange-500/10", border: "border-orange-500/30", text: "text-orange-400", dot: "bg-orange-400" },
@@ -33,24 +31,49 @@ const OUTCOME_COLORS: Record<string, { bg: string; border: string; text: string;
   F: { bg: "bg-purple-500/10", border: "border-purple-500/30", text: "text-purple-400", dot: "bg-purple-400" },
 };
 
-// ── Twitter avatar (40px) with letter fallback ───────────────────────────────
+// ── Twitter avatar ────────────────────────────────────────────────────────────
 
 function TwitterCardAvatar({ username, logoUrl }: { username: string; logoUrl: string }) {
   const [errored, setErrored] = useState(false);
   if (!errored) {
     return (
-      <img
-        src={logoUrl}
-        alt={username}
+      <img src={logoUrl} alt={username}
         className="w-10 h-10 rounded-full object-cover shrink-0"
-        onError={() => setErrored(true)}
-      />
+        onError={() => setErrored(true)} />
     );
   }
   return (
     <div className="w-10 h-10 rounded-full bg-[#1d9bf0] flex items-center justify-center shrink-0">
       <span className="text-white font-bold text-base leading-none">{username[0]?.toUpperCase() ?? "?"}</span>
     </div>
+  );
+}
+
+// ── MiniSparkline ─────────────────────────────────────────────────────────────
+
+function MiniSparkline({ data, width = 80, height = 32 }: { data: number[]; width?: number; height?: number }) {
+  if (data.length < 2) return <div style={{ width, height }} className="shrink-0" />;
+  const min   = Math.min(...data);
+  const max   = Math.max(...data);
+  const range = max - min || min * 0.01 || 1;
+  const positive = data[data.length - 1] >= data[0];
+  const color    = positive ? "#22c55e" : "#ef4444";
+  const pad      = height * 0.1;
+  const pts = data.map((v, i) => ({
+    x: (i / (data.length - 1)) * width,
+    y: pad + (1 - (v - min) / range) * (height - pad * 2),
+  }));
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) {
+    const dx  = (pts[i].x - pts[i - 1].x) / 2.5;
+    const cp1 = `${(pts[i - 1].x + dx).toFixed(1)} ${pts[i - 1].y.toFixed(1)}`;
+    const cp2 = `${(pts[i].x - dx).toFixed(1)} ${pts[i].y.toFixed(1)}`;
+    d += ` C ${cp1} ${cp2} ${pts[i].x.toFixed(1)} ${pts[i].y.toFixed(1)}`;
+  }
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="shrink-0 overflow-visible">
+      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -80,88 +103,64 @@ function useCountdown(target: string): string {
   return display;
 }
 
+function fmtPrice(p: number): string {
+  if (p >= 1000) return `$${Math.round(p).toLocaleString("en-US")}`;
+  if (p >= 1)    return `$${p.toFixed(4)}`;
+  if (p >= 0.01) return `$${p.toFixed(6)}`;
+  return `$${p.toFixed(8)}`;
+}
+
+function fmtMcap(v: number): string {
+  if (v >= 1e9)  return `$${(v / 1e9).toFixed(2)}B`;
+  if (v >= 1e6)  return `$${(v / 1e6).toFixed(2)}M`;
+  if (v >= 1e3)  return `$${(v / 1e3).toFixed(1)}K`;
+  return `$${v.toFixed(0)}`;
+}
+
 function fmt(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000)     return `$${n.toLocaleString("en-US")}`;
   return `$${n.toFixed(2)}`;
 }
 
-function fmtLiveDisplay(value: number, isMcap: boolean): string {
-  if (isMcap) {
-    if (value >= 1e9)  return `$${(value / 1e9).toFixed(2)}B mcap`;
-    if (value >= 1e6)  return `$${(value / 1e6).toFixed(2)}M mcap`;
-    if (value >= 1e3)  return `$${(value / 1e3).toFixed(1)}K mcap`;
-    return `$${value.toFixed(0)} mcap`;
-  }
-  if (value >= 1000) return `$${Math.round(value).toLocaleString("en-US")}`;
-  if (value >= 1)    return `$${value.toFixed(4)}`;
-  if (value >= 0.01) return `$${value.toFixed(6)}`;
-  return `$${value.toFixed(8)}`;
+// ── Live stats hook ───────────────────────────────────────────────────────────
+
+interface LiveStats {
+  price:   number | null;
+  mcap:    number | null;
+  history: number[];
 }
 
-// ── Live price/mcap hook ──────────────────────────────────────────────────────
-
-const BINANCE_REST_MAP: Record<string, string> = {
-  bitcoin: "BTCUSDT",
-  solana:  "SOLUSDT",
-};
-
-function useLiveDisplay(
+function useLiveStats(
   round: { targetToken?: string | null; tokenAddress?: string | null; questionType?: string | null },
   liveData?: LiveData,
-): string {
-  const isMcap = round.questionType === "mcap" || round.questionType === "ath_mcap";
-  const [display, setDisplay] = useState("");
+): LiveStats {
+  const [stats, setStats] = useState<LiveStats>({ price: null, mcap: null, history: [] });
+  const pushRef = useRef<(p: number, m: number | null) => void>(() => { /**/ });
 
-  // BTC/SOL — pull from liveData (WebSocket-driven) already available
-  useEffect(() => {
-    if (!round.targetToken) return;
-    const binanceKey = BINANCE_REST_MAP[round.targetToken];
-    if (!binanceKey) return;
+  pushRef.current = (p: number, m: number | null) => {
+    setStats(prev => {
+      const last = prev.history[prev.history.length - 1];
+      if (last === p) return prev;
+      return { price: p, mcap: m, history: [...prev.history, p].slice(-20) };
+    });
+  };
 
-    // For BTC/SOL mcap questions, fetch Binance price + CoinGecko supply
-    // For price questions, Binance REST suffices — liveData handles real-time
-    // We use a single REST poll here so mcap also works
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const res = await fetch(
-          `https://api.binance.com/api/v3/ticker/price?symbol=${binanceKey}`,
-          { cache: "no-store" }
-        );
-        if (!res.ok || cancelled) return;
-        const j = await res.json() as { price: string };
-        const price = parseFloat(j.price);
-        if (!isFinite(price) || cancelled) return;
-        if (isMcap) {
-          // Approximation: use liveData sparkline supply isn't available here;
-          // just show price for BTC/SOL mcap questions (acceptable)
-          setDisplay(fmtLiveDisplay(price, false));
-        } else {
-          setDisplay(fmtLiveDisplay(price, false));
-        }
-      } catch { /**/ }
-    };
-    poll();
-    const id = setInterval(poll, 10_000);
-    return () => { cancelled = true; clearInterval(id); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [round.targetToken, isMcap]);
-
-  // BTC/SOL — prefer liveData tick when available (sub-second update)
+  // BTC/SOL from liveData WebSocket ticks
   useEffect(() => {
     if (!round.targetToken || !liveData) return;
     const isBtc = round.targetToken === "bitcoin";
     const isSol = round.targetToken === "solana";
-    const asset = isBtc ? liveData.btc : isSol ? liveData.sol : undefined;
+    const asset  = isBtc ? liveData.btc : isSol ? liveData.sol : undefined;
     if (!asset) return;
-    setDisplay(fmtLiveDisplay(asset.price, false));
+    pushRef.current(asset.price, null);
   }, [round.targetToken, liveData]);
 
   // Custom token — DexScreener every 10s
   useEffect(() => {
     if (!round.tokenAddress || round.targetToken) return;
     let cancelled = false;
+
     const poll = async () => {
       try {
         const res = await fetch(
@@ -169,32 +168,34 @@ function useLiveDisplay(
           { cache: "no-store" }
         );
         if (!res.ok || cancelled) return;
-        const data = await res.json() as { pairs?: { priceUsd?: string; marketCap?: number; volume?: { h24?: number } }[] };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const data = await res.json() as { pairs?: any[] };
         const pairs = data.pairs ?? [];
         if (!pairs.length || cancelled) return;
-        pairs.sort((a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0));
-        const pair = pairs[0];
-        const value = isMcap
-          ? (pair.marketCap ?? 0)
-          : parseFloat(pair.priceUsd ?? "0");
-        if (isFinite(value) && value > 0) setDisplay(fmtLiveDisplay(value, isMcap));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        pairs.sort((a: any, b: any) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0));
+        const pair  = pairs[0];
+        const price = parseFloat(pair.priceUsd ?? "0");
+        const mcap  = pair.marketCap ?? null;
+        if (isFinite(price) && price > 0 && !cancelled) pushRef.current(price, mcap);
       } catch { /**/ }
     };
+
     poll();
     const id = setInterval(poll, 10_000);
     return () => { cancelled = true; clearInterval(id); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [round.tokenAddress, round.targetToken, isMcap]);
+  }, [round.tokenAddress, round.targetToken]);
 
-  return display;
+  return stats;
 }
 
 // ── Resolved card ─────────────────────────────────────────────────────────────
 
 function ResolvedRangeCard({ round }: { round: Round }) {
-  const outcomes   = round.outcomes ?? [];
-  const winning    = outcomes.find(o => o.id === round.winningOutcome);
-  const colors     = round.winningOutcome ? OUTCOME_COLORS[round.winningOutcome] : null;
+  const outcomes = round.outcomes ?? [];
+  const winning  = outcomes.find(o => o.id === round.winningOutcome);
+  const colors   = round.winningOutcome ? OUTCOME_COLORS[round.winningOutcome] : null;
 
   const resolvedDate = round.resolvedAt
     ? (() => {
@@ -243,7 +244,7 @@ function ResolvedRangeCard({ round }: { round: Round }) {
           ) : round.targetToken && TOKEN_LOGOS[round.targetToken] ? (
             <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-8 h-8 rounded-full shrink-0" />
           ) : null}
-          <p className="text-white/80 text-sm font-medium leading-snug">{round.question}</p>
+          <p className="text-white/80 text-sm font-medium leading-snug truncate">{round.question}</p>
         </div>
 
         {winning && (
@@ -252,17 +253,15 @@ function ResolvedRangeCard({ round }: { round: Round }) {
           </p>
         )}
 
-        <div className="grid grid-cols-2 gap-1.5 mb-3">
+        <div className="grid grid-cols-2 gap-1 mb-3">
           {outcomes.map(o => {
             const isWinner = o.id === round.winningOutcome;
             const c        = OUTCOME_COLORS[o.id];
             return (
               <div
                 key={o.id}
-                className={`rounded-lg px-2.5 py-1.5 border text-[10px] ${
-                  isWinner
-                    ? `${c.bg} ${c.border} ${c.text}`
-                    : "bg-surface-2 border-surface-3 text-muted"
+                className={`rounded-lg px-2 py-1 border text-[10px] ${
+                  isWinner ? `${c.bg} ${c.border} ${c.text}` : "bg-surface-2 border-surface-3 text-muted"
                 }`}
               >
                 <span className="font-bold mr-1">{o.id}</span>
@@ -290,18 +289,20 @@ function ResolvedRangeCard({ round }: { round: Round }) {
 // ── Active card ───────────────────────────────────────────────────────────────
 
 export default function RangeCard({ round, liveData }: RangeCardProps) {
-  const router = useRouter();
+  const router           = useRouter();
   const resultCountdown  = useCountdown(round.endsAt);
   const bettingCountdown = useCountdown(round.bettingClosesAt ?? round.endsAt);
-  const liveDisplay      = useLiveDisplay(round, liveData);
+  const liveStats        = useLiveStats(round, liveData);
 
-  const outcomes   = round.outcomes ?? [];
-  const isEnded    = round.status !== "open";
+  const outcomes      = round.outcomes ?? [];
+  const isEnded       = round.status !== "open";
   const bettingClosed = round.bettingClosesAt
     ? new Date() > new Date(round.bettingClosesAt)
     : isEnded;
 
-  const hasChart = round.targetToken === "bitcoin" || round.targetToken === "solana";
+  const hasChart   = round.targetToken === "bitcoin" || round.targetToken === "solana";
+  const isMcapQ    = round.questionType === "mcap" || round.questionType === "ath_mcap";
+  const isCrypto   = round.category === "crypto";
   const [prices, setPrices] = useState<Record<string, number>>({});
 
   const fetchPrices = useCallback(async () => {
@@ -315,9 +316,14 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
 
   if (round.status === "resolved") return <ResolvedRangeCard round={round} />;
 
-  const isBtc = round.targetToken === "bitcoin";
-  const isSol = round.targetToken === "solana";
-  const asset  = isBtc ? liveData?.btc : isSol ? liveData?.sol : undefined;
+  // Derived info-box values
+  const displayValue = isMcapQ && liveStats.mcap != null
+    ? liveStats.mcap
+    : liveStats.price;
+  const changeVal = liveStats.history.length >= 2
+    ? (liveStats.history[liveStats.history.length - 1] - liveStats.history[0]) / liveStats.history[0] * 100
+    : null;
+  const showInfoBox = isCrypto && displayValue != null && displayValue > 0;
 
   return (
     <div
@@ -325,6 +331,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
       onClick={() => router.push(`/rounds/${round.id}`)}
     >
       <div className="p-4 flex-1">
+
         {/* Header */}
         <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -339,12 +346,6 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
             {round.isPumpFun && (
               <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold border bg-gradient-to-r from-orange-500/10 to-green-500/10 text-orange-400 border-orange-500/20">
                 pump.fun
-              </span>
-            )}
-            {liveDisplay && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 border border-white/8 text-[10px] font-mono text-white/70">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] shrink-0" />
-                {liveDisplay}
               </span>
             )}
           </div>
@@ -366,8 +367,8 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
           )}
         </div>
 
-        {/* Question */}
-        <div className="flex items-center gap-2.5 mb-2.5">
+        {/* Question — single line, truncated */}
+        <div className="flex items-center gap-2.5 mb-2.5 min-w-0">
           {round.twitterUsername && round.tokenLogo ? (
             <div className="flex flex-col items-center gap-0.5 shrink-0">
               <TwitterCardAvatar username={round.twitterUsername} logoUrl={round.tokenLogo} />
@@ -378,27 +379,30 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
           ) : round.targetToken && TOKEN_LOGOS[round.targetToken] ? (
             <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-8 h-8 rounded-full shrink-0" />
           ) : null}
-          <p className="text-white text-sm font-medium leading-snug">{round.question}</p>
+          <p className="text-white text-sm font-medium truncate">{round.question}</p>
         </div>
 
-        {/* Live price row — BTC/SOL sparkline */}
-        {asset && (
-          <div className="rounded-lg bg-surface-2 border border-surface-3/60 px-3 py-1.5 mb-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-white font-mono font-semibold text-sm">{fmt(asset.price)}</span>
-                <span className={`font-mono text-xs ${asset.change24h >= 0 ? "text-yes" : "text-no"}`}>
-                  {asset.change24h >= 0 ? "▲" : "▼"} {Math.abs(asset.change24h).toFixed(2)}%
-                </span>
+        {/* Price / mcap info box */}
+        {showInfoBox && (
+          <div className="flex items-center justify-between px-3 py-2 bg-white/[0.03] rounded-lg mb-2 border border-white/5">
+            <div>
+              <div className="text-[9px] text-white/30 uppercase tracking-wider mb-0.5">
+                {isMcapQ ? "Market Cap" : "Price"}
               </div>
-              <div className="flex items-center gap-2">
-                <Sparkline data={asset.sparkline} positive={asset.change24h >= 0} />
-                <span className="inline-flex items-center gap-1 text-[9px] font-bold tracking-widest text-brand uppercase">
-                  <span className="w-2 h-2 rounded-full bg-[#22c55e] pulse-dot" />
-                  LIVE
-                </span>
+              <div className="text-sm font-mono font-bold text-white leading-tight">
+                {isMcapQ && liveStats.mcap != null
+                  ? fmtMcap(liveStats.mcap)
+                  : liveStats.price != null
+                  ? fmtPrice(liveStats.price)
+                  : "—"}
               </div>
+              {changeVal != null && (
+                <div className={`text-[10px] font-mono mt-0.5 ${changeVal >= 0 ? "text-green-400" : "text-red-400"}`}>
+                  {changeVal >= 0 ? "+" : ""}{changeVal.toFixed(2)}%
+                </div>
+              )}
             </div>
+            <MiniSparkline data={liveStats.history} width={80} height={32} />
           </div>
         )}
 
