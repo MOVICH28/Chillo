@@ -261,11 +261,12 @@ export default function CreatePage() {
   const [isPumpFun,    setIsPumpFun]    = useState(false);
 
   // ── Crypto: Step 2 — question type + timeframe ────────────────────────────
-  const [cryptoQType,   setCryptoQType]   = useState<CryptoQType>("price");
-  const [betDuration,   setBetDuration]   = useState(60);
-  const [description,   setDescription]   = useState("");
-  const [uploadedImage, setUploadedImage] = useState("");
-  const [twitterUrl,    setTwitterUrl]    = useState("");
+  const [cryptoQType,        setCryptoQType]        = useState<CryptoQType>("price");
+  const [betDuration,        setBetDuration]        = useState(60);
+  const [description,        setDescription]        = useState("");
+  const [uploadedImage,      setUploadedImage]      = useState("");
+  const [imageIsAutoDetected, setImageIsAutoDetected] = useState(false);
+  const [twitterUrl,         setTwitterUrl]         = useState("");
 
   // ── Crypto: Step 3 — smart builder sliders ────────────────────────────────
   const [priceStepIdx,   setPriceStepIdx]   = useState(2);
@@ -319,6 +320,16 @@ export default function CreatePage() {
   // Auto-detect pump.fun when token changes
   useEffect(() => {
     setIsPumpFun(tokenInfo?.isPumpFun ?? false);
+  }, [tokenInfo]);
+
+  // Auto-set market image from token logo when token loads
+  useEffect(() => {
+    if (tokenInfo?.logoUrl) {
+      setUploadedImage(tokenInfo.logoUrl);
+      setImageIsAutoDetected(true);
+    } else if (!tokenInfo) {
+      setImageIsAutoDetected(false);
+    }
   }, [tokenInfo]);
 
   // ── Auto-generate crypto question from type + token + timeframe ───────────
@@ -593,8 +604,28 @@ export default function CreatePage() {
               <p className="text-muted text-xs mb-4">Add an image and choose what you want to predict.</p>
             </div>
 
-            {/* Image upload — top of step */}
-            <ImageUploadZone value={uploadedImage} onChange={setUploadedImage} />
+            {/* Image — auto-detected or manual upload */}
+            {uploadedImage && imageIsAutoDetected ? (
+              <div className="flex items-start gap-3">
+                <div className="relative shrink-0">
+                  <img src={uploadedImage} alt="Token logo" className="w-20 h-20 rounded-lg object-cover border border-white/10" />
+                  <span className="absolute -top-1.5 -right-1.5 text-[9px] bg-brand text-black font-bold px-1.5 py-0.5 rounded leading-tight">Auto</span>
+                </div>
+                <div className="flex flex-col gap-1 pt-1">
+                  <p className="text-white/60 text-xs font-medium">Auto-detected image</p>
+                  <p className="text-white/30 text-[10px]">Token logo from DexScreener</p>
+                  <button
+                    onClick={() => { setUploadedImage(""); setImageIsAutoDetected(false); }}
+                    className="text-white/40 hover:text-white text-xs transition-colors mt-1 text-left"
+                  >Change image</button>
+                </div>
+              </div>
+            ) : (
+              <ImageUploadZone
+                value={uploadedImage}
+                onChange={v => { setUploadedImage(v); setImageIsAutoDetected(false); }}
+              />
+            )}
 
             {/* Question type */}
             <div>
