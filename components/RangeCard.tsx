@@ -12,12 +12,6 @@ interface RangeCardProps {
   liveData?: LiveData;
 }
 
-const CATEGORY_STYLES: Record<string, string> = {
-  crypto: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-};
-const CATEGORY_LABELS: Record<string, string> = {
-  crypto: "Crypto",
-};
 const TOKEN_LOGOS: Record<string, string> = {
   bitcoin: "https://assets.coingecko.com/coins/images/1/small/bitcoin.png",
   solana:  "https://assets.coingecko.com/coins/images/4128/small/solana.png",
@@ -206,15 +200,21 @@ function ResolvedRangeCard({ round }: { round: Round }) {
     <div className="bg-surface rounded-xl border border-surface-3 overflow-hidden opacity-80 hover:opacity-100 transition-opacity">
       <div className="p-4">
         <div className="flex items-start justify-between gap-2 mb-2.5">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {round.roundNumber != null && (
               <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-mono text-muted bg-surface-3 border border-surface-3/60">
                 #{round.roundNumber}
               </span>
             )}
-            <span className={`inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border ${CATEGORY_STYLES[round.category] ?? "bg-surface-3 text-muted border-transparent"}`}>
-              {CATEGORY_LABELS[round.category] ?? round.category}
-            </span>
+            {round.twitterUsername ? (
+              <span className="inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border bg-[#1d9bf0]/10 text-[#1d9bf0] border-[#1d9bf0]/20">
+                Twitter
+              </span>
+            ) : (
+              <span className="inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
+                Crypto
+              </span>
+            )}
             {round.isPumpFun && (
               <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold border bg-gradient-to-r from-orange-500/10 to-green-500/10 text-orange-400 border-orange-500/20">
                 pump.fun
@@ -300,7 +300,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
 
   const hasChart   = round.targetToken === "bitcoin" || round.targetToken === "solana";
   const isMcapQ    = round.questionType === "mcap" || round.questionType === "ath_mcap";
-  const isCrypto   = round.category === "crypto";
+  const isCrypto   = round.category === "crypto" && !round.twitterUsername;
   const [prices, setPrices] = useState<Record<string, number>>({});
 
   const fetchPrices = useCallback(async () => {
@@ -345,9 +345,15 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
                 #{round.roundNumber}
               </span>
             )}
-            <span className={`inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border ${CATEGORY_STYLES[round.category] ?? "bg-surface-3 text-muted border-transparent"}`}>
-              {CATEGORY_LABELS[round.category] ?? round.category}
-            </span>
+            {round.twitterUsername ? (
+              <span className="inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border bg-[#1d9bf0]/10 text-[#1d9bf0] border-[#1d9bf0]/20">
+                Twitter
+              </span>
+            ) : (
+              <span className="inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
+                Crypto
+              </span>
+            )}
             {round.isPumpFun && (
               <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold border bg-gradient-to-r from-orange-500/10 to-green-500/10 text-orange-400 border-orange-500/20">
                 pump.fun
