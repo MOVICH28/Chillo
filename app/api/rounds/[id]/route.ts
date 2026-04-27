@@ -9,8 +9,8 @@ const BASE_POOL_SEED = 20;
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const [round, pool, trades] = await Promise.all([
-    prisma.round.findUnique({ where: { id }, include: { creator: { select: { username: true } } } }),
+  const [round, pool, trades, volumeAgg] = await Promise.all([
+    prisma.round.findUnique({ where: { id }, include: { creator: { select: { username: true, avatarUrl: true } } } }),
     prisma.roundPool.findUnique({ where: { roundId: id } }),
     prisma.trade.findMany({
       where: { roundId: id },
@@ -18,6 +18,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       take: 20,
       include: { user: { select: { username: true, avatarUrl: true } } },
     }),
+    prisma.trade.aggregate({ where: { roundId: id }, _sum: { totalCost: true } }),
   ]);
 
   if (!round) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -42,7 +43,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     noPool:  np,
     totalPool: tp,
     realPool,
-    creatorUsername: round.creator?.username ?? null,
+    creatorUsername:  round.creator?.username  ?? null,
+    creatorAvatarUrl: round.creator?.avatarUrl ?? null,
+    totalVolume: volumeAgg._sum.totalCost ?? 0,
     creator: undefined,
     recentTrades: trades.map(t => ({
       id:          t.id,

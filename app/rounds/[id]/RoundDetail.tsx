@@ -48,6 +48,8 @@ interface RoundData {
   customImage:     string | null;
   twitterUsername:  string | null;
   creatorUsername:  string | null;
+  creatorAvatarUrl: string | null;
+  totalVolume?:     number;
 }
 
 interface RecentTrade {
@@ -540,28 +542,56 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
             </div>
 
             {/* Creator + volume row */}
-            {(round.creatorUsername || round.totalPool > 0) && (
-              <div className="flex items-center gap-4 mb-4 text-sm text-white/60">
+            {(round.creatorUsername || (round.totalVolume ?? round.totalPool) > 0) && (
+              <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-white/60">
                 {round.creatorUsername && (
-                  <Link href={`/profile/${round.creatorUsername}`} className="hover:text-white transition-colors">
+                  <Link href={`/profile/${round.creatorUsername}`} className="flex items-center gap-2 hover:text-white transition-colors">
+                    {round.creatorAvatarUrl ? (
+                      <img src={round.creatorAvatarUrl} alt="" className="w-7 h-7 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white/60">
+                        {round.creatorUsername[0].toUpperCase()}
+                      </div>
+                    )}
                     Created by <span className="text-white font-medium">@{round.creatorUsername}</span>
                   </Link>
                 )}
-                {round.creatorUsername && round.totalPool > 0 && (
+                {round.creatorUsername && (round.totalVolume ?? round.totalPool) > 0 && (
                   <span className="text-white/20">·</span>
                 )}
-                {round.totalPool > 0 && (
-                  <span>
-                    Total volume:{" "}
-                    <span className="text-white font-mono font-medium">
-                      {round.totalPool >= 1_000_000
-                        ? `${(round.totalPool / 1_000_000).toFixed(2)}M`
-                        : round.totalPool >= 1_000
-                        ? `${(round.totalPool / 1_000).toFixed(1)}K`
-                        : round.totalPool.toFixed(1)}{" "}
-                      DORA
+                {(round.totalVolume ?? round.totalPool) > 0 && (() => {
+                  const v = round.totalVolume ?? round.totalPool;
+                  return (
+                    <span>
+                      Volume:{" "}
+                      <span className="text-white font-mono font-medium">
+                        {v >= 1_000_000 ? `${(v / 1_000_000).toFixed(2)}M` : v >= 1_000 ? `${(v / 1_000).toFixed(1)}K` : v.toFixed(1)} DORA
+                      </span>
                     </span>
-                  </span>
+                  );
+                })()}
+                {round.tokenAddress && (
+                  <>
+                    <span className="text-white/20">·</span>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(round.tokenAddress!)}
+                      title="Copy contract address"
+                      className="flex items-center gap-1 font-mono text-xs text-white/40 hover:text-white/80 transition-colors"
+                    >
+                      {round.tokenAddress.slice(0, 4)}…{round.tokenAddress.slice(-4)}
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+                    <a
+                      href={`https://solscan.io/token/${round.tokenAddress}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-white/30 hover:text-brand transition-colors"
+                    >
+                      Solscan ↗
+                    </a>
+                  </>
                 )}
               </div>
             )}

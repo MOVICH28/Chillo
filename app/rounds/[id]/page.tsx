@@ -14,7 +14,10 @@ export default async function RoundDetailPage({ params }: PageProps) {
   const { id } = await params;
 
   const [round, pool] = await Promise.all([
-    prisma.round.findUnique({ where: { id } }),
+    prisma.round.findUnique({
+      where: { id },
+      include: { creator: { select: { username: true, avatarUrl: true } } },
+    }),
     prisma.roundPool.findUnique({ where: { roundId: id } }),
   ]);
 
@@ -56,8 +59,9 @@ export default async function RoundDetailPage({ params }: PageProps) {
     isPumpFun:       round.isPumpFun,
     questionType:    round.questionType    ?? null,
     customImage:     round.customImage     ?? null,
-    twitterUsername:  round.twitterUsername  ?? null,
-    creatorUsername:  null,
+    twitterUsername:   round.twitterUsername   ?? null,
+    creatorUsername:   round.creator?.username  ?? null,
+    creatorAvatarUrl:  round.creator?.avatarUrl ?? null,
   };
 
   return (
