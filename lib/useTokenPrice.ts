@@ -307,27 +307,28 @@ export function useTokenPrice(opts: {
 
     // ── Mode C: DexScreener polling (2s) + localStorage history ──────────────
     else if (tokenAddress) {
-      const periodMs = TIMEFRAME_PERIOD_MS[timeframe] ?? 60_000;
+      // Streaming timeframes (1s/5s/30s) → raw ticks for Live canvas, isKline: false
+      // Kline timeframes (1m+) → OHLCV candles for Line/Candles chart, isKline: true
+      const isStreamingTF = !KLINE_INTERVAL[timeframe];
+      const periodMs      = TIMEFRAME_PERIOD_MS[timeframe] ?? 60_000;
 
       // Load and prune persisted ticks (up to 24h old)
-      const cutoff  = Date.now() - HISTORY_TTL_MS;
+      const cutoff = Date.now() - HISTORY_TTL_MS;
       let ticks: StoredTick[] = lsLoad(tokenAddress).filter(t => t.t >= cutoff);
       let symbol = "TOKEN";
 
-      // Immediately populate chart from stored history — returning users see data at once
+      // Bootstrap chart immediately from stored history
       if (ticks.length) {
-        const candles    = aggregateCandles(ticks, periodMs, showMcap);
-        const lastTick   = ticks[ticks.length - 1];
-        const chartValue = showMcap ? lastTick.m : lastTick.p;
-        setState({
-          price:   lastTick.p,
-          history: candles,
-          status:  "connecting",
-          label:   showMcap ? "TOKEN MCap" : "TOKEN/USD",
-          isKline: candles.length >= 2,
-        });
-        // Suppress initial chartValue=0 case for mcap tokens with no mcap stored yet
-        if (showMcap && chartValue <= 0) setState(s => ({ ...s, history: [] }));
+        const lastTick = ticks[ticks.length - 1];
+        if (isStreamingTF) {
+          const raw = ticks.slice(-MAX_STREAM_HISTORY)
+            .map(t => ({ time: t.t, price: showMcap ? t.m : t.p }))
+            .filter(p => p.price > 0);
+          if (raw.length) setState({ price: lastTick.p, history: raw, status: "connecting", label: "TOKEN/USD", isKline: false });
+        } else {
+          const candles = aggregateCandles(ticks, periodMs, showMcap);
+          if (candles.length) setState({ price: lastTick.p, history: candles, status: "connecting", label: showMcap ? "TOKEN MCap" : "TOKEN/USD", isKline: true });
+        }
       }
 
       const poll = async () => {
@@ -357,18 +358,32 @@ export function useTokenPrice(opts: {
           if (ticks.length > MAX_TICKS) ticks = ticks.slice(-MAX_TICKS);
           lsSave(tokenAddress, ticks);
 
-          const candles    = aggregateCandles(ticks, periodMs, showMcap);
-          const chartValue = showMcap ? mcap : price;
-          const lbl        = showMcap ? `${symbol} MCap` : `${symbol}/USD`;
-          setState({
-            price,
-            history: candles.length
-              ? candles
-              : (chartValue > 0 ? [{ time: Date.now(), price: chartValue }] : []),
-            status:  "live",
-            label:   lbl,
-            isKline: candles.length >= 2,
-          });
+          const lbl = showMcap ? `${symbol} MCap` : `${symbol}/USD`;
+
+          if (isStreamingTF) {
+            // Raw ticks for Live canvas — keep last 200
+            const raw = ticks.slice(-MAX_STREAM_HISTORY)
+              .map(t => ({ time: t.t, price: showMcap ? t.m : t.p }))
+              .filter(p => p.price > 0);
+            setState({
+              price,
+              history: raw.length ? raw : [{ time: Date.now(), price: showMcap ? mcap : price }],
+              status:  "live",
+              label:   lbl,
+              isKline: false,
+            });
+          } else {
+            // OHLCV candles for Line/Candles chart
+            const candles = aggregateCandles(ticks, periodMs, showMcap);
+            const fallback = showMcap ? mcap : price;
+            setState({
+              price,
+              history: candles.length ? candles : [{ time: Date.now(), price: fallback, open: fallback, high: fallback, low: fallback, volume: 0 }],
+              status:  "live",
+              label:   lbl,
+              isKline: true,
+            });
+          }
         } catch { /**/ }
       };
 

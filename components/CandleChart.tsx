@@ -296,15 +296,6 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
   const fittedRef       = useRef(false);
   const [showLiveBtn, setShowLiveBtn] = useState(false);
 
-  // "Building chart history..." — shown for first 30s when custom token has no stored history
-  const mountedWithoutKline = useRef(!isKline);
-  const [buildingPast30s, setBuildingPast30s] = useState(false);
-  useEffect(() => {
-    if (!mountedWithoutKline.current) return;
-    const id = setTimeout(() => setBuildingPast30s(true), 30_000);
-    return () => clearTimeout(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Tracked width fed to LiveLineCanvas
   const [containerWidth, setContainerWidth] = useState(600);
@@ -553,9 +544,8 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
     : [];
 
   const loading = data.length < 2 && status !== "live";
-  // Show building message for custom tokens (no isKline on mount) until 30s passes or history arrives
-  const showBuilding = mountedWithoutKline.current && !buildingPast30s && !isKline
-    && status === "live" && chartType !== "live";
+  // Show "Loading chart..." when too few points to render meaningfully in line/candles mode
+  const tooFewPoints = chartType !== "live" && status === "live" && data.length < 5;
 
   return (
     <div className="relative w-full rounded-xl overflow-hidden" style={{ height: H, background: CHART_BG }}>
@@ -610,12 +600,13 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
         </div>
       )}
 
-      {showBuilding && (
-        <div className="absolute bottom-8 left-0 right-0 flex justify-center pointer-events-none">
-          <span className="text-[11px] font-mono px-3 py-1 rounded-full"
-                style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.25)", border: "1px solid rgba(255,255,255,0.06)" }}>
-            Building chart history…
-          </span>
+      {tooFewPoints && !loading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none">
+          <svg className="animate-spin w-4 h-4 text-white/20" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+          </svg>
+          <span className="text-xs" style={{ color: "rgba(255,255,255,0.2)" }}>Loading chart…</span>
         </div>
       )}
     </div>
