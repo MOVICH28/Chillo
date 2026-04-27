@@ -132,7 +132,7 @@ function useLiveStats(
     setStats(prev => {
       const last = prev.history[prev.history.length - 1];
       if (last === p) return prev;
-      return { price: p, mcap: m, history: [...prev.history, p].slice(-20) };
+      return { price: p, mcap: m, history: [...prev.history, p].slice(-50) };
     });
   };
 
@@ -327,8 +327,6 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
     ? (liveStats.history[liveStats.history.length - 1] - liveStats.history[0]) / liveStats.history[0] * 100
     : null;
   const showInfoBox   = isCrypto && hasTokenData;
-  // eslint-disable-next-line no-console
-  console.log('round category:', round.category, 'targetToken:', round.targetToken, 'tokenAddress:', round.tokenAddress, 'isCrypto:', isCrypto, 'showInfoBox:', showInfoBox);
 
   // Footer values
   const totalPool = round.totalPool ?? 0;
@@ -405,12 +403,12 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
 
         {/* Price / mcap info box — all crypto rounds with token data */}
         {showInfoBox && (
-          <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.03] rounded-lg mb-2 border border-white/5">
+          <div className="flex items-center justify-between px-2 py-1 bg-white/[0.03] rounded-lg mb-2 border border-white/5">
             <div>
               <div className="text-[8px] text-white/25 uppercase tracking-wider mb-0.5">
                 {isMcapQ ? "Mkt Cap" : "Price"}
               </div>
-              <div className="text-[13px] font-mono font-bold text-white leading-tight">
+              <div className="text-xs font-mono font-bold text-white leading-tight">
                 {displayValue != null && displayValue > 0
                   ? isMcapQ && liveStats.mcap != null
                     ? fmtMcap(liveStats.mcap)
@@ -418,12 +416,12 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
                   : <span className="text-white/20">—</span>}
               </div>
               {changeVal != null && (
-                <div className={`text-[10px] font-mono ${changeVal >= 0 ? "text-green-400" : "text-red-400"}`}>
+                <div className={`text-[9px] font-mono ${changeVal >= 0 ? "text-green-400" : "text-red-400"}`}>
                   {changeVal >= 0 ? "+" : ""}{changeVal.toFixed(2)}%
                 </div>
               )}
             </div>
-            <MiniSparkline data={liveStats.history} width={72} height={28} />
+            <MiniSparkline data={liveStats.history} width={120} height={28} />
           </div>
         )}
 
@@ -463,7 +461,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
       {/* Footer */}
       <div className="px-4 pb-3 border-t border-white/5 pt-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] text-white/40 font-mono">
+          <span className="text-xs text-white/70 font-mono">
             Vol: {fmtPool} DORA
           </span>
           <div className="flex items-center gap-2 shrink-0">
@@ -479,7 +477,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
               <Link
                 href={`/profile/${round.creatorUsername}`}
                 onClick={e => e.stopPropagation()}
-                className="text-[10px] text-white/30 hover:text-white/60 transition-colors"
+                className="text-[10px] text-white/70 hover:text-white transition-colors"
               >
                 creator: @{round.creatorUsername}
               </Link>

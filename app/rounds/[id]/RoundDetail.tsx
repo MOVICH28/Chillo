@@ -46,7 +46,8 @@ interface RoundData {
   isPumpFun:       boolean;
   questionType:    string | null;
   customImage:     string | null;
-  twitterUsername: string | null;
+  twitterUsername:  string | null;
+  creatorUsername:  string | null;
 }
 
 interface RecentTrade {
@@ -537,6 +538,33 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
               ) : null}
               <h1 className="text-xl font-semibold text-white leading-snug pt-1">{round.question}</h1>
             </div>
+
+            {/* Creator + volume row */}
+            {(round.creatorUsername || round.totalPool > 0) && (
+              <div className="flex items-center gap-4 mb-4 text-sm text-white/60">
+                {round.creatorUsername && (
+                  <Link href={`/profile/${round.creatorUsername}`} className="hover:text-white transition-colors">
+                    Created by <span className="text-white font-medium">@{round.creatorUsername}</span>
+                  </Link>
+                )}
+                {round.creatorUsername && round.totalPool > 0 && (
+                  <span className="text-white/20">·</span>
+                )}
+                {round.totalPool > 0 && (
+                  <span>
+                    Total volume:{" "}
+                    <span className="text-white font-mono font-medium">
+                      {round.totalPool >= 1_000_000
+                        ? `${(round.totalPool / 1_000_000).toFixed(2)}M`
+                        : round.totalPool >= 1_000
+                        ? `${(round.totalPool / 1_000).toFixed(1)}K`
+                        : round.totalPool.toFixed(1)}{" "}
+                      DORA
+                    </span>
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Countdown timers */}
             {round.status !== "resolved" && (

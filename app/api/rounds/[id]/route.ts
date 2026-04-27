@@ -10,7 +10,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
 
   const [round, pool, trades] = await Promise.all([
-    prisma.round.findUnique({ where: { id } }),
+    prisma.round.findUnique({ where: { id }, include: { creator: { select: { username: true } } } }),
     prisma.roundPool.findUnique({ where: { roundId: id } }),
     prisma.trade.findMany({
       where: { roundId: id },
@@ -42,6 +42,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     noPool:  np,
     totalPool: tp,
     realPool,
+    creatorUsername: round.creator?.username ?? null,
+    creator: undefined,
     recentTrades: trades.map(t => ({
       id:          t.id,
       username:    t.user?.username ?? null,

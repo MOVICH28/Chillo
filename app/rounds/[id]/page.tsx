@@ -56,7 +56,8 @@ export default async function RoundDetailPage({ params }: PageProps) {
     isPumpFun:       round.isPumpFun,
     questionType:    round.questionType    ?? null,
     customImage:     round.customImage     ?? null,
-    twitterUsername: round.twitterUsername ?? null,
+    twitterUsername:  round.twitterUsername  ?? null,
+    creatorUsername:  null,
   };
 
   return (
