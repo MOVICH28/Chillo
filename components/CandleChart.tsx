@@ -296,6 +296,16 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
   const fittedRef       = useRef(false);
   const [showLiveBtn, setShowLiveBtn] = useState(false);
 
+  // "Building chart history..." — shown for first 30s when custom token has no stored history
+  const mountedWithoutKline = useRef(!isKline);
+  const [buildingPast30s, setBuildingPast30s] = useState(false);
+  useEffect(() => {
+    if (!mountedWithoutKline.current) return;
+    const id = setTimeout(() => setBuildingPast30s(true), 30_000);
+    return () => clearTimeout(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Tracked width fed to LiveLineCanvas
   const [containerWidth, setContainerWidth] = useState(600);
 
@@ -522,12 +532,12 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, chartType, isKline, priceToBeat]);
 
-  // ── Effect 3: reset scroll state on timeframe or chartType change ────────────
+  // ── Effect 3: reset scroll state on timeframe, chartType, or isKline change ──
   useEffect(() => {
     userPannedRef.current = false;
     fittedRef.current     = false;
     setShowLiveBtn(false);
-  }, [timeframe, chartType]);
+  }, [timeframe, chartType, isKline]);
 
   const handleGoLive = () => {
     userPannedRef.current = false;
@@ -543,6 +553,9 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
     : [];
 
   const loading = data.length < 2 && status !== "live";
+  // Show building message for custom tokens (no isKline on mount) until 30s passes or history arrives
+  const showBuilding = mountedWithoutKline.current && !buildingPast30s && !isKline
+    && status === "live" && chartType !== "live";
 
   return (
     <div className="relative w-full rounded-xl overflow-hidden" style={{ height: H, background: CHART_BG }}>
@@ -593,6 +606,15 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
           </svg>
           <span className="text-xs" style={{ color: "rgba(255,255,255,0.2)" }}>
             {status === "connecting" ? `Connecting to ${label}…` : "Waiting for price data…"}
+          </span>
+        </div>
+      )}
+
+      {showBuilding && (
+        <div className="absolute bottom-8 left-0 right-0 flex justify-center pointer-events-none">
+          <span className="text-[11px] font-mono px-3 py-1 rounded-full"
+                style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.25)", border: "1px solid rgba(255,255,255,0.06)" }}>
+            Building chart history…
           </span>
         </div>
       )}

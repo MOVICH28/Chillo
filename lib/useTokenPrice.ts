@@ -97,6 +97,51 @@ async function fetchKlinesStream(
   } catch { return []; }
 }
 
+// ── LocalStorage persistence for custom token price history ──────────────────
+const LS_KEY         = (a: string) => `pumpdora_price_history_${a}`;
+const MAX_TICKS      = 500;
+const HISTORY_TTL_MS = 86_400_000; // 24 hours
+
+interface StoredTick { t: number; p: number; m: number; } // time, price, mcap
+
+function lsLoad(addr: string): StoredTick[] {
+  try {
+    if (typeof window === "undefined") return [];
+    const raw = localStorage.getItem(LS_KEY(addr));
+    return raw ? (JSON.parse(raw) as StoredTick[]) : [];
+  } catch { return []; }
+}
+
+function lsSave(addr: string, ticks: StoredTick[]) {
+  try {
+    if (typeof window !== "undefined") localStorage.setItem(LS_KEY(addr), JSON.stringify(ticks));
+  } catch { /**/ }
+}
+
+// Period in ms for each timeframe — used for candle aggregation in Mode C
+const TIMEFRAME_PERIOD_MS: Record<Timeframe, number> = {
+  "1s":   1_000,        "5s":   5_000,       "30s":  30_000,
+  "1m":   60_000,       "5m":   300_000,     "15m":  900_000,
+  "30m":  1_800_000,    "1h":   3_600_000,   "4h":   14_400_000,
+  "6h":   21_600_000,   "24h":  86_400_000,
+};
+
+function aggregateCandles(ticks: StoredTick[], periodMs: number, useMcap: boolean): OHLCPoint[] {
+  if (!ticks.length) return [];
+  const buckets = new Map<number, { o: number; h: number; l: number; c: number }>();
+  for (const tick of ticks) {
+    const v = useMcap ? tick.m : tick.p;
+    if (!v) continue;
+    const key = Math.floor(tick.t / periodMs) * periodMs;
+    const b   = buckets.get(key);
+    if (!b) buckets.set(key, { o: v, h: v, l: v, c: v });
+    else { b.h = Math.max(b.h, v); b.l = Math.min(b.l, v); b.c = v; }
+  }
+  return Array.from(buckets.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([time, c]) => ({ time, price: c.c, open: c.o, high: c.h, low: c.l, volume: 0 }));
+}
+
 /**
  * Single useEffect, exactly one active data source at a time.
  *
@@ -106,10 +151,10 @@ async function fetchKlinesStream(
  *           2. Open aggTrade WebSocket
  *           3. Aggregate ticks into OHLCV candles per candle period
  *           Emission: 1s = every raw tick; 5s/30s = only on period close
- * Mode C  custom tokenAddress
- *           Primary:  Jupiter Price API every 2s  → fast price for chart history
- *           Fallback: DexScreener every 15s       → metadata (mcap, volume, changes)
- *                     Also bootstraps if Jupiter has no data for this token
+ * Mode C  custom tokenAddress  → DexScreener polling every 2s
+ *           Ticks persisted in localStorage (500 max, 24h TTL)
+ *           History loaded on mount so returning users see chart immediately
+ *           Ticks aggregated into OHLCV candles by timeframe period
  */
 export function useTokenPrice(opts: {
   targetToken?:  string | null;
@@ -260,10 +305,30 @@ export function useTokenPrice(opts: {
       }
     }
 
-    // ── Mode C: DexScreener polling (2s) ──────────────────────────────────────
+    // ── Mode C: DexScreener polling (2s) + localStorage history ──────────────
     else if (tokenAddress) {
-      const history: OHLCPoint[] = [];
+      const periodMs = TIMEFRAME_PERIOD_MS[timeframe] ?? 60_000;
+
+      // Load and prune persisted ticks (up to 24h old)
+      const cutoff  = Date.now() - HISTORY_TTL_MS;
+      let ticks: StoredTick[] = lsLoad(tokenAddress).filter(t => t.t >= cutoff);
       let symbol = "TOKEN";
+
+      // Immediately populate chart from stored history — returning users see data at once
+      if (ticks.length) {
+        const candles    = aggregateCandles(ticks, periodMs, showMcap);
+        const lastTick   = ticks[ticks.length - 1];
+        const chartValue = showMcap ? lastTick.m : lastTick.p;
+        setState({
+          price:   lastTick.p,
+          history: candles,
+          status:  "connecting",
+          label:   showMcap ? "TOKEN MCap" : "TOKEN/USD",
+          isKline: candles.length >= 2,
+        });
+        // Suppress initial chartValue=0 case for mcap tokens with no mcap stored yet
+        if (showMcap && chartValue <= 0) setState(s => ({ ...s, history: [] }));
+      }
 
       const poll = async () => {
         if (cancelled) return;
@@ -275,23 +340,35 @@ export function useTokenPrice(opts: {
           if (cancelled || !res.ok) return;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const data: any = await res.json();
-          const pairs: unknown[] = data?.pairs ?? [];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const pairs: any[] = data?.pairs ?? [];
           if (!pairs.length || cancelled) return;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const pair: any = (pairs as any[]).sort(
-            (a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0)
-          )[0];
+          const pair: any = pairs.sort((a: any, b: any) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0))[0];
           const price = parseFloat(pair.priceUsd ?? "0");
           const mcap  = pair.marketCap ?? pair.fdv ?? 0;
           if (!isFinite(price) || price <= 0) return;
           symbol = pair.baseToken?.symbol ?? "TOKEN";
 
+          // Append tick, prune to 24h + max 500
+          ticks.push({ t: Date.now(), p: price, m: mcap });
+          const cutoffNow = Date.now() - HISTORY_TTL_MS;
+          ticks = ticks.filter(t => t.t >= cutoffNow);
+          if (ticks.length > MAX_TICKS) ticks = ticks.slice(-MAX_TICKS);
+          lsSave(tokenAddress, ticks);
+
+          const candles    = aggregateCandles(ticks, periodMs, showMcap);
           const chartValue = showMcap ? mcap : price;
-          if (chartValue <= 0) return;
-          if (history.length >= MAX_STREAM_HISTORY) history.shift();
-          history.push({ time: Date.now(), price: chartValue });
-          const lbl = showMcap ? `${symbol} MCap` : `${symbol}/USD`;
-          setState({ price, history: [...history], status: "live", label: lbl, isKline: false });
+          const lbl        = showMcap ? `${symbol} MCap` : `${symbol}/USD`;
+          setState({
+            price,
+            history: candles.length
+              ? candles
+              : (chartValue > 0 ? [{ time: Date.now(), price: chartValue }] : []),
+            status:  "live",
+            label:   lbl,
+            isKline: candles.length >= 2,
+          });
         } catch { /**/ }
       };
 
