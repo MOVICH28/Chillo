@@ -323,8 +323,10 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
   const showInfoBox   = isCrypto && hasTokenData && displayValue != null && displayValue > 0;
 
   // Footer values
-  const totalPool = round.realPool ?? 0;
-  const fmtPool   = totalPool >= 1_000
+  const totalPool = round.totalPool ?? 0;
+  const fmtPool   = totalPool >= 1_000_000
+    ? `${(totalPool / 1_000_000).toFixed(2)}M`
+    : totalPool >= 1_000
     ? `${(totalPool / 1_000).toFixed(1)}K`
     : totalPool.toFixed(totalPool === 0 ? 0 : 1);
 
@@ -448,7 +450,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
       <div className="px-4 pb-3 border-t border-white/5 pt-2">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] text-white/40 font-mono">
-            {totalPool > 0 ? `Vol: ${fmtPool} DORA` : `${outcomes.length} outcomes`}
+            Vol: {fmtPool} DORA
           </span>
           <div className="flex items-center gap-2 shrink-0">
             {hasChart && (
@@ -465,7 +467,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
                 onClick={e => e.stopPropagation()}
                 className="text-[10px] text-white/30 hover:text-white/60 transition-colors"
               >
-                by @{round.creatorUsername}
+                creator: @{round.creatorUsername}
               </Link>
             )}
           </div>
