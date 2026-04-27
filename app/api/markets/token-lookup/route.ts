@@ -40,10 +40,14 @@ async function fetchDexScreener(query: string, isAddress: boolean) {
     symbol:        pair.baseToken?.symbol  ?? query.toUpperCase(),
     priceUsd:      parseFloat(pair.priceUsd ?? "0"),
     mcapUsd:       pair.marketCap ?? pair.fdv ?? 0,
-    priceChange24h: pair.priceChange?.h24   ?? 0,
-    volume24h:     pair.volume?.h24         ?? 0,
-    logoUrl:       pair.info?.imageUrl      ?? null,
-    address:       pair.baseToken?.address  ?? query,
+    priceChange24h: pair.priceChange?.h24  ?? 0,
+    volume24h:     pair.volume?.h24        ?? 0,
+    change5m:      pair.priceChange?.m5    ?? null,
+    change1h:      pair.priceChange?.h1    ?? null,
+    change6h:      pair.priceChange?.h6    ?? null,
+    change24h:     pair.priceChange?.h24   ?? null,
+    logoUrl:       pair.info?.imageUrl     ?? null,
+    address:       pair.baseToken?.address ?? query,
     isPumpFun,
   };
 }
