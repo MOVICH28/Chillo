@@ -53,8 +53,7 @@ const CANDLE_PERIOD_MS: Partial<Record<Timeframe, number>> = {
 const MAX_STREAM_HISTORY  = 200;
 const KLINE_LIMIT         = 100;
 const KLINE_REFRESH_MS    = 30_000;
-const JUPITER_POLL_MS     = 2_000;
-const DEX_META_POLL_MS    = 15_000;
+const DEX_POLL_MS         = 2_000;
 
 // Mode A: klines REST — uses close time as timestamp (c[6])
 async function fetchKlines(symbol: string, interval: string, signal: AbortSignal): Promise<OHLCPoint[]> {
@@ -142,7 +141,6 @@ export function useTokenPrice(opts: {
     const ac             = new AbortController();
     let ws: WebSocket | null = null;
     let pollInterval:     ReturnType<typeof setInterval> | null = null;
-    let dexInterval:      ReturnType<typeof setInterval> | null = null;
     let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
     let reconnectTimer:   ReturnType<typeof setTimeout>  | null = null;
 
@@ -262,81 +260,43 @@ export function useTokenPrice(opts: {
       }
     }
 
-    // ── Mode C: Jupiter (2s price) + DexScreener (15s metadata) ──────────────
+    // ── Mode C: DexScreener polling (2s) ──────────────────────────────────────
     else if (tokenAddress) {
       const history: OHLCPoint[] = [];
-      // Mutable metadata updated by DexScreener poll (no re-render on its own)
-      let symbol   = "TOKEN";
-      let dexPrice = 0;
-      let dexMcap  = 0;
-      let jupFailed = false; // true when Jupiter has no data for this token
+      let symbol = "TOKEN";
 
-      // DexScreener: symbol, mcap, volume, price changes (15s)
-      const pollDex = async () => {
+      const poll = async () => {
         if (cancelled) return;
         try {
           const res = await fetch(
-            `/api/markets/token-lookup?address=${encodeURIComponent(tokenAddress)}`,
+            `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`,
             { cache: "no-store", signal: ac.signal }
           );
           if (cancelled || !res.ok) return;
-          const d = await res.json();
-          if (cancelled) return;
-          symbol   = d.symbol ?? "TOKEN";
-          dexPrice = parseFloat(d.priceUsd) || 0;
-          dexMcap  = d.mcapUsd ?? 0;
-          // Bootstrap history from DexScreener if Jupiter has no data yet
-          if (jupFailed || !history.length) {
-            const p = showMcap ? dexMcap : dexPrice;
-            if (p > 0) {
-              if (history.length >= MAX_STREAM_HISTORY) history.shift();
-              history.push({ time: Date.now(), price: p });
-              const lbl = showMcap ? `${symbol} MCap` : `${symbol}/USD`;
-              setState({ price: dexPrice, history: [...history], status: "live", label: lbl, isKline: false });
-            }
-          }
-        } catch { /**/ }
-      };
-
-      // Jupiter Price API: fast price ticks (2s)
-      const pollJupiter = async () => {
-        if (cancelled) return;
-        try {
-          const res = await fetch(
-            `https://price.jup.ag/v6/price?ids=${tokenAddress}`,
-            { cache: "no-store", signal: ac.signal }
-          );
-          if (cancelled || !res.ok) { jupFailed = true; return; }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const d: any = await res.json();
-          const entry = d?.data?.[tokenAddress];
-          if (!entry || cancelled) { jupFailed = true; return; }
-          const jupPrice = parseFloat(entry.price ?? "0");
-          if (!isFinite(jupPrice) || jupPrice <= 0) { jupFailed = true; return; }
-          jupFailed = false;
+          const data: any = await res.json();
+          const pairs: unknown[] = data?.pairs ?? [];
+          if (!pairs.length || cancelled) return;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const pair: any = (pairs as any[]).sort(
+            (a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0)
+          )[0];
+          const price = parseFloat(pair.priceUsd ?? "0");
+          const mcap  = pair.marketCap ?? pair.fdv ?? 0;
+          if (!isFinite(price) || price <= 0) return;
+          symbol = pair.baseToken?.symbol ?? "TOKEN";
 
-          // Chart value: near-real-time mcap (jupPrice × circulatingSupply) or price
-          let chartValue: number;
-          if (showMcap) {
-            chartValue = dexMcap > 0 && dexPrice > 0
-              ? jupPrice * (dexMcap / dexPrice)
-              : dexMcap;
-            if (chartValue <= 0) return;
-          } else {
-            chartValue = jupPrice;
-          }
-
+          const chartValue = showMcap ? mcap : price;
+          if (chartValue <= 0) return;
           if (history.length >= MAX_STREAM_HISTORY) history.shift();
           history.push({ time: Date.now(), price: chartValue });
           const lbl = showMcap ? `${symbol} MCap` : `${symbol}/USD`;
-          setState({ price: jupPrice, history: [...history], status: "live", label: lbl, isKline: false });
-        } catch { jupFailed = true; }
+          setState({ price, history: [...history], status: "live", label: lbl, isKline: false });
+        } catch { /**/ }
       };
 
-      // Bootstrap: DexScreener first (symbol + initial price), then Jupiter
-      pollDex().then(() => pollJupiter());
-      pollInterval = setInterval(pollJupiter, JUPITER_POLL_MS);
-      dexInterval  = setInterval(pollDex,     DEX_META_POLL_MS);
+      poll();
+      pollInterval = setInterval(poll, DEX_POLL_MS);
     }
 
     return () => {
@@ -344,7 +304,6 @@ export function useTokenPrice(opts: {
       ac.abort();
       ws?.close();
       if (pollInterval)      clearInterval(pollInterval);
-      if (dexInterval)       clearInterval(dexInterval);
       if (heartbeatInterval) clearInterval(heartbeatInterval);
       if (reconnectTimer)    clearTimeout(reconnectTimer);
     };

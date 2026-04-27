@@ -93,9 +93,8 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
   const [cgData,    setCgData]    = useState<CgData    | null>(null);
 
   // Custom token state
-  const [dexData,      setDexData]      = useState<DexData | null>(null);
-  const [jupiterPrice, setJupiterPrice] = useState<number | null>(null);
-  const [updating,     setUpdating]     = useState(false);
+  const [dexData,   setDexData]   = useState<DexData | null>(null);
+  const [updating,  setUpdating]  = useState(false);
 
   const [loading, setLoading] = useState(true);
 
@@ -104,7 +103,6 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
     setLivePrice(null);
     setCgData(null);
     setDexData(null);
-    setJupiterPrice(null);
     setLoading(true);
   }, [sym, tokenAddress]);
 
@@ -220,76 +218,47 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cgId]);
 
-  // ── Custom tokens: DexScreener (15s metadata) + Jupiter (2s live price) ──
+  // ── Custom tokens: DexScreener polling (2s) ──────────────────────────────
   useEffect(() => {
     if (isCG || !tokenAddress) return;
 
-    let cancelled    = false;
-    let dexInterval: ReturnType<typeof setInterval> | null = null;
-    let jupInterval: ReturnType<typeof setInterval> | null = null;
-    const ac         = new AbortController();
+    let cancelled = false;
+    const ac      = new AbortController();
 
-    // Mutable dex snapshot — shared with Jupiter mcap computation
-    let snapDexPrice = 0;
-    let snapMcap: number | null = null;
-
-    const pollDex = async () => {
+    const poll = async () => {
       if (cancelled) return;
       setUpdating(true);
       try {
         const res = await fetch(
-          `/api/markets/token-lookup?address=${encodeURIComponent(tokenAddress)}`,
+          `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`,
           { cache: "no-store", signal: ac.signal }
         );
         if (!res.ok || cancelled) return;
-        const d = await res.json();
+        const data = await res.json();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pairs: any[] = data.pairs ?? [];
+        if (!pairs.length || cancelled) { setLoading(false); return; }
+        pairs.sort((a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0));
+        const pair = pairs[0];
         if (cancelled) return;
-        snapDexPrice = parseFloat(d.priceUsd) || 0;
-        snapMcap     = d.mcapUsd ?? null;
         setDexData({
-          priceUsd:  snapDexPrice,
-          marketCap: snapMcap,
-          volume24h: d.volume24h  ?? null,
-          change5m:  d.change5m   ?? null,
-          change1h:  d.change1h   ?? null,
-          change6h:  d.change6h   ?? null,
-          change24h: d.change24h  ?? null,
-          symbol:    d.symbol     ?? tokenAddress.slice(0, 8),
+          priceUsd:  parseFloat(pair.priceUsd ?? "0"),
+          marketCap: pair.marketCap ?? pair.fdv    ?? null,
+          volume24h: pair.volume?.h24              ?? null,
+          change5m:  pair.priceChange?.m5          ?? null,
+          change1h:  pair.priceChange?.h1          ?? null,
+          change6h:  pair.priceChange?.h6          ?? null,
+          change24h: pair.priceChange?.h24         ?? null,
+          symbol:    pair.baseToken?.symbol ?? tokenAddress.slice(0, 8),
         });
         setLoading(false);
       } catch { /**/ }
       finally { if (!cancelled) setUpdating(false); }
     };
 
-    const pollJupiter = async () => {
-      if (cancelled) return;
-      try {
-        const res = await fetch(
-          `https://price.jup.ag/v6/price?ids=${tokenAddress}`,
-          { cache: "no-store", signal: ac.signal }
-        );
-        if (!res.ok || cancelled) return;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const d: any = await res.json();
-        const entry  = d?.data?.[tokenAddress];
-        if (!entry || cancelled) return;
-        const p = parseFloat(entry.price ?? "0");
-        if (!isFinite(p) || p <= 0) return;
-        setJupiterPrice(p);
-      } catch { /**/ }
-    };
-
-    // Bootstrap: dex first (symbol + initial price), then Jupiter
-    pollDex().then(() => pollJupiter());
-    jupInterval = setInterval(pollJupiter, 2_000);
-    dexInterval = setInterval(pollDex,     15_000);
-
-    return () => {
-      cancelled = true;
-      ac.abort();
-      if (jupInterval) clearInterval(jupInterval);
-      if (dexInterval) clearInterval(dexInterval);
-    };
+    poll();
+    const id = setInterval(poll, 2_000);
+    return () => { cancelled = true; ac.abort(); clearInterval(id); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokenAddress, isCG]);
 
@@ -328,10 +297,8 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
     c6h    = cgData?.change6h  ?? null;
     c24h   = cgData?.change24h ?? null;
   } else if (dexData) {
-    price  = jupiterPrice ?? dexData.priceUsd;
-    mktCap = jupiterPrice != null && dexData.priceUsd > 0 && dexData.marketCap != null
-      ? jupiterPrice * (dexData.marketCap / dexData.priceUsd)
-      : dexData.marketCap;
+    price  = dexData.priceUsd;
+    mktCap = dexData.marketCap;
     vol24h = dexData.volume24h;
     c5m    = dexData.change5m;
     c1h    = dexData.change1h;
