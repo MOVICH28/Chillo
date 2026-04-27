@@ -300,7 +300,13 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
 
   const hasChart   = round.targetToken === "bitcoin" || round.targetToken === "solana";
   const isMcapQ    = round.questionType === "mcap" || round.questionType === "ath_mcap";
-  const isCrypto   = round.category === "crypto" && !round.twitterUsername;
+  const isCrypto   = !round.twitterUsername && (
+    round.category === "crypto" ||
+    round.category === "custom" ||
+    !!round.targetToken ||
+    !!round.tokenAddress ||
+    !!round.tokenSymbol
+  );
   const [prices, setPrices] = useState<Record<string, number>>({});
 
   const fetchPrices = useCallback(async () => {
@@ -320,7 +326,9 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
   const changeVal     = liveStats.history.length >= 2
     ? (liveStats.history[liveStats.history.length - 1] - liveStats.history[0]) / liveStats.history[0] * 100
     : null;
-  const showInfoBox   = isCrypto && hasTokenData && displayValue != null && displayValue > 0;
+  const showInfoBox   = isCrypto && hasTokenData;
+  // eslint-disable-next-line no-console
+  console.log('round category:', round.category, 'targetToken:', round.targetToken, 'tokenAddress:', round.tokenAddress, 'isCrypto:', isCrypto, 'showInfoBox:', showInfoBox);
 
   // Footer values
   const totalPool = round.totalPool ?? 0;
@@ -403,11 +411,11 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
                 {isMcapQ ? "Mkt Cap" : "Price"}
               </div>
               <div className="text-[13px] font-mono font-bold text-white leading-tight">
-                {isMcapQ && liveStats.mcap != null
-                  ? fmtMcap(liveStats.mcap)
-                  : liveStats.price != null
-                  ? fmtPrice(liveStats.price)
-                  : "—"}
+                {displayValue != null && displayValue > 0
+                  ? isMcapQ && liveStats.mcap != null
+                    ? fmtMcap(liveStats.mcap)
+                    : fmtPrice(liveStats.price!)
+                  : <span className="text-white/20">—</span>}
               </div>
               {changeVal != null && (
                 <div className={`text-[10px] font-mono ${changeVal >= 0 ? "text-green-400" : "text-red-400"}`}>
