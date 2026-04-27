@@ -113,8 +113,9 @@ export function useTokenPrice(opts: {
   tokenSymbol?:  string | null;
   tokenAddress?: string | null;
   timeframe?:    Timeframe;
+  showMcap?:     boolean;
 }): TokenPriceState {
-  const { targetToken, tokenSymbol, tokenAddress, timeframe = "1s" } = opts;
+  const { targetToken, tokenSymbol, tokenAddress, timeframe = "1s", showMcap = false } = opts;
 
   const sym           = (targetToken ?? tokenSymbol ?? "").toLowerCase();
   const binanceSymbol = BINANCE_MAP[sym] ?? null;
@@ -270,11 +271,16 @@ export function useTokenPrice(opts: {
           if (cancelled) return;
           if (!res.ok) { setState(s => ({ ...s, status: "error" })); return; }
           const d = await res.json();
-          const p = parseFloat(d.priceUsd);
-          if (!isFinite(p) || cancelled) return;
+          const rawPrice = parseFloat(d.priceUsd);
+          const rawMcap  = d.mcapUsd ?? 0;
+          const p = showMcap ? rawMcap : rawPrice;
+          if (!isFinite(p) || p <= 0 || cancelled) return;
           if (history.length >= MAX_STREAM_HISTORY) history.shift();
           history.push({ time: Date.now(), price: p });
-          setState({ price: p, history: [...history], status: "live", label: `${d.symbol ?? "TOKEN"}/USD`, isKline: false });
+          const lbl = showMcap
+            ? `${d.symbol ?? "TOKEN"} MCap`
+            : `${d.symbol ?? "TOKEN"}/USD`;
+          setState({ price: p, history: [...history], status: "live", label: lbl, isKline: false });
         } catch (e) {
           if (!cancelled && !(e instanceof DOMException && e.name === "AbortError")) {
             setState(s => ({ ...s, status: "error" }));
@@ -294,7 +300,7 @@ export function useTokenPrice(opts: {
       if (reconnectTimer)    clearTimeout(reconnectTimer);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sym, tokenAddress, timeframe]);
+  }, [sym, tokenAddress, timeframe, showMcap]);
 
   return state;
 }

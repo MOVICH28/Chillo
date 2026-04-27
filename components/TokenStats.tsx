@@ -93,7 +93,8 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
   const [cgData,    setCgData]    = useState<CgData    | null>(null);
 
   // Custom token state
-  const [dexData, setDexData] = useState<DexData | null>(null);
+  const [dexData,   setDexData]   = useState<DexData | null>(null);
+  const [updating,  setUpdating]  = useState(false);
 
   const [loading, setLoading] = useState(true);
 
@@ -225,6 +226,7 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
 
     const poll = async () => {
       if (cancelled) return;
+      if (!cancelled) setUpdating(true);
       try {
         const res = await fetch(
           `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`,
@@ -250,6 +252,7 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
         });
         setLoading(false);
       } catch { /**/ }
+      finally { if (!cancelled) setUpdating(false); }
     };
 
     poll();
@@ -310,7 +313,12 @@ export default function TokenStats({ targetToken, tokenAddress, tokenSymbol }: P
 
       {/* Market cap */}
       <div className="flex flex-col">
-        <span className="text-[9px] text-white/25 mb-0.5 uppercase tracking-wider">Mkt Cap</span>
+        <div className="flex items-center gap-1 mb-0.5">
+          <span className="text-[9px] text-white/25 uppercase tracking-wider">Mkt Cap</span>
+          {updating && !loading && (
+            <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse shrink-0" title="updating..." />
+          )}
+        </div>
         <span className="text-white font-mono font-bold text-xl leading-tight">{fmtLarge(mktCap)}</span>
       </div>
 

@@ -28,6 +28,14 @@ function formatPrice(p: number): string {
   return "$" + p.toFixed(6);
 }
 
+function formatMcap(v: number): string {
+  if (v <= 0)            return "$0";
+  if (v < 1_000)         return `$${v.toFixed(0)}`;
+  if (v < 1_000_000)     return `$${(v / 1_000).toFixed(1)}K`;
+  if (v < 1_000_000_000) return `$${(v / 1_000_000).toFixed(2)}M`;
+  return `$${(v / 1_000_000_000).toFixed(2)}B`;
+}
+
 function formatTime(ms: number): string {
   return new Date(ms).toLocaleTimeString("en-US", {
     hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit",
@@ -36,11 +44,12 @@ function formatTime(ms: number): string {
 
 // ── Canvas snake-line for LIVE mode ──────────────────────────────────────────
 
-function LiveLineCanvas({ data, priceToBeat, width, height }: {
+function LiveLineCanvas({ data, priceToBeat, width, height, showMcap }: {
   data:        OHLCPoint[];
   priceToBeat: number | null;
   width:       number;
   height:      number;
+  showMcap?:   boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef   = useRef<number>(0);
@@ -134,7 +143,7 @@ function LiveLineCanvas({ data, priceToBeat, width, height }: {
         ctx.stroke();
         ctx.fillStyle = "rgba(255,255,255,0.35)";
         ctx.textAlign = "left";
-        ctx.fillText(formatPrice(p), chartW + 4, y + 3);
+        ctx.fillText(showMcap ? formatMcap(p) : formatPrice(p), chartW + 4, y + 3);
       }
 
       // ── X-axis grid + time labels ──────────────────────────────────────────
@@ -202,7 +211,7 @@ function LiveLineCanvas({ data, priceToBeat, width, height }: {
       ctx.shadowBlur = 0;
 
       // ── Current price pill label (in Y-axis area) ─────────────────────────
-      const pillText = formatPrice(liveTailPrice);
+      const pillText = showMcap ? formatMcap(liveTailPrice) : formatPrice(liveTailPrice);
       ctx.font       = "bold 13px monospace";
       const pillW    = ctx.measureText(pillText).width + 10;
       const pillH    = 18;
@@ -262,9 +271,10 @@ interface Props {
   timeframe:   Timeframe;
   status:      "connecting" | "live" | "error";
   label:       string;
+  showMcap?:   boolean;
 }
 
-export default function CandleChart({ data, chartType, isKline, priceToBeat, timeframe, status, label }: Props) {
+export default function CandleChart({ data, chartType, isKline, priceToBeat, timeframe, status, label, showMcap }: Props) {
   const containerRef    = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chartRef        = useRef<any>(null);
@@ -388,6 +398,17 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
     } catch { /**/ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Effect: apply price formatter for mcap vs price display ─────────────────
+  useEffect(() => {
+    if (!lineRef.current || !candleRef.current) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fmt: any = showMcap
+      ? { type: "custom", formatter: formatMcap, minMove: 1 }
+      : { type: "price", precision: 6, minMove: 0.000001 };
+    try { lineRef.current.applyOptions({ priceFormat: fmt }); } catch { /**/ }
+    try { candleRef.current.applyOptions({ priceFormat: fmt }); } catch { /**/ }
+  }, [showMcap]);
 
   // ── Effect 2: push data to lightweight-charts (Line / Candles only) ─────────
   useEffect(() => {
@@ -544,6 +565,7 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
             priceToBeat={priceToBeat}
             width={containerWidth}
             height={H}
+            showMcap={showMcap}
           />
         </div>
       )}

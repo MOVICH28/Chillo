@@ -44,6 +44,7 @@ interface RoundData {
   tokenLogo:       string | null;
   isCustom:        boolean;
   isPumpFun:       boolean;
+  questionType:    string | null;
   customImage:     string | null;
   twitterUsername: string | null;
 }
@@ -160,16 +161,17 @@ const TIMEFRAMES: { key: Timeframe; label: string }[] = [
 
 // ── Live chart ────────────────────────────────────────────────────────────────
 
-function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat, timeframe, chartType }: {
+function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat, timeframe, chartType, showMcap }: {
   targetToken?:  string | null;
   tokenAddress?: string | null;
   tokenSymbol?:  string | null;
   priceToBeat:   number | null;
   timeframe:     Timeframe;
   chartType:     "line" | "candles" | "live";
+  showMcap?:     boolean;
 }) {
   const { history, status, label, isKline } = useTokenPrice({
-    targetToken, tokenAddress, tokenSymbol, timeframe,
+    targetToken, tokenAddress, tokenSymbol, timeframe, showMcap,
   });
 
   return (
@@ -177,10 +179,11 @@ function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat, timefr
       data={history}
       chartType={chartType as "line" | "candles" | "live"}
       isKline={isKline}
-      priceToBeat={priceToBeat}
+      priceToBeat={showMcap ? null : priceToBeat}
       timeframe={timeframe}
       status={status}
       label={label}
+      showMcap={showMcap}
     />
   );
 }
@@ -478,6 +481,11 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
               <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
                 Crypto
               </span>
+              {round.isPumpFun && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-gradient-to-r from-orange-500/10 to-green-500/10 text-orange-400 border-orange-500/20">
+                  pump.fun
+                </span>
+              )}
               {round.status === "resolved" ? (
                 <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-white/5 text-white/30 border-white/10">
                   Resolved {resolvedDate}
@@ -636,6 +644,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                   priceToBeat={round.targetPrice}
                   timeframe={chartType === "live" ? "1s" : timeframe}
                   chartType={chartType}
+                  showMcap={round.questionType === "mcap" || round.questionType === "ath_mcap"}
                 />
                 <PoolBar outcomes={outcomes} prices={lmsrPrices} />
               </>
