@@ -115,6 +115,11 @@ function ResolvedRangeCard({ round }: { round: Round }) {
             <span className={`inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border ${CATEGORY_STYLES[round.category] ?? "bg-surface-3 text-muted border-transparent"}`}>
               {CATEGORY_LABELS[round.category] ?? round.category}
             </span>
+            {round.isPumpFun && (
+              <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold border bg-gradient-to-r from-orange-500/10 to-green-500/10 text-orange-400 border-orange-500/20">
+                pump.fun
+              </span>
+            )}
           </div>
           {winning && colors && (
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${colors.bg} ${colors.text} ${colors.border}`}>
@@ -227,6 +232,11 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
             <span className={`inline-flex px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border ${CATEGORY_STYLES[round.category] ?? "bg-surface-3 text-muted border-transparent"}`}>
               {CATEGORY_LABELS[round.category] ?? round.category}
             </span>
+            {round.isPumpFun && (
+              <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold border bg-gradient-to-r from-orange-500/10 to-green-500/10 text-orange-400 border-orange-500/20">
+                pump.fun
+              </span>
+            )}
           </div>
           {!isEnded && (
             <div className="text-right shrink-0">

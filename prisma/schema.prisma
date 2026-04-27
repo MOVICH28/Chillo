@@ -46,6 +46,7 @@ model Round {
   twitterPostCount   Int?      // cached post count (for posts_count type)
   questionType       String?   // "price" | "ath_mcap" | "mcap" — for custom crypto markets
   maxObservedMcap    Float?    // highest mcap seen during round lifetime (for ath_mcap resolution)
+  isPumpFun          Boolean   @default(false) // detected or manually flagged pump.fun token
   creator         User?      @relation("CreatedRounds", fields: [creatorId], references: [id])
   positions       Position[]
   trades          Trade[]

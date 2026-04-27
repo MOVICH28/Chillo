@@ -123,6 +123,7 @@ interface TokenInfo {
   volume24h: number;
   logoUrl: string | null;
   address: string;
+  isPumpFun?: boolean;
 }
 
 interface OutcomeInput {
@@ -257,6 +258,7 @@ export default function CreatePage() {
   const [tokenInfo,    setTokenInfo]    = useState<TokenInfo | null>(null);
   const [tokenLoading, setTokenLoading] = useState(false);
   const [tokenError,   setTokenError]   = useState("");
+  const [isPumpFun,    setIsPumpFun]    = useState(false);
 
   // ── Crypto: Step 2 — question type + timeframe ────────────────────────────
   const [cryptoQType,   setCryptoQType]   = useState<CryptoQType>("price");
@@ -313,6 +315,11 @@ export default function CreatePage() {
     const id = setTimeout(() => lookupToken(tokenQuery), 500);
     return () => clearTimeout(id);
   }, [tokenQuery, lookupToken]);
+
+  // Auto-detect pump.fun when token changes
+  useEffect(() => {
+    setIsPumpFun(tokenInfo?.isPumpFun ?? false);
+  }, [tokenInfo]);
 
   // ── Auto-generate crypto question from type + token + timeframe ───────────
   useEffect(() => {
@@ -392,6 +399,7 @@ export default function CreatePage() {
           ? tokenInfo.address : null;
         body.twitterUrl   = twitterUrl;
         body.customImage  = uploadedImage || null;
+        body.isPumpFun    = isPumpFun;
       }
 
       const res = await fetch("/api/markets/create", {
@@ -530,7 +538,14 @@ export default function CreatePage() {
                   ? <img src={tokenInfo.logoUrl} alt={tokenInfo.symbol} className="w-10 h-10 rounded-full shrink-0" />
                   : <div className="w-10 h-10 rounded-full bg-brand/20 flex items-center justify-center text-brand font-bold text-sm shrink-0">{tokenInfo.symbol[0]}</div>}
                 <div className="flex-1 min-w-0">
-                  <p className="text-white font-semibold text-sm">{tokenInfo.name} <span className="text-muted font-normal">({tokenInfo.symbol})</span></p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-white font-semibold text-sm">{tokenInfo.name} <span className="text-muted font-normal">({tokenInfo.symbol})</span></p>
+                    {isPumpFun && (
+                      <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold border bg-gradient-to-r from-orange-500/10 to-green-500/10 text-orange-400 border-orange-500/20">
+                        pump.fun
+                      </span>
+                    )}
+                  </div>
                   <p className="text-brand font-mono text-xs">
                     ${tokenInfo.priceUsd >= 1000
                       ? tokenInfo.priceUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })
@@ -544,6 +559,20 @@ export default function CreatePage() {
                 </div>
                 <button onClick={() => { setTokenQuery(""); setTokenInfo(null); }} className="text-muted hover:text-white text-xs">✕</button>
               </div>
+            )}
+            {tokenInfo && (
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isPumpFun}
+                  onChange={e => setIsPumpFun(e.target.checked)}
+                  className="w-4 h-4 rounded accent-orange-400"
+                />
+                <span className="text-sm text-white/70">This is a pump.fun token</span>
+                {tokenInfo.isPumpFun && isPumpFun && (
+                  <span className="text-[10px] text-orange-400/60">auto-detected</span>
+                )}
+              </label>
             )}
             <div className="flex justify-between pt-2">
               <button onClick={() => { setCategory(null); setStep(0); }}

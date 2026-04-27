@@ -54,6 +54,7 @@ export interface Round {
   twitterQuestion?: string | null;
   twitterPeriodHours?: number | null;
   questionType?: string | null;
+  isPumpFun?: boolean;
 }
 
 export interface Bet {

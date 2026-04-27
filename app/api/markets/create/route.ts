@@ -34,6 +34,8 @@ export async function POST(req: NextRequest) {
     questionType,
     // Separate betting duration (minutes) — when present, endsAt = now + betDuration + 5min
     betDuration,
+    // pump.fun token flag (auto-detected or manually set)
+    isPumpFun,
   } = body;
 
   const isTwitterMarket = !!twitterUsername;
@@ -143,6 +145,7 @@ export async function POST(req: NextRequest) {
         twitterQuestion:    twitterQuestion        || null,
         twitterPeriodHours: twitterPeriodHours     || null,
         questionType:       questionType           || null,
+        isPumpFun:          Boolean(isPumpFun),
       },
     }),
   ]);

@@ -54,15 +54,25 @@ const openRounds     = rounds.filter((r) => r.status !== "resolved" && !r.isCust
   const resolvedRounds = rounds.filter((r) => r.status === "resolved" && !r.isCustom).slice(0, 20);
   const customRounds   = rounds.filter((r) => r.isCustom && r.status !== "resolved");
 
-  const filtered =
-    category === "all" ? openRounds : openRounds.filter((r) => r.category === category);
+  const twitterRounds     = customRounds.filter((r) => r.twitterUsername);
+  const pumpfunCustom     = customRounds.filter((r) => r.isPumpFun);
+  const communityRounds   =
+    category === "twitter" ? customRounds.filter((r) => !r.twitterUsername) :
+    category === "pumpfun" ? customRounds.filter((r) => !r.isPumpFun) :
+    customRounds;
 
-  // Category counts reflect only open non-custom rounds
+  const filtered =
+    category === "all"     ? openRounds :
+    category === "twitter" ? twitterRounds :
+    category === "pumpfun" ? [...openRounds.filter((r) => r.category === "pumpfun"), ...pumpfunCustom] :
+    openRounds.filter((r) => r.category === category);
+
+  // Category counts: open non-custom rounds + custom twitter/pumpfun
   const counts = openRounds.reduce<Record<string, number>>((acc, r) => {
     acc[r.category] = (acc[r.category] ?? 0) + 1;
     acc["all"] = (acc["all"] ?? 0) + 1;
     return acc;
-  }, {});
+  }, { twitter: twitterRounds.length, pumpfun: pumpfunCustom.length });
 
   return (
     <div className="min-h-screen bg-base flex flex-col">
@@ -87,7 +97,7 @@ const openRounds     = rounds.filter((r) => r.status !== "resolved" && !r.isCust
           <div className="flex items-center justify-between mb-5">
             <div>
               <h1 className="text-white font-bold text-xl">
-                {category === "all" ? "All Markets" : category === "pumpfun" ? "pump.fun Markets" : "Crypto Markets"}
+                {category === "all" ? "All Markets" : category === "pumpfun" ? "pump.fun Markets" : category === "twitter" ? "Twitter / X Markets" : "Crypto Markets"}
               </h1>
               <p className="text-muted text-xs mt-0.5">
                 {filtered.length} open market{filtered.length !== 1 ? "s" : ""}
@@ -96,14 +106,14 @@ const openRounds     = rounds.filter((r) => r.status !== "resolved" && !r.isCust
 
             {/* Mobile category pills */}
             <div className="flex gap-2 lg:hidden">
-              {["all", "pumpfun", "crypto"].map((c) => (
+              {["all", "pumpfun", "crypto", "twitter"].map((c) => (
                 <button
                   key={c}
                   onClick={() => setCategory(c)}
                   className={`px-3 py-1 rounded-full text-xs font-medium transition-colors
                     ${category === c ? "bg-brand text-black" : "bg-surface-3 text-muted"}`}
                 >
-                  {c === "pumpfun" ? "🚀" : c === "crypto" ? "₿" : "All"}
+                  {c === "pumpfun" ? "🚀" : c === "crypto" ? "₿" : c === "twitter" ? "𝕏" : "All"}
                 </button>
               ))}
             </div>
@@ -124,7 +134,9 @@ const openRounds     = rounds.filter((r) => r.status !== "resolved" && !r.isCust
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filtered.map((round) =>
-                round.outcomes ? (
+                round.twitterUsername ? (
+                  <TwitterMarketCard key={round.id} round={round} />
+                ) : round.outcomes ? (
                   <RangeCard
                     key={round.id}
                     round={round}
@@ -144,18 +156,18 @@ const openRounds     = rounds.filter((r) => r.status !== "resolved" && !r.isCust
           )}
 
           {/* Community Markets */}
-          {customRounds.length > 0 && (
+          {communityRounds.length > 0 && (
             <div className="mt-8">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-purple-400" />
                   <h2 className="text-white font-semibold text-sm">Community Markets</h2>
-                  <span className="text-[10px] uppercase tracking-widest text-muted">{customRounds.length} open</span>
+                  <span className="text-[10px] uppercase tracking-widest text-muted">{communityRounds.length} open</span>
                 </div>
                 <a href="/create" className="text-xs text-brand hover:text-brand-dim transition-colors">+ Create yours →</a>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {customRounds.map((round) =>
+                {communityRounds.map((round) =>
                   round.twitterUsername ? (
                     <TwitterMarketCard key={round.id} round={round} />
                   ) : (

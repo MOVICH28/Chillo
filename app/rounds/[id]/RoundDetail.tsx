@@ -43,6 +43,7 @@ interface RoundData {
   tokenSymbol:     string | null;
   tokenLogo:       string | null;
   isCustom:        boolean;
+  isPumpFun:       boolean;
   customImage:     string | null;
   twitterUsername: string | null;
 }

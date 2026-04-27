@@ -29,6 +29,12 @@ async function fetchDexScreener(query: string, isAddress: boolean) {
   pairs.sort((a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0));
   const pair = pairs[0];
 
+  const isPumpFun =
+    pair.dexId === "pump_amm" ||
+    (pair.dexId ?? "").toLowerCase().includes("pump") ||
+    (pair.url ?? "").toLowerCase().includes("pump.fun") ||
+    (pair.labels ?? []).some((l: string) => l.toLowerCase().includes("pump"));
+
   return {
     name:          pair.baseToken?.name    ?? query,
     symbol:        pair.baseToken?.symbol  ?? query.toUpperCase(),
@@ -38,6 +44,7 @@ async function fetchDexScreener(query: string, isAddress: boolean) {
     volume24h:     pair.volume?.h24         ?? 0,
     logoUrl:       pair.info?.imageUrl      ?? null,
     address:       pair.baseToken?.address  ?? query,
+    isPumpFun,
   };
 }
 
@@ -74,6 +81,7 @@ export async function GET(req: NextRequest) {
       volume24h:     0,
       logoUrl:       known.logoUrl,
       address:       upper,
+      isPumpFun:     false,
     });
   }
 
