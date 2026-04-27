@@ -244,7 +244,9 @@ function ResolvedRangeCard({ round }: { round: Round }) {
           ) : round.targetToken && TOKEN_LOGOS[round.targetToken] ? (
             <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-8 h-8 rounded-full shrink-0" />
           ) : null}
-          <p className="text-white/80 text-sm font-medium leading-snug truncate">{round.question}</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-white/80 text-sm font-medium truncate whitespace-nowrap overflow-hidden">{round.question}</p>
+          </div>
         </div>
 
         {winning && (
@@ -368,7 +370,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
         </div>
 
         {/* Question — single line, truncated */}
-        <div className="flex items-center gap-2.5 mb-2.5 min-w-0">
+        <div className="flex items-center gap-2.5 mb-2.5 min-w-0 overflow-hidden">
           {round.twitterUsername && round.tokenLogo ? (
             <div className="flex flex-col items-center gap-0.5 shrink-0">
               <TwitterCardAvatar username={round.twitterUsername} logoUrl={round.tokenLogo} />
@@ -379,7 +381,9 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
           ) : round.targetToken && TOKEN_LOGOS[round.targetToken] ? (
             <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-8 h-8 rounded-full shrink-0" />
           ) : null}
-          <p className="text-white text-sm font-medium truncate">{round.question}</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-white text-sm font-medium truncate whitespace-nowrap overflow-hidden">{round.question}</p>
+          </div>
         </div>
 
         {/* Price / mcap info box */}

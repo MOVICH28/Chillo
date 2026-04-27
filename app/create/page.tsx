@@ -836,7 +836,7 @@ export default function CreatePage() {
             question={question} description={description} outcomes={outcomes}
             betDuration={betDuration} uploadedImage={uploadedImage}
             username={user.username} tokenInfo={tokenInfo}
-            cryptoQType={cryptoQType}
+            cryptoQType={cryptoQType} isPumpFun={isPumpFun}
             creating={creating} createError={createError}
             onBack={() => setStep(3)} onCreate={handleCreate}
           />
@@ -1033,16 +1033,15 @@ const QTYPE_LABELS: Record<string, string> = {
 
 function ReviewStep({
   question, description, outcomes, betDuration, uploadedImage, username, tokenInfo,
-  cryptoQType, creating, createError, onBack, onCreate,
+  cryptoQType, isPumpFun, creating, createError, onBack, onCreate,
 }: {
   question: string; description: string; outcomes: OutcomeInput[];
   betDuration: number; uploadedImage: string; username: string;
-  tokenInfo: TokenInfo | null; cryptoQType: CryptoQType;
+  tokenInfo: TokenInfo | null; cryptoQType: CryptoQType; isPumpFun: boolean;
   creating: boolean; createError: string; onBack: () => void; onCreate: () => void;
 }) {
   const tfLabel      = formatDuration(betDuration);
   const resultBuffer = betDuration <= 3 ? 2 : 5;
-  console.log("uploadedImage:", uploadedImage ? `${uploadedImage.slice(0, 40)}… (${uploadedImage.length} chars)` : "(empty)");
 
   return (
     <div className="space-y-4">
@@ -1053,9 +1052,12 @@ function ReviewStep({
             <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">Community</span>
             <span className="text-[10px] px-2 py-0.5 rounded border bg-white/5 text-white/40 border-white/10">{QTYPE_LABELS[cryptoQType]}</span>
             {tokenInfo && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 {tokenInfo.logoUrl && <img src={tokenInfo.logoUrl} alt={tokenInfo.symbol} className="w-4 h-4 rounded-full" />}
                 <span className="text-[10px] text-muted font-mono">{tokenInfo.symbol}</span>
+                {isPumpFun && (
+                  <span className="bg-orange-500/20 text-orange-400 border border-orange-500/30 text-[10px] px-2 py-0.5 rounded-full">pump.fun</span>
+                )}
               </div>
             )}
             <span className="ml-auto text-[10px] text-muted">{tfLabel} betting</span>
