@@ -97,6 +97,56 @@ async function fetchKlinesStream(
   } catch { return []; }
 }
 
+// ── GeckoTerminal historical OHLCV (free, no API key) ────────────────────────
+// Fetches 1m candles via pool address (from DexScreener pair.pairAddress).
+// Returns oldest-first; timestamps converted to ms. Returns [] on any error.
+async function fetchGeckoOHLCV(pairAddress: string, signal: AbortSignal): Promise<OHLCPoint[]> {
+  try {
+    const res = await fetch(
+      `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pairAddress}/ohlcv/minute?aggregate=1&limit=1000`,
+      { signal }
+    );
+    if (!res.ok) return [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const json: any = await res.json();
+    const list: number[][] = json?.data?.attributes?.ohlcv_list ?? [];
+    if (!list.length) return [];
+    // API returns newest-first — reverse for chronological order
+    return list.reverse().map(c => ({
+      time:   c[0] * 1000, // seconds → ms
+      open:   c[1],
+      high:   c[2],
+      low:    c[3],
+      price:  c[4], // close
+      volume: c[5],
+    }));
+  } catch { return []; }
+}
+
+// Resample 1m OHLCPoint candles into any larger period.
+// Preserves true OHLCV by merging consecutive candles that fall in the same bucket.
+function resampleCandles(candles: OHLCPoint[], targetMs: number): OHLCPoint[] {
+  if (!candles.length) return [];
+  if (targetMs <= 60_000) return candles; // already 1m — no resampling needed
+
+  const buckets = new Map<number, { o: number; h: number; l: number; c: number; v: number }>();
+  for (const c of candles) {
+    const key = Math.floor(c.time / targetMs) * targetMs;
+    const b   = buckets.get(key);
+    if (!b) {
+      buckets.set(key, { o: c.open ?? c.price, h: c.high ?? c.price, l: c.low ?? c.price, c: c.price, v: c.volume ?? 0 });
+    } else {
+      b.h = Math.max(b.h, c.high ?? c.price);
+      b.l = Math.min(b.l, c.low ?? c.price);
+      b.c = c.price; // close = last candle in period
+      b.v += c.volume ?? 0;
+    }
+  }
+  return Array.from(buckets.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([time, b]) => ({ time, price: b.c, open: b.o, high: b.h, low: b.l, volume: b.v }));
+}
+
 // ── LocalStorage persistence for custom token price history ──────────────────
 const LS_KEY         = (a: string) => `pumpdora_price_history_${a}`;
 const MAX_TICKS      = 500;
@@ -305,19 +355,33 @@ export function useTokenPrice(opts: {
       }
     }
 
-    // ── Mode C: DexScreener polling (2s) + localStorage history ──────────────
+    // ── Mode C: DexScreener polling (2s) + GeckoTerminal history + localStorage ─
     else if (tokenAddress) {
-      // Streaming timeframes (1s/5s/30s) → raw ticks for Live canvas, isKline: false
-      // Kline timeframes (1m+) → OHLCV candles for Line/Candles chart, isKline: true
+      // Streaming TFs (1s/5s/30s) → raw ticks for Live canvas, isKline: false
+      // Kline TFs (1m+)           → OHLCV candles for Line/Candles, isKline: true
       const isStreamingTF = !KLINE_INTERVAL[timeframe];
       const periodMs      = TIMEFRAME_PERIOD_MS[timeframe] ?? 60_000;
 
       // Load and prune persisted ticks (up to 24h old)
       const cutoff = Date.now() - HISTORY_TTL_MS;
-      let ticks: StoredTick[] = lsLoad(tokenAddress).filter(t => t.t >= cutoff);
-      let symbol = "TOKEN";
+      let ticks: StoredTick[]       = lsLoad(tokenAddress).filter(t => t.t >= cutoff);
+      let symbol                    = "TOKEN";
+      let historicalCandles: OHLCPoint[] = []; // GeckoTerminal 1m candles
+      let historicalFetched         = false;
 
-      // Bootstrap chart immediately from stored history
+      // Merge GeckoTerminal 1m history + live StoredTicks into OHLCV for any kline TF.
+      // GeckoTerminal provides true OHLCV; live ticks extend beyond the last historical candle.
+      // For showMcap: GeckoTerminal has no mcap data so skip it — live ticks only.
+      const buildKlineHistory = (): OHLCPoint[] => {
+        if (showMcap) return aggregateCandles(ticks, periodMs, true);
+        const resampled  = resampleCandles(historicalCandles, periodMs);
+        // Append live ticks that fall in periods AFTER the last historical period
+        const liveStart  = resampled.length ? resampled[resampled.length - 1].time + periodMs : 0;
+        const liveCandles = aggregateCandles(ticks.filter(t => t.t >= liveStart), periodMs, false);
+        return [...resampled, ...liveCandles];
+      };
+
+      // Bootstrap from localStorage immediately (before first poll)
       if (ticks.length) {
         const lastTick = ticks[ticks.length - 1];
         if (isStreamingTF) {
@@ -326,7 +390,7 @@ export function useTokenPrice(opts: {
             .filter(p => p.price > 0);
           if (raw.length) setState({ price: lastTick.p, history: raw, status: "connecting", label: "TOKEN/USD", isKline: false });
         } else {
-          const candles = aggregateCandles(ticks, periodMs, showMcap);
+          const candles = buildKlineHistory();
           if (candles.length) setState({ price: lastTick.p, history: candles, status: "connecting", label: showMcap ? "TOKEN MCap" : "TOKEN/USD", isKline: true });
         }
       }
@@ -351,7 +415,18 @@ export function useTokenPrice(opts: {
           if (!isFinite(price) || price <= 0) return;
           symbol = pair.baseToken?.symbol ?? "TOKEN";
 
-          // Append tick, prune to 24h + max 500
+          // First poll on a kline TF: kick off GeckoTerminal history fetch (fire-and-forget)
+          if (!historicalFetched && pair.pairAddress && !isStreamingTF && !showMcap) {
+            historicalFetched = true;
+            fetchGeckoOHLCV(pair.pairAddress as string, ac.signal).then(candles => {
+              if (cancelled || !candles.length) return;
+              historicalCandles = candles;
+              const merged = buildKlineHistory();
+              if (merged.length) setState(s => ({ ...s, history: merged, isKline: true }));
+            });
+          }
+
+          // Append tick, prune to 24h + max 500, persist
           ticks.push({ t: Date.now(), p: price, m: mcap });
           const cutoffNow = Date.now() - HISTORY_TTL_MS;
           ticks = ticks.filter(t => t.t >= cutoffNow);
@@ -361,7 +436,6 @@ export function useTokenPrice(opts: {
           const lbl = showMcap ? `${symbol} MCap` : `${symbol}/USD`;
 
           if (isStreamingTF) {
-            // Raw ticks for Live canvas — keep last 200
             const raw = ticks.slice(-MAX_STREAM_HISTORY)
               .map(t => ({ time: t.t, price: showMcap ? t.m : t.p }))
               .filter(p => p.price > 0);
@@ -373,8 +447,7 @@ export function useTokenPrice(opts: {
               isKline: false,
             });
           } else {
-            // OHLCV candles for Line/Candles chart
-            const candles = aggregateCandles(ticks, periodMs, showMcap);
+            const candles  = buildKlineHistory();
             const fallback = showMcap ? mcap : price;
             setState({
               price,
