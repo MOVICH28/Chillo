@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-me";
 const CREATION_FEE = 10;
-const MAX_MARKETS_PER_DAY = 2;
+const ADMIN_USERNAME = "pumpdora";
 
 function getPayload(req: NextRequest): { userId: string } | null {
   const auth = req.headers.get("authorization");
@@ -66,13 +66,14 @@ export async function POST(req: NextRequest) {
   if (user.doraBalance < CREATION_FEE)
     return NextResponse.json({ error: `Insufficient DORA (need ${CREATION_FEE})` }, { status: 400 });
 
-  // Rate limit: max 2 markets per 24h
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const recentCount = await prisma.round.count({
-    where: { creatorId: payload.userId, createdAt: { gte: since } },
+  // Rate limit: 20/day for admin, 2/day for everyone else
+  const dailyLimit = user.username === ADMIN_USERNAME ? 20 : 2;
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const marketsCreatedToday = await prisma.round.count({
+    where: { creatorId: user.id, createdAt: { gte: oneDayAgo } },
   });
-  if (recentCount >= MAX_MARKETS_PER_DAY)
-    return NextResponse.json({ error: "Max 2 markets per 24 hours" }, { status: 429 });
+  if (marketsCreatedToday >= dailyLimit)
+    return NextResponse.json({ error: `Daily limit reached. You can create ${dailyLimit} markets per day.` }, { status: 429 });
 
   // If tokenAddress given, look up token info
   let tokenSymbol: string | null = null;
