@@ -411,7 +411,14 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
     ? new Date() > new Date(round.bettingClosesAt)
     : round.status !== "open";
 
-  const hasToken = !!(round.targetToken || round.tokenAddress || round.tokenSymbol);
+  const hasToken      = !!(round.targetToken || round.tokenAddress || round.tokenSymbol);
+  const isCustomToken = !!round.tokenAddress && !round.targetToken;
+
+  // Streaming timeframes only make sense with Binance WebSocket (Live mode).
+  // For custom tokens in Line/Candles, hide 1s/5s/30s and default to 5m.
+  const availableTimeframes = isCustomToken && chartType !== "live"
+    ? TIMEFRAMES.filter(tf => !["1s", "5s", "30s"].includes(tf.key))
+    : TIMEFRAMES;
 
   const refreshRound = useCallback(async () => {
     try {
@@ -583,7 +590,13 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                         {(["live", "line", "candles"] as const).map(ct => (
                           <button
                             key={ct}
-                            onClick={() => setChartType(ct)}
+                            onClick={() => {
+                              setChartType(ct);
+                              // Custom tokens: snap to 5m when leaving Live mode with a streaming TF
+                              if (isCustomToken && ct !== "live" && ["1s", "5s", "30s"].includes(timeframe)) {
+                                setTimeframe("5m");
+                              }
+                            }}
                             className={`px-2.5 py-1 text-[11px] font-semibold transition-colors
                               ${chartType === ct
                                 ? "bg-white/10 text-white"
@@ -616,7 +629,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                           {tfOpen && (
                             <div className="absolute right-0 top-full mt-1 z-30 rounded-lg overflow-hidden py-1"
                                  style={{ background: "#0d0f14", border: "1px solid rgba(255,255,255,0.1)", minWidth: 68 }}>
-                              {TIMEFRAMES.map(tf => (
+                              {availableTimeframes.map(tf => (
                                 <button
                                   key={tf.key}
                                   onClick={() => {
