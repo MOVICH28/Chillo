@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Round, Outcome } from "@/lib/types";
 import { LiveData } from "@/lib/useLiveData";
 
@@ -314,13 +315,18 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
   if (round.status === "resolved") return <ResolvedRangeCard round={round} />;
 
   // Derived info-box values
-  const displayValue = isMcapQ && liveStats.mcap != null
-    ? liveStats.mcap
-    : liveStats.price;
-  const changeVal = liveStats.history.length >= 2
+  const hasTokenData  = !!(round.targetToken || round.tokenAddress);
+  const displayValue  = isMcapQ && liveStats.mcap != null ? liveStats.mcap : liveStats.price;
+  const changeVal     = liveStats.history.length >= 2
     ? (liveStats.history[liveStats.history.length - 1] - liveStats.history[0]) / liveStats.history[0] * 100
     : null;
-  const showInfoBox = isCrypto && displayValue != null && displayValue > 0;
+  const showInfoBox   = isCrypto && hasTokenData && displayValue != null && displayValue > 0;
+
+  // Footer values
+  const totalPool = round.realPool ?? 0;
+  const fmtPool   = totalPool >= 1_000
+    ? `${(totalPool / 1_000).toFixed(1)}K`
+    : totalPool.toFixed(totalPool === 0 ? 0 : 1);
 
   return (
     <div
@@ -381,14 +387,14 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
           </div>
         </div>
 
-        {/* Price / mcap info box */}
+        {/* Price / mcap info box — all crypto rounds with token data */}
         {showInfoBox && (
-          <div className="flex items-center justify-between px-3 py-2 bg-white/[0.03] rounded-lg mb-2 border border-white/5">
+          <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.03] rounded-lg mb-2 border border-white/5">
             <div>
-              <div className="text-[9px] text-white/30 uppercase tracking-wider mb-0.5">
-                {isMcapQ ? "Market Cap" : "Price"}
+              <div className="text-[8px] text-white/25 uppercase tracking-wider mb-0.5">
+                {isMcapQ ? "Mkt Cap" : "Price"}
               </div>
-              <div className="text-sm font-mono font-bold text-white leading-tight">
+              <div className="text-[13px] font-mono font-bold text-white leading-tight">
                 {isMcapQ && liveStats.mcap != null
                   ? fmtMcap(liveStats.mcap)
                   : liveStats.price != null
@@ -396,12 +402,12 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
                   : "—"}
               </div>
               {changeVal != null && (
-                <div className={`text-[10px] font-mono mt-0.5 ${changeVal >= 0 ? "text-green-400" : "text-red-400"}`}>
+                <div className={`text-[10px] font-mono ${changeVal >= 0 ? "text-green-400" : "text-red-400"}`}>
                   {changeVal >= 0 ? "+" : ""}{changeVal.toFixed(2)}%
                 </div>
               )}
             </div>
-            <MiniSparkline data={liveStats.history} width={80} height={32} />
+            <MiniSparkline data={liveStats.history} width={72} height={28} />
           </div>
         )}
 
@@ -439,17 +445,30 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
       </div>
 
       {/* Footer */}
-      <div className="px-4 pb-3 border-t border-surface-3/50 pt-2.5">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] text-muted">{outcomes.length} outcomes · LMSR</span>
-          {hasChart && (
-            <span className="flex items-center gap-1 text-[10px] text-brand">
-              View Chart
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </span>
-          )}
+      <div className="px-4 pb-3 border-t border-white/5 pt-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] text-white/40 font-mono">
+            {totalPool > 0 ? `Vol: ${fmtPool} DORA` : `${outcomes.length} outcomes`}
+          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            {hasChart && (
+              <span className="flex items-center gap-1 text-[10px] text-brand">
+                Chart
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </span>
+            )}
+            {round.creatorUsername && (
+              <Link
+                href={`/profile/${round.creatorUsername}`}
+                onClick={e => e.stopPropagation()}
+                className="text-[10px] text-white/30 hover:text-white/60 transition-colors"
+              >
+                by @{round.creatorUsername}
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     </div>
