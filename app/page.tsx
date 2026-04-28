@@ -28,6 +28,7 @@ export default function Home() {
   const [category, setCategory] = useState("all");
   const [betTarget, setBetTarget] = useState<{ round: Round; side: string; outcome?: Outcome } | null>(null);
   const [completedOpen, setCompletedOpen] = useState(false);
+  const [sort, setSort] = useState<"new" | "volume">("new");
   const { data: liveData } = useLiveData();
 
   const fetchRounds = useCallback(async () => {
@@ -51,7 +52,11 @@ export default function Home() {
 
   const allOpenRounds  = rounds
     .filter((r) => r.status !== "resolved")
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    .sort((a, b) =>
+      sort === "volume"
+        ? (b.totalVolume ?? 0) - (a.totalVolume ?? 0)
+        : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   const resolvedRounds = rounds
     .filter((r) => r.status === "resolved")
     .sort((a, b) => new Date(b.resolvedAt ?? b.createdAt).getTime() - new Date(a.resolvedAt ?? a.createdAt).getTime())
@@ -102,18 +107,34 @@ export default function Home() {
               </p>
             </div>
 
-            {/* Mobile category pills */}
-            <div className="flex gap-2 lg:hidden">
-              {["all", "pumpfun", "crypto", "twitter"].map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setCategory(c)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors
-                    ${category === c ? "bg-brand text-black" : "bg-surface-3 text-muted"}`}
-                >
-                  {c === "pumpfun" ? "🚀" : c === "crypto" ? "₿" : c === "twitter" ? "𝕏" : "All"}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              {/* Sort buttons (desktop) */}
+              <div className="hidden lg:flex items-center gap-0.5 bg-surface-3/40 rounded-lg p-0.5">
+                {(["new", "volume"] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setSort(s)}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors
+                      ${sort === s ? "bg-surface text-white" : "text-muted hover:text-white/70"}`}
+                  >
+                    {s === "new" ? "New" : "Volume"}
+                  </button>
+                ))}
+              </div>
+
+              {/* Mobile category pills */}
+              <div className="flex gap-2 lg:hidden">
+                {["all", "pumpfun", "crypto", "twitter"].map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setCategory(c)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors
+                      ${category === c ? "bg-brand text-black" : "bg-surface-3 text-muted"}`}
+                  >
+                    {c === "pumpfun" ? "🚀" : c === "crypto" ? "₿" : c === "twitter" ? "𝕏" : "All"}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

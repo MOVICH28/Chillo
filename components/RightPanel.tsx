@@ -51,7 +51,7 @@ function avatarColor(username: string): string {
 }
 
 export default function RightPanel({ rounds }: RightPanelProps) {
-  const totalVolume = rounds.reduce((s, r) => s + (r.totalVolume ?? 0), 0);
+  const totalVolume = rounds.filter(r => r.status === "open").reduce((s, r) => s + (r.totalVolume ?? 0), 0);
   const openRounds  = rounds.filter((r) => r.status === "open").length;
 
   const [liveBets, setLiveBets] = useState<LiveBet[]>([]);

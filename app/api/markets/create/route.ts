@@ -108,6 +108,8 @@ export async function POST(req: NextRequest) {
   // Initialise LMSR shares to 0 for each outcome
   const sharesInit = Object.fromEntries(outcomes.map((o: { id: string }) => [o.id, 0]));
 
+  const totalRounds = await prisma.round.count();
+
   const [, round] = await prisma.$transaction([
     prisma.user.update({
       where: { id: payload.userId },
@@ -118,6 +120,7 @@ export async function POST(req: NextRequest) {
     }),
     prisma.round.create({
       data: {
+        roundNumber:       totalRounds + 1,
         question:          question.trim(),
         category:          isTwitterMarket ? "twitter" : "custom",
         status:            "open",

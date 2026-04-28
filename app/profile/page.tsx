@@ -28,7 +28,7 @@ interface BetWithRound {
   payout: number | null;
   paid: boolean;
   currency: string;
-  round: { question: string; status: string; winningOutcome: string | null; outcomes: { id: string; label: string }[] | null } | null;
+  round: { question: string; status: string; winningOutcome: string | null; outcomes: { id: string; label: string }[] | null; roundNumber?: number | null } | null;
 }
 
 
@@ -200,8 +200,8 @@ export default function ProfilePage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="text-[10px] uppercase tracking-widest text-muted border-b border-surface-3">
-                <th className="text-left px-3 py-2">Date</th>
-                <th className="text-left px-3 py-2">Market</th>
+                <th className="text-left px-3 py-2 whitespace-nowrap">Date</th>
+                <th className="text-left px-3 py-2 w-full">Market</th>
                 <th className="text-center px-3 py-2">Outcome</th>
                 <th className="text-right px-3 py-2">Stake</th>
                 <th className="text-center px-3 py-2">Result</th>
@@ -223,8 +223,16 @@ export default function ProfilePage() {
                     <td className="px-3 py-2.5 text-muted whitespace-nowrap text-[11px]">
                       {new Date(b.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                     </td>
-                    <td className="px-3 py-2.5 text-white/60 max-w-[180px] truncate">
-                      {b.round?.question ?? b.roundId}
+                    <td className="px-3 py-2.5 max-w-0 w-full">
+                      <div
+                        className="truncate text-white/60 text-xs"
+                        title={b.round?.question ?? b.roundId}
+                      >
+                        {b.round?.roundNumber != null && (
+                          <span className="text-muted font-mono mr-1">#{b.round.roundNumber} ·</span>
+                        )}
+                        {b.round?.question ?? b.roundId}
+                      </div>
                     </td>
                     <td className="px-3 py-2.5 text-center font-bold text-white/80 font-mono">{b.side}</td>
                     <td className="px-3 py-2.5 text-right font-mono text-white/80">{b.amount.toFixed(2)}</td>
