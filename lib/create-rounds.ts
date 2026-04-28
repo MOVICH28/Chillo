@@ -4,7 +4,7 @@ import { Outcome } from "@/lib/types";
 
 const ROUND_DURATION_MS            = 15 * 60 * 1000; // 15 min total
 const BETTING_CLOSES_BEFORE_END_MS =  5 * 60 * 1000; // betting closes at +10 min (5 min before end)
-const ROUND_CREATION_INTERVAL_MS   = 10 * 60 * 1000; // new round every 10 min
+const ROUND_CREATION_INTERVAL_MS   = 10 * 24 * 60 * 60 * 1000; // 10 days
 
 async function fetchCryptoPrices(): Promise<{ btc: number; sol: number } | null> {
   try {
