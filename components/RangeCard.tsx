@@ -477,9 +477,9 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
               <Link
                 href={`/profile/${round.creatorUsername}`}
                 onClick={e => e.stopPropagation()}
-                className="flex items-center gap-1.5 text-xs hover:opacity-80 transition-opacity"
+                className="flex items-center gap-1 text-xs hover:opacity-80 transition-opacity"
               >
-                <span className="text-white/40">Created market:</span>
+                <span className="text-white/40 mr-1">Created market:</span>
                 {round.creatorAvatarUrl ? (
                   <img src={round.creatorAvatarUrl} alt="" className="w-5 h-5 rounded-full object-cover" />
                 ) : (
@@ -487,7 +487,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
                     {round.creatorUsername[0].toUpperCase()}
                   </div>
                 )}
-                <span className="text-white font-medium">{round.creatorUsername}</span>
+                <span className="text-white font-medium ml-1">{round.creatorUsername}</span>
               </Link>
             )}
           </div>

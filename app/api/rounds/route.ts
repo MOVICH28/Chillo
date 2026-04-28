@@ -35,6 +35,7 @@ export async function GET() {
     const volumeMap = Object.fromEntries(
       volumeByRound.map((v) => [v.roundId, v._sum.totalCost ?? 0])
     );
+    console.log("[rounds] volumeMap entries:", volumeByRound.length, "sample:", JSON.stringify(volumeByRound.slice(0, 3)));
 
     const poolMap = new Map(pools.map((p) => [p.roundId, p]));
 

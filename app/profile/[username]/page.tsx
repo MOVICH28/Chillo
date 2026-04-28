@@ -29,6 +29,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
       doraBalance: true,
       avatarUrl: true,
       createdAt: true,
+      _count: { select: { followers: true, following: true } },
       bets: {
         where: { currency: "DORA" },
         orderBy: { createdAt: "desc" },
@@ -42,6 +43,8 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
   });
 
   if (!user) notFound();
+
+  const createdMarketsCount = await prisma.round.count({ where: { creatorId: user.id } });
 
   // Fetch rounds for the bets
   const roundIds = Array.from(new Set(user.bets.map(b => b.roundId)));
@@ -99,7 +102,12 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
                 <span className="text-white font-bold text-xl">{user.username}</span>
                 <span className="px-1.5 py-0.5 rounded text-[10px] bg-brand/10 border border-brand/20 text-brand font-medium">DORA</span>
               </div>
-              <p className="text-muted text-xs">Member since {joinDate}</p>
+              <p className="text-muted text-xs mb-1.5">Member since {joinDate}</p>
+              <p className="text-sm text-white/60">
+                <span className="text-white font-semibold">{user._count.followers}</span> followers
+                <span className="text-white/20 mx-1.5">·</span>
+                <span className="text-white font-semibold">{user._count.following}</span> following
+              </p>
             </div>
             <div className="shrink-0 text-right flex flex-col items-end gap-3">
               <div>
@@ -120,12 +128,13 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
           {[
-            { label: "Total Bets",    value: bets.length.toString() },
-            { label: "Total Wagered", value: `${wagered.toFixed(0)} DORA` },
-            { label: "Wins / Losses", value: `${wins.length} / ${resolved.length - wins.length}` },
-            { label: "Win Rate",      value: `${winRate}%` },
+            { label: "Total Bets",       value: bets.length.toString() },
+            { label: "Total Wagered",    value: `${wagered.toFixed(0)} DORA` },
+            { label: "Wins / Losses",    value: `${wins.length} / ${resolved.length - wins.length}` },
+            { label: "Win Rate",         value: `${winRate}%` },
+            { label: "Created Markets",  value: createdMarketsCount.toString() },
           ].map(({ label, value }) => (
             <div key={label} className="bg-surface border border-surface-3 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-widest text-muted mb-1">{label}</p>

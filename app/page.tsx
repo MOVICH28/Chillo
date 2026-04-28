@@ -60,9 +60,8 @@ export default function Home() {
 
   const isCryptoRound = (r: Round) =>
     !r.twitterUsername &&
-    !r.isPumpFun &&
-    r.category !== "pumpfun" &&
-    (r.category === "crypto" || r.category === "custom" || !!r.targetToken || !!r.tokenAddress);
+    (r.category === "crypto" || r.category === "custom" || r.isPumpFun || r.category === "pumpfun" ||
+      !!r.targetToken || !!r.tokenAddress || !!r.tokenSymbol);
 
   const filtered =
     category === "all"     ? allOpenRounds :
