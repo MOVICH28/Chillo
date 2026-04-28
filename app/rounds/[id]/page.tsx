@@ -62,6 +62,8 @@ export default async function RoundDetailPage({ params }: PageProps) {
     twitterUsername:   round.twitterUsername   ?? null,
     creatorUsername:   round.creator?.username  ?? null,
     creatorAvatarUrl:  round.creator?.avatarUrl ?? null,
+    description:       round.description        ?? null,
+    twitterUrl:        round.twitterUrl         ?? null,
   };
 
   return (

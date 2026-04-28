@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Avatar from "@/components/Avatar";
+import Sidebar from "@/components/Sidebar";
 import LMSRBetPanel from "@/components/LMSRBetPanel";
 import { getAllPrices } from "@/lib/lmsr";
 import dynamic from "next/dynamic";
@@ -50,6 +51,8 @@ interface RoundData {
   creatorUsername:  string | null;
   creatorAvatarUrl: string | null;
   totalVolume?:     number;
+  description:      string | null;
+  twitterUrl:       string | null;
 }
 
 interface RecentTrade {
@@ -389,6 +392,7 @@ function CommentsSection({ roundId }: { roundId: string }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function RoundDetail({ initialRound }: { initialRound: RoundData }) {
+  const router          = useRouter();
   const searchParams    = useSearchParams();
   const initialOutcome  = searchParams.get("outcome");
   const betPanelRef     = useRef<HTMLDivElement>(null);
@@ -472,14 +476,16 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
     : null;
 
   return (
-    <div className="min-h-screen bg-base text-white pt-16">
-      <div className="max-w-6xl mx-auto px-4 py-6">
+    <div className="min-h-screen bg-base text-white">
+      <div className="flex flex-row gap-6 max-w-[1400px] mx-auto w-full px-4 mt-14">
 
-        {/* Two-column layout */}
-        <div className="flex flex-col lg:flex-row gap-6">
+        {/* Left Sidebar */}
+        <div className="hidden lg:block w-64 shrink-0 overflow-y-auto py-6 no-scrollbar sticky top-14 self-start">
+          <Sidebar active={round.category} onSelect={() => router.push("/")} counts={{}} />
+        </div>
 
-          {/* ── LEFT column (60%) ── */}
-          <div className="lg:w-[60%]">
+        {/* Main content */}
+        <main className="flex-1 min-w-0 py-6">
 
             {/* Question + status badges */}
             <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -495,6 +501,19 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-gradient-to-r from-orange-500/10 to-green-500/10 text-orange-400 border-orange-500/20">
                   pump.fun
                 </span>
+              )}
+              {round.twitterUrl && (
+                <a
+                  href={round.twitterUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border bg-[#1d9bf0]/10 text-[#1d9bf0] border-[#1d9bf0]/20 hover:bg-[#1d9bf0]/20 transition-colors"
+                >
+                  <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.253 5.622 5.91-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                  View on X
+                </a>
               )}
               {round.status === "resolved" ? (
                 <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-white/5 text-white/30 border-white/10">
@@ -727,64 +746,85 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
               </div>
             ) : null}
 
-          </div>
-
-          {/* ── RIGHT column (40%) ── */}
-          <div className="lg:w-[40%] flex flex-col gap-4">
-            {/* LMSR Bet Panel */}
-            {outcomes.length > 0 && (
-              <div ref={betPanelRef}>
-                <LMSRBetPanel
-                  roundId={round.id}
-                  outcomes={outcomes}
-                  lmsrB={round.lmsrB}
-                  initialShares={round.shares ?? {}}
-                  bettingClosed={bettingClosed}
-                  roundStatus={round.status}
-                  winningOutcome={round.winningOutcome}
-                  initialOutcome={initialOutcome}
-                  onTradeSuccess={refreshRound}
-                />
+            {/* Description */}
+            {round.description && (
+              <div className="mt-4 p-4 rounded-xl bg-white/[0.03] border border-white/5">
+                <p className="text-[10px] uppercase tracking-widest text-white/30 mb-2">Description</p>
+                <p className="text-sm text-white/70 leading-relaxed">{round.description}</p>
               </div>
             )}
-          </div>
-        </div>
 
-        {/* ── Discussion / Activity tabs (full width) ── */}
-        <div className="mt-6 bg-white/[0.02] rounded-xl border border-white/5 overflow-hidden">
-          {/* Tab switcher */}
-          <div className="flex border-b border-white/5">
-            {(["discussion", "activity"] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`flex-1 px-4 py-3 text-sm font-semibold transition-colors
-                  ${activeTab === tab
-                    ? "text-white border-b-2 border-brand -mb-px"
-                    : "text-white/30 hover:text-white/60"}`}
-              >
-                {tab === "discussion" ? "Discussion" : `Activity${recentTrades.length > 0 ? ` (${recentTrades.length})` : ""}`}
-              </button>
-            ))}
+          {/* ── Discussion / Activity tabs ── */}
+          <div className="mt-6 bg-white/[0.02] rounded-xl border border-white/5 overflow-hidden">
+            <div className="flex border-b border-white/5">
+              {(["discussion", "activity"] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex-1 px-4 py-3 text-sm font-semibold transition-colors
+                    ${activeTab === tab
+                      ? "text-white border-b-2 border-brand -mb-px"
+                      : "text-white/30 hover:text-white/60"}`}
+                >
+                  {tab === "discussion" ? "Discussion" : `Activity${recentTrades.length > 0 ? ` (${recentTrades.length})` : ""}`}
+                </button>
+              ))}
+            </div>
+            <div className="p-4">
+              {activeTab === "discussion" ? (
+                <CommentsSection roundId={round.id} />
+              ) : (
+                <ActivityTab recentTrades={recentTrades} />
+              )}
+            </div>
           </div>
 
-          <div className="p-4">
-            {activeTab === "discussion" ? (
-              <CommentsSection roundId={round.id} />
-            ) : (
-              <ActivityTab recentTrades={recentTrades} />
-            )}
-          </div>
-        </div>
+          {/* Bet panel — mobile/tablet (shown when right column is hidden) */}
+          {outcomes.length > 0 && (
+            <div className="mt-6 lg:hidden" ref={betPanelRef}>
+              <LMSRBetPanel
+                roundId={round.id}
+                outcomes={outcomes}
+                lmsrB={round.lmsrB}
+                initialShares={round.shares ?? {}}
+                bettingClosed={bettingClosed}
+                roundStatus={round.status}
+                winningOutcome={round.winningOutcome}
+                initialOutcome={initialOutcome}
+                onTradeSuccess={refreshRound}
+              />
+            </div>
+          )}
 
-        {/* Back to Markets */}
-        <div className="mt-6 pb-2">
-          <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-white/30 hover:text-white/70 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to Markets
-          </Link>
+          {/* Back to Markets */}
+          <div className="mt-6 pb-6">
+            <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-white/30 hover:text-white/70 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to Markets
+            </Link>
+          </div>
+
+        </main>
+
+        {/* Right column: Bet Panel (desktop) */}
+        <div className="hidden lg:block w-80 shrink-0 py-6 sticky top-14 self-start">
+          {outcomes.length > 0 && (
+            <div ref={betPanelRef}>
+              <LMSRBetPanel
+                roundId={round.id}
+                outcomes={outcomes}
+                lmsrB={round.lmsrB}
+                initialShares={round.shares ?? {}}
+                bettingClosed={bettingClosed}
+                roundStatus={round.status}
+                winningOutcome={round.winningOutcome}
+                initialOutcome={initialOutcome}
+                onTradeSuccess={refreshRound}
+              />
+            </div>
+          )}
         </div>
 
       </div>
