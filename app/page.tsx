@@ -58,17 +58,24 @@ export default function Home() {
     .sort((a, b) => new Date(b.resolvedAt ?? b.createdAt).getTime() - new Date(a.resolvedAt ?? a.createdAt).getTime())
     .slice(0, 20);
 
+  const isCryptoRound = (r: Round) =>
+    !r.twitterUsername &&
+    !r.isPumpFun &&
+    r.category !== "pumpfun" &&
+    (r.category === "crypto" || r.category === "custom" || !!r.targetToken || !!r.tokenAddress);
+
   const filtered =
     category === "all"     ? allOpenRounds :
     category === "twitter" ? allOpenRounds.filter((r) => r.twitterUsername) :
     category === "pumpfun" ? allOpenRounds.filter((r) => r.isPumpFun || r.category === "pumpfun") :
+    category === "crypto"  ? allOpenRounds.filter(isCryptoRound) :
     allOpenRounds.filter((r) => r.category === category);
 
   const counts = allOpenRounds.reduce<Record<string, number>>((acc, r) => {
     acc["all"] = (acc["all"] ?? 0) + 1;
     if (r.twitterUsername) acc["twitter"] = (acc["twitter"] ?? 0) + 1;
     if (r.isPumpFun || r.category === "pumpfun") acc["pumpfun"] = (acc["pumpfun"] ?? 0) + 1;
-    if (r.category === "crypto") acc["crypto"] = (acc["crypto"] ?? 0) + 1;
+    if (isCryptoRound(r)) acc["crypto"] = (acc["crypto"] ?? 0) + 1;
     return acc;
   }, {});
 

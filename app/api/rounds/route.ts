@@ -22,14 +22,19 @@ function computeOdds(yesPool: number, noPool: number, totalPool: number) {
 
 export async function GET() {
   try {
-    const [rounds, pools] = await Promise.all([
+    const [rounds, pools, volumeByRound] = await Promise.all([
       prisma.round.findMany({
         where: { status: { in: ["open", "closed", "resolved"] } },
         orderBy: { createdAt: "desc" },
         include: { creator: { select: { username: true, avatarUrl: true } } },
       }),
       prisma.roundPool.findMany(),
+      prisma.trade.groupBy({ by: ["roundId"], _sum: { totalCost: true } }),
     ]);
+
+    const volumeMap = Object.fromEntries(
+      volumeByRound.map((v) => [v.roundId, v._sum.totalCost ?? 0])
+    );
 
     const poolMap = new Map(pools.map((p) => [p.roundId, p]));
 
@@ -62,6 +67,7 @@ export async function GET() {
         outcomes,
         creatorUsername:  round.creator?.username  ?? null,
         creatorAvatarUrl: round.creator?.avatarUrl ?? null,
+        totalVolume: volumeMap[round.id] ?? 0,
         creator: undefined,
         ...computeOdds(yp, np, tp),
         bets: [],

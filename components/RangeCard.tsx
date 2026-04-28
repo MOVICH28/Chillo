@@ -329,12 +329,12 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
   const showInfoBox   = isCrypto && hasTokenData;
 
   // Footer values
-  const totalPool = round.totalPool ?? 0;
-  const fmtPool   = totalPool >= 1_000_000
-    ? `${(totalPool / 1_000_000).toFixed(2)}M`
-    : totalPool >= 1_000
-    ? `${(totalPool / 1_000).toFixed(1)}K`
-    : totalPool.toFixed(totalPool === 0 ? 0 : 1);
+  const totalVolume = round.totalVolume ?? 0;
+  const fmtPool   = totalVolume >= 1_000_000
+    ? `${(totalVolume / 1_000_000).toFixed(2)}M`
+    : totalVolume >= 1_000
+    ? `${(totalVolume / 1_000).toFixed(1)}K`
+    : totalVolume.toFixed(totalVolume === 0 ? 0 : 1);
 
   return (
     <div
@@ -461,7 +461,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
       {/* Footer */}
       <div className="px-4 pb-3 border-t border-white/5 pt-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-white/70 font-mono">
+          <span className="text-xs text-white font-mono">
             Vol: {fmtPool} DORA
           </span>
           <div className="flex items-center gap-2 shrink-0">
@@ -477,16 +477,17 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
               <Link
                 href={`/profile/${round.creatorUsername}`}
                 onClick={e => e.stopPropagation()}
-                className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors"
+                className="flex items-center gap-1.5 text-xs hover:opacity-80 transition-opacity"
               >
+                <span className="text-white/40">Created market:</span>
                 {round.creatorAvatarUrl ? (
-                  <img src={round.creatorAvatarUrl} alt="" className="w-[18px] h-[18px] rounded-full object-cover" />
+                  <img src={round.creatorAvatarUrl} alt="" className="w-5 h-5 rounded-full object-cover" />
                 ) : (
-                  <div className="w-[18px] h-[18px] rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold text-white/50">
+                  <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold text-white/50">
                     {round.creatorUsername[0].toUpperCase()}
                   </div>
                 )}
-                @{round.creatorUsername}
+                <span className="text-white font-medium">{round.creatorUsername}</span>
               </Link>
             )}
           </div>

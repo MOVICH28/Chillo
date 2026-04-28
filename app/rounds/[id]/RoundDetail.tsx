@@ -542,30 +542,31 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
             </div>
 
             {/* Creator + volume row */}
-            {(round.creatorUsername || (round.totalVolume ?? round.totalPool) > 0) && (
+            {(round.creatorUsername || round.totalVolume !== undefined) && (
               <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-white/60">
                 {round.creatorUsername && (
-                  <Link href={`/profile/${round.creatorUsername}`} className="flex items-center gap-2 hover:text-white transition-colors">
+                  <Link href={`/profile/${round.creatorUsername}`} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                    <span className="text-white/40">Created market:</span>
                     {round.creatorAvatarUrl ? (
-                      <img src={round.creatorAvatarUrl} alt="" className="w-7 h-7 rounded-full object-cover" />
+                      <img src={round.creatorAvatarUrl} alt="" className="w-5 h-5 rounded-full object-cover" />
                     ) : (
-                      <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white/60">
+                      <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white/50">
                         {round.creatorUsername[0].toUpperCase()}
                       </div>
                     )}
-                    Created by <span className="text-white font-medium">@{round.creatorUsername}</span>
+                    <span className="text-white font-medium">{round.creatorUsername}</span>
                   </Link>
                 )}
-                {round.creatorUsername && (round.totalVolume ?? round.totalPool) > 0 && (
+                {round.creatorUsername && (
                   <span className="text-white/20">·</span>
                 )}
-                {(round.totalVolume ?? round.totalPool) > 0 && (() => {
-                  const v = round.totalVolume ?? round.totalPool;
+                {(() => {
+                  const v = round.totalVolume ?? 0;
                   return (
                     <span>
-                      Volume:{" "}
+                      <span className="text-white/40">Vol:</span>{" "}
                       <span className="text-white font-mono font-medium">
-                        {v >= 1_000_000 ? `${(v / 1_000_000).toFixed(2)}M` : v >= 1_000 ? `${(v / 1_000).toFixed(1)}K` : v.toFixed(1)} DORA
+                        {v >= 1_000_000 ? `${(v / 1_000_000).toFixed(2)}M` : v >= 1_000 ? `${(v / 1_000).toFixed(1)}K` : v.toFixed(v === 0 ? 0 : 1)} DORA
                       </span>
                     </span>
                   );
