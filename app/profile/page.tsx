@@ -4,10 +4,13 @@ export const dynamic = "force-dynamic";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/useAuth";
 import Navbar from "@/components/Navbar";
 import AuthModal from "@/components/AuthModal";
 import Avatar from "@/components/Avatar";
+import Sidebar from "@/components/Sidebar";
+import RightPanel from "@/components/RightPanel";
 
 import {
   PieChart, Pie, Cell,
@@ -60,6 +63,7 @@ function PieTooltip({ active, payload, bets }: any) {
 
 export default function ProfilePage() {
   const { user, getToken, refreshUser } = useAuth();
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [doraBets, setDoraBets] = useState<BetWithRound[]>([]);
@@ -321,12 +325,23 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-base pt-16">
       <Navbar rounds={[]} />
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="flex flex-row gap-6 max-w-[1400px] mx-auto w-full px-4">
 
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-white font-bold text-2xl">Profile</h1>
-          <Link href="/" className="text-muted text-sm hover:text-white transition-colors">← Markets</Link>
+        {/* Left sidebar */}
+        <div className="hidden lg:flex flex-col gap-4 w-72 shrink-0 overflow-y-auto py-6 no-scrollbar sticky top-16 self-start max-h-[calc(100vh-64px)]">
+          <Sidebar active="all" onSelect={(cat) => router.push(`/?cat=${cat}`)} counts={{}} />
+          <RightPanel rounds={[]} />
         </div>
+
+        {/* Main content */}
+        <main className="flex-1 min-w-0 py-6">
+
+        {/* Back arrow */}
+        <Link href="/" className="flex items-center text-white/40 hover:text-white/70 transition-colors mb-6 w-fit">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </Link>
 
         {/* ── DORA user card ──────────────────────────────────────────── */}
         {user && (() => {
@@ -415,6 +430,7 @@ export default function ProfilePage() {
           );
         })()}
 
+        </main>
       </div>
     </div>
   );
