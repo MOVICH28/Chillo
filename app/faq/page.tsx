@@ -17,96 +17,169 @@ interface FAQSection {
 
 const FAQ_SECTIONS: FAQSection[] = [
   {
-    title: "How It Works",
-    icon: "💡",
+    title: "What is Pumpdora?",
+    icon: "🎯",
     items: [
       {
         question: "What is Pumpdora?",
         answer:
-          "Pumpdora is a prediction platform where you predict the price of BTC or SOL in the next 15 minutes using DORA virtual currency. Pick the right price range — win a share of the prize pool!",
+          "Pumpdora is a virtual prediction market platform for testing trading strategies. You predict outcomes of crypto price movements, Twitter account activity, and custom events using DORA — a virtual currency. Everything is simulated: no real money, no real crypto wallets required.",
       },
       {
-        question: "How does a round work?",
-        answer: (
-          <ol className="list-decimal list-inside space-y-1.5 text-muted">
-            <li>A new round opens every 10 minutes</li>
-            <li>You see 6 price ranges — pick where you think the price will be in 15 minutes</li>
-            <li>You have 10 minutes to place your bet</li>
-            <li>After 15 minutes the result is announced using the live Binance price</li>
-            <li>Winners split the prize pool proportionally to their bet size</li>
-          </ol>
-        ),
-      },
-      {
-        question: "Are there two separate rounds — BTC and SOL?",
-        answer:
-          "Yes! There is always one active BTC round and one active SOL price round running simultaneously. You can bet on both at the same time.",
-      },
-      {
-        question: "How are results determined?",
-        answer:
-          "We use the real-time price from Binance at the exact moment the round ends. Whichever of the 6 price ranges contains that price is the winner.",
-      },
-    ],
-  },
-  {
-    title: "Payouts & Fees",
-    icon: "💸",
-    items: [
-      {
-        question: "How much can I win?",
+        question: "What is DORA?",
         answer: (
           <div className="space-y-2 text-muted">
-            <p>Your winnings depend on two things: how many people bet on the same range as you, and how much total DORA was bet on losing ranges. Here is how it works — all bets from losing ranges go into the prize pool and get distributed to winners. If you bet on the correct range, you receive your original bet back plus a share of the losers pool proportional to your stake.</p>
-            <p><span className="text-white font-semibold">Example:</span> total pool is 100 DORA, winning range collected 20 DORA, you bet 10 DORA on the winning range — you get (10/20) × 95 DORA = <span className="text-brand font-semibold">47.5 DORA</span>.</p>
-            <p>The fewer people on your range and the more people on wrong ranges, the bigger your reward.</p>
+            <p>DORA is the virtual currency used on Pumpdora. It has no real monetary value — it exists purely to simulate trading on prediction markets.</p>
+            <p>Every new account receives <span className="text-brand font-semibold">1000 DORA for free</span> on registration. You can use it to trade, create markets, and climb the leaderboard.</p>
           </div>
         ),
       },
       {
-        question: "What is the platform fee?",
+        question: "Is real money involved?",
         answer:
-          "Pumpdora takes 5% from each round's pool. 95% goes to winners.",
+          "No. Pumpdora is a testnet/simulation platform. DORA is not real money and cannot be withdrawn or converted. The platform runs on Solana devnet — all transactions are simulated. Think of it as a trading simulator.",
       },
-      {
-        question: "When do I receive my winnings?",
-        answer:
-          "Winnings are added to your DORA balance automatically right after the round resolves — usually within seconds. You can track your bet status in your Profile page.",
-      },
-    ],
-  },
-  {
-    title: "Betting Rules",
-    icon: "🎯",
-    items: [
-      {
-        question: "What is the minimum bet?",
-        answer: "The minimum bet is 1 DORA.",
-      },
-      {
-        question: "Can I bet on multiple ranges in one round?",
-        answer:
-          "Yes! You can bet on as many ranges as you want in a single round. You can also place multiple bets on the same range to increase your stake. The more you bet on the correct range, the bigger your share of the prize pool.",
-      },
-    ],
-  },
-  {
-    title: "Account & Security",
-    icon: "🔐",
-    items: [
       {
         question: "How do I get started?",
         answer: (
           <div className="space-y-2 text-muted">
-            <p>Simply click <span className="text-white font-semibold">Login / Register</span> in the top right. Create a free account with a username, email, and password.</p>
-            <p>You start with <span className="text-brand font-semibold">1000 DORA</span> virtual currency — no real money, no wallet needed.</p>
+            <p>Click <span className="text-white font-semibold">Login / Register</span> in the top right. You can register with an email, username, and password — or use Google login.</p>
+            <p>You instantly receive <span className="text-brand font-semibold">1000 DORA</span> to start trading. No wallet setup, no credit card needed.</p>
+          </div>
+        ),
+      },
+    ],
+  },
+  {
+    title: "How LMSR Trading Works",
+    icon: "📈",
+    items: [
+      {
+        question: "What is LMSR?",
+        answer: (
+          <div className="space-y-2 text-muted">
+            <p>LMSR (Logarithmic Market Scoring Rule) is an automated market maker used in prediction markets. Unlike traditional betting where you split a fixed pool, LMSR uses a mathematical formula to continuously price outcome shares.</p>
+            <p>This means you can <span className="text-white">buy and sell shares at any time</span> before betting closes — not just at the start. Prices adjust dynamically with demand.</p>
           </div>
         ),
       },
       {
-        question: "Is it safe?",
+        question: "How do I trade?",
+        answer: (
+          <ol className="list-decimal list-inside space-y-1.5 text-muted">
+            <li>Open any market and pick an outcome (A, B, C…)</li>
+            <li>Enter a DORA amount and click Buy — you receive shares at the current price</li>
+            <li>If your outcome wins, each share pays out proportionally from the losers&apos; pool</li>
+            <li>You can also Sell your shares back before betting closes to lock in a profit or cut a loss</li>
+          </ol>
+        ),
+      },
+      {
+        question: "How are prices determined?",
         answer:
-          "Pumpdora uses DORA virtual currency — no real money or crypto wallets are involved. Your account is protected by bcrypt-hashed passwords and JWT authentication.",
+          "Each outcome starts at an equal probability (e.g. 25% each for 4 outcomes). As traders buy shares in an outcome, its price rises and others fall. The price of an outcome reflects the market's implied probability that it will win. An outcome priced at 0.70 DORA per share means the market implies ~70% chance it wins.",
+      },
+      {
+        question: "What is the trading fee?",
+        answer:
+          "There is a 1% platform fee on every trade — both buys and sells. The fee is deducted from your DORA amount before shares are issued (on buy) or from proceeds (on sell). Market creators also earn 1% of every trade in their market as a commission.",
+      },
+      {
+        question: "What happens when I sell?",
+        answer:
+          "You can sell some or all of your shares back to the market at the current LMSR price at any time before betting closes. Selling is useful if the market has moved in your favour and you want to lock in profit, or if you want to cut a loss before resolution.",
+      },
+    ],
+  },
+  {
+    title: "Markets & Outcomes",
+    icon: "🏪",
+    items: [
+      {
+        question: "What types of markets are there?",
+        answer: (
+          <div className="space-y-2 text-muted">
+            <p><span className="text-white font-semibold">Crypto markets</span> — Questions about token price, market cap, or all-time high. Results are resolved automatically at round end using live price data.</p>
+            <p><span className="text-white font-semibold">Twitter / X markets</span> — Questions about a Twitter account&apos;s follower count or posting frequency. These are resolved manually.</p>
+            <p><span className="text-white font-semibold">pump.fun markets</span> — Markets for pump.fun tokens, including price and market cap questions.</p>
+          </div>
+        ),
+      },
+      {
+        question: "What do the outcome labels A, B, C… mean?",
+        answer:
+          "Each market has 2 to 6 outcomes labeled A through F. Each label maps to a specific answer (e.g. A = price below $50K, B = $50K–$60K, C = above $60K). The full label is shown on the market card and in the bet panel.",
+      },
+      {
+        question: "How are results determined?",
+        answer: (
+          <div className="space-y-2 text-muted">
+            <p><span className="text-white font-semibold">Crypto markets:</span> Automatically resolved at round end. The outcome whose range contains the live price (from Binance or a DEX) at the exact end time wins.</p>
+            <p><span className="text-white font-semibold">Twitter markets:</span> Resolved manually by admins after verifying the data against the Twitter API.</p>
+          </div>
+        ),
+      },
+    ],
+  },
+  {
+    title: "Creating Markets",
+    icon: "🛠️",
+    items: [
+      {
+        question: "How do I create a market?",
+        answer: (
+          <ol className="list-decimal list-inside space-y-1.5 text-muted">
+            <li>Click <span className="text-white font-semibold">+ Create</span> in the navbar (you must be logged in)</li>
+            <li>Enter a question and define 2–6 outcome labels</li>
+            <li>Choose a category (Crypto or Twitter) and set the betting duration</li>
+            <li>Pay 10 DORA creation fee — the market opens immediately</li>
+          </ol>
+        ),
+      },
+      {
+        question: "What is the creation fee and daily limit?",
+        answer:
+          "Creating a market costs 10 DORA. Regular accounts can create up to 2 markets per day. Admin accounts can create up to 20 per day.",
+      },
+      {
+        question: "Do I earn anything from my market?",
+        answer:
+          "Yes — as the creator you earn a 1% commission on every trade placed in your market (buys and sells). This is separate from the platform fee and is credited to your DORA balance automatically.",
+      },
+      {
+        question: "What options are available when creating a market?",
+        answer: (
+          <div className="space-y-2 text-muted">
+            <p>For crypto markets you can link a token by contract address (auto-fetches name and logo), choose the question type (price / market cap / ATH), and set a separate betting close time before the result time.</p>
+            <p>For Twitter markets you link a Twitter username and choose between follower count or posting frequency as the question type.</p>
+            <p>All markets support an optional description and a Twitter/X reference link for additional context.</p>
+          </div>
+        ),
+      },
+    ],
+  },
+  {
+    title: "Payouts & Balance",
+    icon: "💸",
+    items: [
+      {
+        question: "How are winnings calculated?",
+        answer: (
+          <div className="space-y-2 text-muted">
+            <p>When a market resolves, shares in the winning outcome are worth a payout determined by the LMSR model. Losing shares expire worthless.</p>
+            <p>Your payout = (your shares) × (payout per share). The payout per share depends on how many shares were bought and at what prices — higher-probability outcomes pay less per share but are safer bets.</p>
+          </div>
+        ),
+      },
+      {
+        question: "When are winnings credited?",
+        answer:
+          "Winnings are added to your DORA balance automatically within seconds of a market resolving. You can track all your bets, results, and P&L in your Profile page.",
+      },
+      {
+        question: "What happens if a market is refunded?",
+        answer:
+          "If a market cannot be resolved (e.g. data unavailable), all bets are refunded in full. Refunded bets appear in your trading history with a REFUND status.",
       },
     ],
   },
@@ -175,10 +248,7 @@ export default function FAQPage() {
               <p className="text-muted text-xs mt-0.5">Everything you need to know</p>
             </div>
           </div>
-          <Link
-            href="/"
-            className="text-muted text-sm hover:text-white transition-colors shrink-0"
-          >
+          <Link href="/" className="text-muted text-sm hover:text-white transition-colors shrink-0">
             ← Markets
           </Link>
         </div>
@@ -187,7 +257,6 @@ export default function FAQPage() {
         <div className="space-y-6">
           {FAQ_SECTIONS.map((section, si) => (
             <div key={section.title} className="bg-surface border border-surface-3 rounded-xl overflow-hidden">
-              {/* Section header */}
               <button
                 onClick={() => toggleSection(si, section)}
                 className="w-full flex items-center gap-2.5 px-5 py-3.5 border-b border-surface-3 bg-surface-2/30 hover:bg-surface-2/60 transition-colors text-left"
@@ -199,7 +268,6 @@ export default function FAQPage() {
                 </span>
               </button>
 
-              {/* Items */}
               {section.items.map((item, ii) => (
                 <AccordionItem
                   key={ii}
@@ -212,7 +280,6 @@ export default function FAQPage() {
           ))}
         </div>
 
-        {/* Footer note */}
         <p className="text-center text-muted text-xs mt-10">
           Still have questions?{" "}
           <a

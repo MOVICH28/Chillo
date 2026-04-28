@@ -196,17 +196,17 @@ export default function LMSRBetPanel({
                   setTxStatus("idle");
                 }}
                 disabled={resolved || bettingClosed}
-                className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-all text-left
+                className={`w-full flex items-start gap-2 px-3 py-2.5 rounded-xl border transition-all text-left
                   ${isSel
                     ? `${c.bg} ${c.border} ring-1 ring-inset ${c.border}`
                     : isWinner ? `${c.bg} ${c.border}`
                     : resolved || bettingClosed ? "bg-white/[0.02] border-white/5 opacity-60 cursor-default"
                     : "bg-white/[0.02] border-white/5 hover:bg-white/[0.04] cursor-pointer"}`}
               >
-                <span className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold shrink-0 ${c.bg} ${c.text} border ${c.border}`}>
+                <span className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold shrink-0 mt-px ${c.bg} ${c.text} border ${c.border}`}>
                   {o.id}
                 </span>
-                <span className={`flex-1 text-xs font-medium truncate ${isSel || isWinner ? c.text : "text-white/70"}`}>
+                <span className={`flex-1 text-xs font-medium leading-tight min-w-0 break-words ${isSel || isWinner ? c.text : "text-white/70"}`}>
                   {o.label}{isWinner && <span className="ml-1 text-[10px]">✓</span>}
                 </span>
                 {arrow && <span className={`text-[10px] font-bold shrink-0 ${arrowClr}`}>{arrow}</span>}

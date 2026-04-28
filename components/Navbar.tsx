@@ -17,13 +17,34 @@ export default function Navbar({ rounds }: NavbarProps) {
   const { user, logout } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [volume24h, setVolume24h] = useState(0);
 
   useEffect(() => {
     setIsAdmin(!!localStorage.getItem("pumpdora_admin_session"));
   }, []);
 
-  const totalPool = rounds.reduce((sum, r) => sum + r.totalPool, 0);
+  useEffect(() => {
+    fetch("/api/volume")
+      .then(r => r.json())
+      .then(d => { if (typeof d.volume24h === "number") setVolume24h(d.volume24h); })
+      .catch(() => {});
+    const id = setInterval(() => {
+      fetch("/api/volume")
+        .then(r => r.json())
+        .then(d => { if (typeof d.volume24h === "number") setVolume24h(d.volume24h); })
+        .catch(() => {});
+    }, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // rounds prop kept for compatibility but volume comes from API
+  void rounds;
   const doraFormatted = user ? Math.floor(user.doraBalance).toLocaleString("en-US") : "0";
+  const volFormatted = volume24h >= 1_000_000
+    ? `${(volume24h / 1_000_000).toFixed(2)}M`
+    : volume24h >= 1_000
+    ? `${(volume24h / 1_000).toFixed(1)}K`
+    : volume24h.toFixed(0);
 
   return (
     <>
@@ -35,16 +56,10 @@ export default function Navbar({ rounds }: NavbarProps) {
         <Image src="/logo.png" alt="Pumpdora" width={180} height={52} style={{ objectFit: "contain" }} />
       </Link>
 
-      {/* Live indicator */}
-      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-3 text-xs text-muted shrink-0">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] pulse-dot" />
-        LIVE
-      </div>
-
-      {/* Total pool */}
+      {/* Volume 24h */}
       <div className="hidden lg:flex items-center gap-1 text-xs text-muted shrink-0">
-        <span>Pool:</span>
-        <span className="text-brand font-mono font-semibold">{totalPool.toFixed(1)} DORA</span>
+        <span>Volume 24h:</span>
+        <span className="text-brand font-mono font-semibold">{volFormatted} DORA</span>
       </div>
 
       {/* Nav links */}
