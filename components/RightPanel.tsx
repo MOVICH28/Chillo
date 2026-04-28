@@ -51,8 +51,8 @@ function avatarColor(username: string): string {
 }
 
 export default function RightPanel({ rounds }: RightPanelProps) {
-  const totalPool = rounds.reduce((s, r) => s + r.totalPool, 0);
-  const openRounds = rounds.filter((r) => r.status === "open").length;
+  const totalVolume = rounds.reduce((s, r) => s + (r.totalVolume ?? 0), 0);
+  const openRounds  = rounds.filter((r) => r.status === "open").length;
 
   const [liveBets, setLiveBets] = useState<LiveBet[]>([]);
   const [totalBets, setTotalBets] = useState(0);
@@ -84,10 +84,10 @@ export default function RightPanel({ rounds }: RightPanelProps) {
       <div className="bg-surface rounded-xl border border-surface-3 p-4">
         <p className="text-[10px] uppercase tracking-widest text-muted mb-3">Today&apos;s Stats</p>
         <div className="space-y-2.5">
-          <Stat label="Total Pool" value={`${formatDora(totalPool)} DORA`} highlight />
+          <Stat label="Total Volume" value={`${formatDora(totalVolume)} DORA`} highlight />
           <Stat label="Active Markets" value={openRounds.toString()} />
           <Stat label="Total Bets" value={totalBets.toString()} />
-          <Stat label="Avg Pool" value={`${openRounds ? formatDora(totalPool / openRounds) : "0"} DORA`} />
+          <Stat label="Avg Volume" value={`${openRounds ? formatDora(totalVolume / openRounds) : "0"} DORA`} />
         </div>
       </div>
 

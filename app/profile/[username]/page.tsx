@@ -107,6 +107,8 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
                 <span className="text-white font-semibold">{user._count.followers}</span> followers
                 <span className="text-white/20 mx-1.5">·</span>
                 <span className="text-white font-semibold">{user._count.following}</span> following
+                <span className="text-white/20 mx-1.5">·</span>
+                <span className="text-white font-semibold">{createdMarketsCount}</span> created
               </p>
             </div>
             <div className="shrink-0 text-right flex flex-col items-end gap-3">

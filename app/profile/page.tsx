@@ -32,22 +32,6 @@ interface BetWithRound {
 }
 
 
-const OUTCOME_COLORS: Record<string, { text: string; bg: string; border: string }> = {
-  A: { text: "text-red-400",    bg: "bg-red-500/10",    border: "border-red-500/30" },
-  B: { text: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/30" },
-  C: { text: "text-yellow-400", bg: "bg-yellow-500/10", border: "border-yellow-500/30" },
-  D: { text: "text-green-400",  bg: "bg-green-500/10",  border: "border-green-500/30" },
-  E: { text: "text-sky-400",    bg: "bg-sky-500/10",    border: "border-sky-500/30" },
-  F: { text: "text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/30" },
-};
-
-function resultLabel(bet: BetWithRound): { label: string; color: string } {
-  if (bet.result === "refund") return { label: "REFUND", color: "text-gray-400" };
-  if (bet.result === null) return { label: "Pending", color: "text-yellow-400" };
-  return bet.result === bet.side
-    ? { label: "WIN", color: "text-yes" }
-    : { label: "LOSS", color: "text-no" };
-}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function PieTooltip({ active, payload, bets }: any) {
@@ -79,10 +63,9 @@ export default function ProfilePage() {
   const [mounted, setMounted] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [doraBets, setDoraBets] = useState<BetWithRound[]>([]);
-  const [betsLoading, setBetsLoading] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [followStats, setFollowStats] = useState({ followersCount: 0, followingCount: 0 });
+  const [followStats, setFollowStats] = useState({ followersCount: 0, followingCount: 0, createdMarketsCount: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
@@ -97,9 +80,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!user) return;
-    setBetsLoading(true);
     fetchDoraBets();
-    setBetsLoading(false);
     const id = setInterval(() => { fetchDoraBets(); refreshUser(); }, 10000);
     return () => clearInterval(id);
   }, [user, fetchDoraBets, refreshUser]);
@@ -239,8 +220,8 @@ export default function ProfilePage() {
                 const plColor  = profit === null ? "text-muted" : profit >= 0 ? "text-[#22c55e]" : "text-red-400";
                 return (
                   <tr key={b.id} className="border-b border-surface-3/50 hover:bg-white/[0.02] transition-colors">
-                    <td className="px-3 py-2.5 text-muted whitespace-nowrap">
-                      {new Date(b.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
+                    <td className="px-3 py-2.5 text-muted whitespace-nowrap text-[11px]">
+                      {new Date(b.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                     </td>
                     <td className="px-3 py-2.5 text-white/60 max-w-[180px] truncate">
                       {b.round?.question ?? b.roundId}
@@ -326,104 +307,7 @@ export default function ProfilePage() {
     );
   }
 
-  function BetTable({ bets, unit }: { bets: BetWithRound[]; unit: string }) {
-    return (
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-[10px] uppercase tracking-widest text-muted border-b border-surface-3">
-              <th className="text-left px-4 py-2.5">Market</th>
-              <th className="text-center px-3 py-2.5">Bet</th>
-              <th className="text-center px-3 py-2.5">Result</th>
-              <th className="text-right px-3 py-2.5">Amount</th>
-              <th className="text-right px-3 py-2.5">Payout</th>
-              <th className="text-center px-3 py-2.5">Status</th>
-              <th className="text-right px-4 py-2.5">Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {bets.map((bet) => {
-              const { label, color } = resultLabel(bet);
-              const isRefund = bet.result === "refund";
-              const isWin    = !isRefund && bet.result !== null && bet.result === bet.side;
-              const isLoss   = !isRefund && bet.result !== null && bet.result !== bet.side;
-              const estPayout = bet.amount * bet.odds;
-              return (
-                <tr key={bet.id} className="border-b border-surface-3/50 hover:bg-surface-2/50 transition-colors">
-                  <td className="px-4 py-3 text-muted text-xs">{bet.round?.question ?? bet.roundId}</td>
-                  <td className="px-3 py-3 text-center">
-                    {(() => {
-                      const c = OUTCOME_COLORS[bet.side];
-                      const outcomeLabel = bet.round?.outcomes?.find(o => o.id === bet.side)?.label;
-                      if (c && outcomeLabel) {
-                        return (
-                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${c.bg} ${c.text} border ${c.border} max-w-[130px] truncate`}>
-                            <span className="font-bold">{bet.side}</span>
-                            <span className="opacity-70 truncate">· {outcomeLabel}</span>
-                          </span>
-                        );
-                      }
-                      return (
-                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${bet.side === "yes" ? "bg-yes/10 text-yes" : "bg-no/10 text-no"}`}>
-                          {bet.side.toUpperCase()}
-                        </span>
-                      );
-                    })()}
-                  </td>
-                  <td className="px-3 py-3 text-center">
-                    {bet.round?.status === "resolved" && bet.round.winningOutcome ? (
-                      (() => {
-                        const wc = OUTCOME_COLORS[bet.round.winningOutcome];
-                        const wLabel = bet.round.outcomes?.find(o => o.id === bet.round!.winningOutcome)?.label;
-                        const won = bet.side === bet.round.winningOutcome;
-                        return (
-                          <div className="flex flex-col items-center gap-0.5">
-                            {wc && wLabel ? (
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${wc.bg} ${wc.text} border ${wc.border} max-w-[130px] truncate`}>
-                                <span className="font-bold">{bet.round.winningOutcome}</span>
-                                <span className="opacity-70 truncate">· {wLabel}</span>
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-muted">{bet.round.winningOutcome}</span>
-                            )}
-                            <span className={`text-[10px] font-semibold ${won ? "text-[#22c55e]" : "text-red-400"}`}>
-                              {won ? "✓ Won" : "✗ Lost"}
-                            </span>
-                          </div>
-                        );
-                      })()
-                    ) : (
-                      <span className="text-white/20 text-[10px]">Pending</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3 text-right font-mono text-white text-xs">
-                    {bet.amount.toFixed(2)} {unit}
-                  </td>
-                  <td className="px-3 py-3 text-right font-mono text-xs">
-                    {isWin && bet.payout != null ? (
-                      <span className="text-yes font-semibold">+{bet.payout.toFixed(2)} {unit}</span>
-                    ) : isRefund ? (
-                      <span className="text-gray-400">{bet.amount.toFixed(2)} {unit}</span>
-                    ) : isLoss ? (
-                      <span className="text-muted">—</span>
-                    ) : (
-                      <span className="text-white">{estPayout.toFixed(2)} {unit}</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3 text-center">
-                    <span className={`text-xs font-semibold ${color}`}>{label}</span>
-                  </td>
-                  <td className="px-4 py-3 text-right text-muted text-xs">
-                    {new Date(bet.createdAt).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
+
 
   // ── Main render ───────────────────────────────────────────────────────────
   return (
@@ -476,9 +360,12 @@ export default function ProfilePage() {
                       <span className="px-1.5 py-0.5 rounded text-[10px] bg-brand/10 border border-brand/20 text-brand font-medium">DORA</span>
                     </div>
                     <p className="text-muted text-xs mb-2">{user.email}</p>
-                    <div className="flex items-center gap-4 text-xs">
-                      <span className="text-muted"><span className="text-white font-semibold">{followStats.followersCount}</span> followers</span>
-                      <span className="text-muted"><span className="text-white font-semibold">{followStats.followingCount}</span> following</span>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                      <span><span className="text-white font-semibold">{followStats.followersCount}</span> followers</span>
+                      <span className="text-white/20">·</span>
+                      <span><span className="text-white font-semibold">{followStats.followingCount}</span> following</span>
+                      <span className="text-white/20">·</span>
+                      <span><span className="text-white font-semibold">{followStats.createdMarketsCount}</span> created</span>
                     </div>
                   </div>
 
@@ -516,28 +403,6 @@ export default function ProfilePage() {
               <PerformanceChart bets={doraBets} unit="DORA" />
 
               <TradingHistoryChart bets={doraBets} />
-
-              {/* DORA bet history */}
-              <div className="bg-surface border border-surface-3 rounded-xl overflow-hidden mb-6">
-                <div className="px-4 py-3 border-b border-surface-3 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-brand" />
-                  <h2 className="text-white font-semibold">DORA Bet History</h2>
-                </div>
-                {betsLoading ? (
-                  <div className="p-8 text-center text-muted text-sm">Loading…</div>
-                ) : doraBets.length === 0 ? (
-                  <div className="p-10 flex flex-col items-center gap-2">
-                    <p className="text-3xl">🎯</p>
-                    <p className="text-white font-semibold mt-1">No DORA bets yet</p>
-                    <p className="text-muted text-sm">Head back to markets and place your first virtual bet.</p>
-                    <Link href="/" className="mt-3 px-4 py-2 rounded-lg text-sm font-semibold bg-brand hover:bg-brand-dim text-black transition-colors">
-                      Browse Markets
-                    </Link>
-                  </div>
-                ) : (
-                  <BetTable bets={doraBets} unit="DORA" />
-                )}
-              </div>
             </>
           );
         })()}

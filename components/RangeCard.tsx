@@ -270,6 +270,26 @@ function ResolvedRangeCard({ round }: { round: Round }) {
           })}
         </div>
 
+        {(round.totalPool ?? 0) > 0 && (
+          <div className="mb-3">
+            <div className="flex h-1.5 rounded-full overflow-hidden gap-px mb-1">
+              {outcomes.map((o) => {
+                const pct = ((o.pool ?? 0) / (round.totalPool ?? 1)) * 100;
+                if (pct < 0.5) return null;
+                const c = OUTCOME_COLORS[o.id];
+                return <div key={o.id} className={c?.dot ?? ""} style={{ width: `${pct}%` }} />;
+              })}
+            </div>
+            <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+              {outcomes.map((o) => {
+                const pct = (((o.pool ?? 0) / (round.totalPool ?? 1)) * 100).toFixed(0);
+                const c = OUTCOME_COLORS[o.id];
+                return <span key={o.id} className={`text-[9px] font-mono ${c?.text ?? "text-muted"}`}>{o.id}: {pct}%</span>;
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted border-t border-surface-3/50 pt-2.5">
           <span>Pool: <span className="text-white font-mono">{(round.realPool ?? 0).toFixed(2)} DORA</span></span>
           {resolvedDate && (
@@ -456,6 +476,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
             );
           })}
         </div>
+
       </div>
 
       {/* Footer */}

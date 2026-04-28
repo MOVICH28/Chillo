@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
-import LiveTicker from "@/components/LiveTicker";
 import Sidebar from "@/components/Sidebar";
 import RoundCard from "@/components/RoundCard";
 import RangeCard from "@/components/RangeCard";
@@ -83,13 +82,8 @@ export default function Home() {
       <Suspense fallback={null}><RefCapture /></Suspense>
       <Navbar rounds={rounds} />
 
-      {/* Ticker just below navbar */}
-      <div className="mt-14">
-        <LiveTicker liveData={liveData} />
-      </div>
-
-{/* Main layout */}
-      <div className="flex flex-row gap-6 max-w-[1400px] mx-auto w-full px-4 h-[calc(100vh-56px)]">
+      {/* Main layout */}
+      <div className="flex flex-row gap-6 max-w-[1400px] mx-auto w-full px-4 h-[calc(100vh-56px)] mt-14">
         {/* Sidebar */}
         <div id="categories" className="hidden lg:block w-64 shrink-0 overflow-y-auto py-6 no-scrollbar">
           <Sidebar active={category} onSelect={setCategory} counts={counts} />
