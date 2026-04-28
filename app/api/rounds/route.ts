@@ -21,66 +21,69 @@ function computeOdds(yesPool: number, noPool: number, totalPool: number) {
 }
 
 export async function GET() {
-  const [rounds, pools] = await Promise.all([
-    prisma.round.findMany({
-      where: { status: { in: ["open", "closed", "resolved"] } },
-      orderBy: { createdAt: "desc" },
-      include: { creator: { select: { username: true, avatarUrl: true } } },
-    }),
-    prisma.roundPool.findMany(),
-  ]);
+  try {
+    const [rounds, pools] = await Promise.all([
+      prisma.round.findMany({
+        where: { status: { in: ["open", "closed", "resolved"] } },
+        orderBy: { createdAt: "desc" },
+        include: { creator: { select: { username: true, avatarUrl: true } } },
+      }),
+      prisma.roundPool.findMany(),
+    ]);
 
-  const poolMap = new Map(pools.map((p) => [p.roundId, p]));
+    const poolMap = new Map(pools.map((p) => [p.roundId, p]));
 
-  const mapped = rounds.map((round) => {
-    const live = poolMap.get(round.id);
-    const yp   = live ? live.yesPool   : round.yesPool;
-    const np   = live ? live.noPool    : round.noPool;
-    const tp   = live ? live.totalPool : round.totalPool;
+    const mapped = rounds.map((round) => {
+      const live = poolMap.get(round.id);
+      const yp   = live ? live.yesPool   : round.yesPool;
+      const np   = live ? live.noPool    : round.noPool;
+      const tp   = live ? live.totalPool : round.totalPool;
 
-    // For range rounds (has outcomes), realPool = all user bets (no seed).
-    // For pumpfun yes/no rounds, subtract the 20 SOL platform seed.
-    const isRange  = round.outcomes !== null;
-    const realPool = isRange
-      ? Math.max(0, tp)
-      : Math.max(0, tp - BASE_POOL_SEED);
+      const isRange  = round.outcomes !== null;
+      const realPool = isRange
+        ? Math.max(0, tp)
+        : Math.max(0, tp - BASE_POOL_SEED);
 
-    // For range rounds, merge live totalPool back into outcomes array
-    let outcomes: Outcome[] | null = null;
-    if (isRange && round.outcomes) {
-      // outcomes stored on the Round itself (updated on each bet)
-      outcomes = round.outcomes as unknown as Outcome[];
-    }
+      let outcomes: Outcome[] | null = null;
+      if (isRange && round.outcomes) {
+        outcomes = round.outcomes as unknown as Outcome[];
+      }
 
-    return {
-      ...round,
-      endsAt:           round.endsAt.toISOString(),
-      createdAt:        round.createdAt.toISOString(),
-      resolvedAt:       round.resolvedAt?.toISOString()      ?? null,
-      bettingClosesAt:  round.bettingClosesAt?.toISOString() ?? null,
-      yesPool:  yp,
-      noPool:   np,
-      totalPool: tp,
-      realPool,
-      outcomes,
-      creatorUsername:  round.creator?.username  ?? null,
-      creatorAvatarUrl: round.creator?.avatarUrl ?? null,
-      creator: undefined,
-      ...computeOdds(yp, np, tp),
-      bets: [],
-    };
-  });
+      return {
+        ...round,
+        endsAt:           round.endsAt.toISOString(),
+        createdAt:        round.createdAt.toISOString(),
+        resolvedAt:       round.resolvedAt?.toISOString()      ?? null,
+        bettingClosesAt:  round.bettingClosesAt?.toISOString() ?? null,
+        yesPool:  yp,
+        noPool:   np,
+        totalPool: tp,
+        realPool,
+        outcomes,
+        creatorUsername:  round.creator?.username  ?? null,
+        creatorAvatarUrl: round.creator?.avatarUrl ?? null,
+        creator: undefined,
+        ...computeOdds(yp, np, tp),
+        bets: [],
+      };
+    });
 
-  // Open/closed rounds first, then last 20 resolved sorted by resolvedAt desc.
-  const open     = mapped.filter((r) => r.status !== "resolved");
-  const resolved = mapped
-    .filter((r) => r.status === "resolved")
-    .sort((a, b) => {
-      const ta = a.resolvedAt ? new Date(a.resolvedAt).getTime() : 0;
-      const tb = b.resolvedAt ? new Date(b.resolvedAt).getTime() : 0;
-      return tb - ta;
-    })
-    .slice(0, 20);
+    const open     = mapped.filter((r) => r.status !== "resolved");
+    const resolved = mapped
+      .filter((r) => r.status === "resolved")
+      .sort((a, b) => {
+        const ta = a.resolvedAt ? new Date(a.resolvedAt).getTime() : 0;
+        const tb = b.resolvedAt ? new Date(b.resolvedAt).getTime() : 0;
+        return tb - ta;
+      })
+      .slice(0, 20);
 
-  return NextResponse.json([...open, ...resolved]);
+    return NextResponse.json([...open, ...resolved]);
+  } catch (error) {
+    console.error("Rounds API error:", error);
+    return NextResponse.json(
+      { error: "Internal server error", details: String(error) },
+      { status: 500 }
+    );
+  }
 }
