@@ -50,30 +50,40 @@ function avatarColor(username: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-export default function RightPanel({ rounds }: RightPanelProps) {
-  const totalVolume = rounds.filter(r => r.status === "open").reduce((s, r) => s + (r.totalVolume ?? 0), 0);
-  const openRounds  = rounds.filter((r) => r.status === "open").length;
+interface Stats24h {
+  volume24h: number;
+  bets24h: number;
+  activeMarkets: number;
+}
 
+export default function RightPanel({ rounds }: RightPanelProps) {
+  void rounds;
+
+  const [stats, setStats] = useState<Stats24h>({ volume24h: 0, bets24h: 0, activeMarkets: 0 });
   const [liveBets, setLiveBets] = useState<LiveBet[]>([]);
-  const [totalBets, setTotalBets] = useState(0);
 
   useEffect(() => {
+    function fetchStats() {
+      fetch("/api/stats")
+        .then(r => r.json())
+        .then((d: Stats24h) => setStats(d))
+        .catch(() => {});
+    }
+    fetchStats();
+    const statsId = setInterval(fetchStats, 30_000);
+
     function fetchBets() {
       fetch("/api/bets")
         .then((r) => r.json())
-        .then((data) => {
-          if (Array.isArray(data)) {
-            setLiveBets(data);
-            setTotalBets(data.length);
-          }
-        })
+        .then((data) => { if (Array.isArray(data)) setLiveBets(data); })
         .catch(() => {});
     }
     fetchBets();
-    const id = setInterval(fetchBets, 5_000);
+    const betsId = setInterval(fetchBets, 5_000);
     window.addEventListener("trade-placed", fetchBets);
     return () => {
-      clearInterval(id);
+      clearInterval(statsId);
+      clearInterval(betsId);
       window.removeEventListener("trade-placed", fetchBets);
     };
   }, []);
@@ -82,12 +92,12 @@ export default function RightPanel({ rounds }: RightPanelProps) {
     <aside className="w-64 shrink-0 flex flex-col gap-4 pt-2">
       {/* Today's Stats */}
       <div className="bg-surface rounded-xl border border-surface-3 p-4">
-        <p className="text-[10px] uppercase tracking-widest text-muted mb-3">Today&apos;s Stats</p>
+        <p className="text-[10px] uppercase tracking-widest text-muted mb-3">24h Stats</p>
         <div className="space-y-2.5">
-          <Stat label="Total Volume" value={`${formatDora(totalVolume)} DORA`} highlight />
-          <Stat label="Active Markets" value={openRounds.toString()} />
-          <Stat label="Total Bets" value={totalBets.toString()} />
-          <Stat label="Avg Volume" value={`${openRounds ? formatDora(totalVolume / openRounds) : "0"} DORA`} />
+          <Stat label="Volume 24h" value={`${formatDora(stats.volume24h)} DORA`} highlight />
+          <Stat label="Active Markets" value={stats.activeMarkets.toString()} />
+          <Stat label="Trades 24h" value={stats.bets24h.toString()} />
+          <Stat label="Avg Volume" value={`${stats.activeMarkets ? formatDora(stats.volume24h / stats.activeMarkets) : "0"} DORA`} />
         </div>
       </div>
 

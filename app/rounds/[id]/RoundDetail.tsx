@@ -597,13 +597,21 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                       </svg>
                     </button>
+                  </>
+                )}
+                {round.twitterUrl && (
+                  <>
+                    <span className="text-white/20">·</span>
                     <a
-                      href={`https://solscan.io/token/${round.tokenAddress}`}
+                      href={round.twitterUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-white/30 hover:text-brand transition-colors"
+                      className="flex items-center gap-1 text-xs text-white/30 hover:text-brand transition-colors"
                     >
-                      Solscan ↗
+                      <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.253 5.622 5.91-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                      </svg>
+                      {round.twitterUsername ? `@${round.twitterUsername}` : "X / Twitter"} →
                     </a>
                   </>
                 )}
@@ -631,6 +639,45 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                 </div>
               </div>
             )}
+
+            {/* Final Results — resolved rounds */}
+            {round.status === "resolved" && round.shares && outcomes.length > 0 && (() => {
+              const shares = round.shares!;
+              const total  = Object.values(shares).reduce((s, v) => s + v, 0);
+              return (
+                <div className="mb-4 p-4 rounded-xl bg-white/[0.03] border border-white/5">
+                  <p className="text-[10px] uppercase tracking-widest text-white/30 mb-3">Final Results</p>
+                  <div className="space-y-2">
+                    {outcomes.map(o => {
+                      const s         = shares[o.id] ?? 0;
+                      const pct       = total > 0 ? Math.round(s / total * 100) : 0;
+                      const isWinner  = o.id === round.winningOutcome;
+                      return (
+                        <div key={o.id} className="flex items-center gap-2">
+                          <span className={`text-xs font-bold w-4 shrink-0 ${isWinner ? "text-[#22c55e]" : "text-white/40"}`}>
+                            {o.id}
+                          </span>
+                          <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${isWinner ? "bg-[#22c55e]" : "bg-white/15"}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <span className={`text-xs font-mono w-8 text-right shrink-0 ${isWinner ? "text-[#22c55e] font-semibold" : "text-white/40"}`}>
+                            {pct}%
+                          </span>
+                          {isWinner
+                            ? <span className="text-[#22c55e] text-xs shrink-0 w-3">✓</span>
+                            : <span className="w-3 shrink-0" />
+                          }
+                          <span className="text-xs text-white/30 truncate">{o.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Token stats bar */}
             {hasToken && (

@@ -56,9 +56,9 @@ export default function Navbar({ rounds }: NavbarProps) {
         <Image src="/logo.png" alt="Pumpdora" width={180} height={52} style={{ objectFit: "contain" }} />
       </Link>
 
-      {/* Volume 24h */}
+      {/* Total Volume (all-time) */}
       <div className="hidden lg:flex items-center gap-1 text-xs text-muted shrink-0">
-        <span>Volume 24h:</span>
+        <span>Total Volume:</span>
         <span className="text-brand font-mono font-semibold">{volFormatted} DORA</span>
       </div>
 

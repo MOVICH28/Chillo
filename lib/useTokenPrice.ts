@@ -123,33 +123,6 @@ async function fetchGeckoOHLCV(pairAddress: string, signal: AbortSignal): Promis
   } catch { return []; }
 }
 
-// GeckoTerminal history by token address (no pool address needed).
-// Tries aggregate=5 first (~83h of history), falls back to aggregate=1 (~16h).
-async function fetchGeckoByTokenAddress(tokenAddress: string, signal: AbortSignal): Promise<OHLCPoint[]> {
-  for (const agg of [5, 1]) {
-    try {
-      const res = await fetch(
-        `https://api.geckoterminal.com/api/v2/networks/solana/tokens/${tokenAddress}/ohlcv/minute?aggregate=${agg}&limit=1000`,
-        { signal }
-      );
-      if (!res.ok) continue;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const json: any = await res.json();
-      const list: number[][] = json?.data?.attributes?.ohlcv_list ?? [];
-      if (!list.length) continue;
-      return list.reverse().map(c => ({
-        time:   c[0] * 1000,
-        open:   c[1],
-        high:   c[2],
-        low:    c[3],
-        price:  c[4],
-        volume: c[5],
-      }));
-    } catch { /**/ }
-  }
-  return [];
-}
-
 // Resample 1m OHLCPoint candles into any larger period.
 // Preserves true OHLCV by merging consecutive candles that fall in the same bucket.
 function resampleCandles(candles: OHLCPoint[], targetMs: number): OHLCPoint[] {
@@ -422,18 +395,6 @@ export function useTokenPrice(opts: {
         }
       }
 
-      // Immediately fetch GeckoTerminal history by token address on mount —
-      // no need to wait for DexScreener to return a pairAddress first.
-      if (!isStreamingTF && !showMcap) {
-        historicalFetched = true;
-        fetchGeckoByTokenAddress(tokenAddress, ac.signal).then(candles => {
-          if (cancelled || !candles.length) return;
-          historicalCandles = candles;
-          const merged = buildKlineHistory();
-          if (merged.length) setState(s => ({ ...s, history: merged, isKline: true }));
-        });
-      }
-
       const poll = async () => {
         if (cancelled) return;
         try {
@@ -454,7 +415,7 @@ export function useTokenPrice(opts: {
           if (!isFinite(price) || price <= 0) return;
           symbol = pair.baseToken?.symbol ?? "TOKEN";
 
-          // First poll on a kline TF: kick off GeckoTerminal history fetch (fire-and-forget)
+          // Fallback: if prefetch failed to get history, try on first poll
           if (!historicalFetched && pair.pairAddress && !isStreamingTF && !showMcap) {
             historicalFetched = true;
             fetchGeckoOHLCV(pair.pairAddress as string, ac.signal).then(candles => {
@@ -499,8 +460,49 @@ export function useTokenPrice(opts: {
         } catch { /**/ }
       };
 
-      poll();
-      pollInterval = setInterval(poll, DEX_POLL_MS);
+      if (!isStreamingTF && !showMcap) {
+        // Prefetch: DexScreener → pairAddress → GeckoTerminal pool OHLCV → then start poll
+        historicalFetched = true; // prevent poll fallback from double-fetching
+        (async () => {
+          let pairAddress: string | null = null;
+          try {
+            const res = await fetch(
+              `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`,
+              { cache: "no-store", signal: ac.signal }
+            );
+            if (!cancelled && res.ok) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const data: any = await res.json();
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const pairs: any[] = data?.pairs ?? [];
+              if (pairs.length) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const pair: any = pairs.sort((a: any, b: any) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0))[0];
+                pairAddress = pair.pairAddress ?? null;
+                symbol      = pair.baseToken?.symbol ?? "TOKEN";
+              }
+            }
+          } catch { /**/ }
+
+          if (!cancelled && pairAddress) {
+            const candles = await fetchGeckoOHLCV(pairAddress, ac.signal);
+            if (!cancelled && candles.length) {
+              historicalCandles = candles;
+              const merged = buildKlineHistory();
+              if (merged.length) setState(s => ({ ...s, history: merged, isKline: true }));
+            }
+          }
+
+          if (!cancelled) {
+            poll();
+            pollInterval = setInterval(poll, DEX_POLL_MS);
+          }
+        })();
+      } else {
+        // Streaming TF or showMcap: start poll immediately
+        poll();
+        pollInterval = setInterval(poll, DEX_POLL_MS);
+      }
     }
 
     return () => {

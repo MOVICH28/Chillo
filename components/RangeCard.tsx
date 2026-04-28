@@ -271,22 +271,21 @@ function ResolvedRangeCard({ round }: { round: Round }) {
         </div>
 
         {(round.totalPool ?? 0) > 0 && (
-          <div className="mb-3">
-            <div className="flex h-1.5 rounded-full overflow-hidden gap-px mb-1">
-              {outcomes.map((o) => {
-                const pct = ((o.pool ?? 0) / (round.totalPool ?? 1)) * 100;
-                if (pct < 0.5) return null;
-                const c = OUTCOME_COLORS[o.id];
-                return <div key={o.id} className={c?.dot ?? ""} style={{ width: `${pct}%` }} />;
-              })}
-            </div>
-            <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-              {outcomes.map((o) => {
-                const pct = (((o.pool ?? 0) / (round.totalPool ?? 1)) * 100).toFixed(0);
-                const c = OUTCOME_COLORS[o.id];
-                return <span key={o.id} className={`text-[9px] font-mono ${c?.text ?? "text-muted"}`}>{o.id}: {pct}%</span>;
-              })}
-            </div>
+          <div className="mb-3 flex flex-wrap items-center gap-y-0.5 text-[10px] font-mono">
+            {outcomes.flatMap((o, idx) => {
+              const pct = Math.round(((o.pool ?? 0) / (round.totalPool ?? 1)) * 100);
+              const isWinner = o.id === round.winningOutcome;
+              const items = [];
+              if (idx > 0) items.push(
+                <span key={`sep-${o.id}`} className="text-white/20 mx-1">·</span>
+              );
+              items.push(
+                <span key={o.id} className={isWinner ? "text-[#22c55e] font-bold" : "text-white/30"}>
+                  {o.id} {pct}%{isWinner ? " ✓" : ""}
+                </span>
+              );
+              return items;
+            })}
           </div>
         )}
 

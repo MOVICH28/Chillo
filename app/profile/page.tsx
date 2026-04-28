@@ -327,10 +327,9 @@ export default function ProfilePage() {
       <Navbar rounds={[]} />
       <div className="flex flex-row gap-6 max-w-[1400px] mx-auto w-full px-4">
 
-        {/* Left sidebar */}
-        <div className="hidden lg:flex flex-col gap-4 w-72 shrink-0 overflow-y-auto py-6 no-scrollbar sticky top-16 self-start max-h-[calc(100vh-64px)]">
+        {/* Left sidebar: Categories */}
+        <div className="hidden lg:flex flex-col gap-4 w-60 shrink-0 overflow-y-auto py-6 no-scrollbar sticky top-16 self-start max-h-[calc(100vh-64px)]">
           <Sidebar active="all" onSelect={(cat) => router.push(`/?cat=${cat}`)} counts={{}} />
-          <RightPanel rounds={[]} />
         </div>
 
         {/* Main content */}
@@ -431,6 +430,12 @@ export default function ProfilePage() {
         })()}
 
         </main>
+
+        {/* Right panel: 24h Stats + Live Bets */}
+        <div className="hidden lg:flex flex-col gap-4 shrink-0 overflow-y-auto py-6 no-scrollbar sticky top-16 self-start max-h-[calc(100vh-64px)]">
+          <RightPanel rounds={[]} />
+        </div>
+
       </div>
     </div>
   );
