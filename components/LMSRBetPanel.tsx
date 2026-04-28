@@ -196,28 +196,28 @@ export default function LMSRBetPanel({
                   setTxStatus("idle");
                 }}
                 disabled={resolved || bettingClosed}
-                className={`w-full flex items-start gap-2 px-3 py-2.5 rounded-xl border transition-all text-left
+                className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded-xl border transition-all text-left
                   ${isSel
                     ? `${c.bg} ${c.border} ring-1 ring-inset ${c.border}`
                     : isWinner ? `${c.bg} ${c.border}`
                     : resolved || bettingClosed ? "bg-white/[0.02] border-white/5 opacity-60 cursor-default"
                     : "bg-white/[0.02] border-white/5 hover:bg-white/[0.04] cursor-pointer"}`}
               >
-                <span className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold shrink-0 mt-px ${c.bg} ${c.text} border ${c.border}`}>
+                <span className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold shrink-0 ${c.bg} ${c.text} border ${c.border}`}>
                   {o.id}
                 </span>
-                <span className={`flex-1 text-xs font-medium leading-tight min-w-0 break-words ${isSel || isWinner ? c.text : "text-white/70"}`}>
+                <span className={`flex-1 text-xs font-medium min-w-0 truncate whitespace-nowrap ${isSel || isWinner ? c.text : "text-white/70"}`}>
                   {o.label}{isWinner && <span className="ml-1 text-[10px]">✓</span>}
                 </span>
                 {arrow && <span className={`text-[10px] font-bold shrink-0 ${arrowClr}`}>{arrow}</span>}
-                <div className="flex flex-col items-end gap-0.5 shrink-0 w-16">
+                <div className="flex flex-col items-end gap-0.5 shrink-0 w-12">
                   <div className="w-full h-1 rounded-full bg-white/5 overflow-hidden">
                     <div className={`h-full rounded-full ${c.bar}`} style={{ width: `${pct}%` }} />
                   </div>
                   <span className={`text-[10px] font-mono font-bold ${c.text}`}>{pct}%</span>
                 </div>
-                <span className="text-[10px] font-mono text-white/40 shrink-0 w-16 text-right">
-                  {price.toFixed(2)} DORA
+                <span className="text-[10px] font-mono text-white/40 shrink-0 w-14 text-right">
+                  {price.toFixed(2)} D
                 </span>
                 {pos && pos.shares > 0
                   ? <span className={`text-[10px] font-mono shrink-0 ${c.text}`}>{(pos.shares * pos.avgCost).toFixed(2)} D</span>

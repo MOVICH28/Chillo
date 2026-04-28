@@ -484,8 +484,8 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
           <Sidebar active={round.category} onSelect={() => router.push("/")} counts={{}} />
         </div>
 
-        {/* Main content — 65% of space after sidebar */}
-        <main className="min-w-0 flex-[13] py-6">
+        {/* Main content — 60% of space after sidebar */}
+        <main className="min-w-0 flex-[3] py-6">
 
             {/* Back arrow */}
             <Link href="/" className="flex items-center text-white/40 hover:text-white/70 transition-colors mb-4 w-fit">
@@ -743,22 +743,24 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
             {/* Description */}
             {(round.description || round.twitterUrl) && (
               <div className="mt-4 p-4 rounded-xl bg-white/[0.03] border border-white/5">
-                <p className="text-[10px] uppercase tracking-widest text-white/30 mb-2">Description</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] uppercase tracking-widest text-white/30">Description</p>
+                  {round.twitterUrl && (
+                    <a
+                      href={round.twitterUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs text-white/40 hover:text-white transition-colors"
+                    >
+                      <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.253 5.622 5.91-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                      </svg>
+                      {round.twitterUsername ? `@${round.twitterUsername}` : "X / Twitter"} →
+                    </a>
+                  )}
+                </div>
                 {round.description && (
                   <p className="text-sm text-white/70 leading-relaxed">{round.description}</p>
-                )}
-                {round.twitterUrl && (
-                  <a
-                    href={round.twitterUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 mt-2 text-xs text-white/40 hover:text-white transition-colors"
-                  >
-                    <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.253 5.622 5.91-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                    </svg>
-                    {round.twitterUsername ? `@${round.twitterUsername}` : "X / Twitter"}
-                  </a>
                 )}
               </div>
             )}
@@ -817,8 +819,8 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
 
         </main>
 
-        {/* Right column: Bet Panel (desktop) — 35% of space after sidebar */}
-        <div className="hidden lg:block flex-[7] py-6 sticky top-14 self-start">
+        {/* Right column: Bet Panel (desktop) — 40% of space after sidebar */}
+        <div className="hidden lg:block flex-[2] min-w-[320px] py-6 sticky top-14 self-start">
           {outcomes.length > 0 && (
             <div ref={betPanelRef}>
               <LMSRBetPanel

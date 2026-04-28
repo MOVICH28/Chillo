@@ -51,7 +51,7 @@ const CANDLE_PERIOD_MS: Partial<Record<Timeframe, number>> = {
 };
 
 const MAX_STREAM_HISTORY  = 200;
-const KLINE_LIMIT         = 100;
+const KLINE_LIMIT         = 500;
 const KLINE_REFRESH_MS    = 30_000;
 const DEX_POLL_MS         = 2_000;
 
@@ -121,6 +121,33 @@ async function fetchGeckoOHLCV(pairAddress: string, signal: AbortSignal): Promis
       volume: c[5],
     }));
   } catch { return []; }
+}
+
+// GeckoTerminal history by token address (no pool address needed).
+// Tries aggregate=5 first (~83h of history), falls back to aggregate=1 (~16h).
+async function fetchGeckoByTokenAddress(tokenAddress: string, signal: AbortSignal): Promise<OHLCPoint[]> {
+  for (const agg of [5, 1]) {
+    try {
+      const res = await fetch(
+        `https://api.geckoterminal.com/api/v2/networks/solana/tokens/${tokenAddress}/ohlcv/minute?aggregate=${agg}&limit=1000`,
+        { signal }
+      );
+      if (!res.ok) continue;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const json: any = await res.json();
+      const list: number[][] = json?.data?.attributes?.ohlcv_list ?? [];
+      if (!list.length) continue;
+      return list.reverse().map(c => ({
+        time:   c[0] * 1000,
+        open:   c[1],
+        high:   c[2],
+        low:    c[3],
+        price:  c[4],
+        volume: c[5],
+      }));
+    } catch { /**/ }
+  }
+  return [];
 }
 
 // Resample 1m OHLCPoint candles into any larger period.
@@ -393,6 +420,18 @@ export function useTokenPrice(opts: {
           const candles = buildKlineHistory();
           if (candles.length) setState({ price: lastTick.p, history: candles, status: "connecting", label: showMcap ? "TOKEN MCap" : "TOKEN/USD", isKline: true });
         }
+      }
+
+      // Immediately fetch GeckoTerminal history by token address on mount —
+      // no need to wait for DexScreener to return a pairAddress first.
+      if (!isStreamingTF && !showMcap) {
+        historicalFetched = true;
+        fetchGeckoByTokenAddress(tokenAddress, ac.signal).then(candles => {
+          if (cancelled || !candles.length) return;
+          historicalCandles = candles;
+          const merged = buildKlineHistory();
+          if (merged.length) setState(s => ({ ...s, history: merged, isKline: true }));
+        });
       }
 
       const poll = async () => {
