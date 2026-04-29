@@ -239,7 +239,7 @@ export default function Home() {
         </main>
 
         {/* Right panel */}
-        <div className="hidden xl:block w-36 shrink-0 overflow-y-auto overflow-hidden py-6 no-scrollbar">
+        <div className="hidden xl:block w-48 shrink-0 overflow-y-auto overflow-hidden py-6 no-scrollbar">
           <RightPanel rounds={rounds} />
         </div>
       </div>

@@ -181,7 +181,7 @@ export default function RightPanel({ rounds }: RightPanelProps) {
 function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-1">
-      <span className="text-[10px] text-muted truncate">{label}</span>
+      <span className="text-[10px] text-muted whitespace-nowrap">{label}</span>
       <span className={`text-[10px] font-mono font-semibold shrink-0 ${highlight ? "text-brand" : "text-white"}`}>
         {value}
       </span>
