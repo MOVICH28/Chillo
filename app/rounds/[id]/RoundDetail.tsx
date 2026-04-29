@@ -4,7 +4,6 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Avatar from "@/components/Avatar";
-import Sidebar from "@/components/Sidebar";
 import LMSRBetPanel from "@/components/LMSRBetPanel";
 import { getAllPrices } from "@/lib/lmsr";
 import dynamic from "next/dynamic";
@@ -479,12 +478,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
     <div className="min-h-screen bg-base text-white">
       <div className="flex flex-row gap-3 max-w-[1400px] mx-auto w-full px-2 mt-14">
 
-        {/* Left Sidebar */}
-        <div className="hidden lg:block w-64 shrink-0 overflow-y-auto py-6 no-scrollbar sticky top-14 self-start">
-          <Sidebar active={round.category} onSelect={() => router.push("/")} counts={{}} />
-        </div>
-
-        {/* Main content — 60% of space after sidebar */}
+        {/* Main content */}
         <main className="min-w-0 flex-[3] py-6">
 
             {/* Back arrow */}

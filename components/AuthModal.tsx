@@ -73,7 +73,8 @@ export default function AuthModal({ onClose }: AuthModalProps) {
     if (regPassword.length < 6) { setError("Password must be at least 6 characters"); return; }
     setSubmitting(true);
     try {
-      await register(regUsername, regEmail, regPassword);
+      const refCode = typeof window !== "undefined" ? (localStorage.getItem("pumpdora_ref") ?? undefined) : undefined;
+      await register(regUsername, regEmail, regPassword, refCode);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");

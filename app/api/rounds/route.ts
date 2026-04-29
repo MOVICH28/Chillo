@@ -83,7 +83,7 @@ export async function GET() {
         const tb = b.resolvedAt ? new Date(b.resolvedAt).getTime() : 0;
         return tb - ta;
       })
-      .slice(0, 20);
+      .slice(0, 100);
 
     return NextResponse.json([...open, ...resolved]);
   } catch (error) {

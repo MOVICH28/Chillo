@@ -69,7 +69,8 @@ export default function ProfilePage() {
   const [doraBets, setDoraBets] = useState<BetWithRound[]>([]);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [followStats, setFollowStats] = useState({ followersCount: 0, followingCount: 0, createdMarketsCount: 0 });
+  const [followStats, setFollowStats] = useState({ followersCount: 0, followingCount: 0, createdMarketsCount: 0, referredCount: 0 });
+  const [refCopied, setRefCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
@@ -420,6 +421,52 @@ export default function ProfilePage() {
                     <p className="text-white font-semibold font-mono">{value}</p>
                   </div>
                 ))}
+              </div>
+
+              {/* ── Referral section ─────────────────────────────────── */}
+              <div id="referral" className="bg-surface border border-surface-3 rounded-xl p-5 mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-white font-semibold text-sm">Referral Program</h2>
+                    <p className="text-muted text-xs mt-0.5">Earn 1% of every bet your referrals place</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase tracking-widest text-muted mb-0.5">Earned</p>
+                    <p className="text-brand font-mono font-bold text-lg">
+                      {(user.referralEarnings ?? 0).toFixed(2)}
+                      <span className="text-xs font-normal ml-1">DORA</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-white/[0.03] border border-white/8 mb-4">
+                  <span className="flex-1 text-xs font-mono text-white/60 truncate">
+                    {typeof window !== "undefined" ? `${window.location.origin}/?ref=${user.username}` : `pumpdora.com/?ref=${user.username}`}
+                  </span>
+                  <button
+                    onClick={() => {
+                      const link = `${window.location.origin}/?ref=${user.username}`;
+                      navigator.clipboard.writeText(link).then(() => {
+                        setRefCopied(true);
+                        setTimeout(() => setRefCopied(false), 2000);
+                      });
+                    }}
+                    className="shrink-0 px-3 py-1.5 rounded-md text-xs font-semibold bg-brand hover:bg-brand-dim text-black transition-colors"
+                  >
+                    {refCopied ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white/[0.03] rounded-lg p-3 border border-white/5">
+                    <p className="text-[10px] uppercase tracking-widest text-muted mb-1">Referred Users</p>
+                    <p className="text-white font-semibold font-mono text-lg">{followStats.referredCount}</p>
+                  </div>
+                  <div className="bg-white/[0.03] rounded-lg p-3 border border-white/5">
+                    <p className="text-[10px] uppercase tracking-widest text-muted mb-1">Total Earned</p>
+                    <p className="text-brand font-semibold font-mono text-lg">{(user.referralEarnings ?? 0).toFixed(2)} DORA</p>
+                  </div>
+                </div>
               </div>
 
               <PerformanceChart bets={doraBets} unit="DORA" />

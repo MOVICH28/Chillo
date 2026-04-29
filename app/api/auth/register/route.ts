@@ -9,7 +9,7 @@ const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-me";
 
 export async function POST(req: NextRequest) {
   try {
-    const { username, email, password } = await req.json();
+    const { username, email, password, refCode } = await req.json();
 
     if (!username || !email || !password) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -23,8 +23,21 @@ export async function POST(req: NextRequest) {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
+    let referredById: string | null = null;
+    if (refCode && typeof refCode === "string") {
+      const referrer = await prisma.user.findUnique({ where: { username: refCode.trim() }, select: { id: true } });
+      if (referrer) referredById = referrer.id;
+    }
+
+    const trimmedUsername = username.trim();
     const user = await prisma.user.create({
-      data: { username: username.trim(), email: email.toLowerCase().trim(), passwordHash },
+      data: {
+        username: trimmedUsername,
+        email: email.toLowerCase().trim(),
+        passwordHash,
+        referralCode: trimmedUsername,
+        ...(referredById ? { referredBy: referredById } : {}),
+      },
     });
 
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "30d" });

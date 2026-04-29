@@ -191,6 +191,13 @@ export async function POST(req: NextRequest) {
         profitLoss,
       },
     });
+
+    if (user.referredBy) {
+      await tx.user.update({
+        where: { id: user.referredBy },
+        data: { referralEarnings: { increment: fee * 0.01 } },
+      });
+    }
   });
 
   const updatedUser = await prisma.user.findUnique({

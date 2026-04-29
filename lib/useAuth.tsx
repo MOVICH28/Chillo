@@ -9,13 +9,14 @@ export interface AuthUser {
   email: string;
   doraBalance: number;
   avatarUrl: string | null;
+  referralEarnings: number;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
   login: (identifier: string, password: string) => Promise<AuthUser>;
-  register: (username: string, email: string, password: string) => Promise<AuthUser>;
+  register: (username: string, email: string, password: string, refCode?: string) => Promise<AuthUser>;
   logout: () => void;
   getToken: () => string | null;
   refreshUser: () => Promise<void>;
@@ -77,11 +78,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data.user as AuthUser;
   }, []);
 
-  const register = useCallback(async (username: string, email: string, password: string) => {
+  const register = useCallback(async (username: string, email: string, password: string, refCode?: string) => {
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, email, password }),
+      body: JSON.stringify({ username, email, password, ...(refCode ? { refCode } : {}) }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "Registration failed");
