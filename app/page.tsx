@@ -95,7 +95,7 @@ export default function Home() {
         </div>
 
         {/* Main content */}
-        <main id="markets" className="flex-1 min-w-0 overflow-y-auto py-6 no-scrollbar">
+        <main id="markets" className="flex-1 min-w-0 overflow-y-auto py-6 no-scrollbar max-w-[calc(100%-180px-160px-24px)]">
           {/* Page header */}
           <div className="flex items-center justify-between mb-5">
             <div>
@@ -239,7 +239,7 @@ export default function Home() {
         </main>
 
         {/* Right panel */}
-        <div className="hidden xl:block w-40 shrink-0 overflow-y-auto overflow-x-hidden py-6 no-scrollbar">
+        <div className="hidden xl:block w-36 shrink-0 overflow-y-auto py-6 no-scrollbar">
           <RightPanel rounds={rounds} />
         </div>
       </div>

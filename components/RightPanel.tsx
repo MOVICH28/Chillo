@@ -89,29 +89,28 @@ export default function RightPanel({ rounds }: RightPanelProps) {
   }, []);
 
   return (
-    <aside className="w-64 shrink-0 flex flex-col gap-4 pt-2">
+    <aside className="w-36 shrink-0 flex flex-col gap-3 pt-2">
       {/* Today's Stats */}
-      <div className="bg-surface rounded-xl border border-surface-3 p-4">
-        <p className="text-[10px] uppercase tracking-widest text-muted mb-3">24h Stats</p>
-        <div className="space-y-2.5">
-          <Stat label="Volume 24h" value={`${formatDora(stats.volume24h)} DORA`} highlight />
-          <Stat label="Active Markets" value={stats.activeMarkets.toString()} />
-          <Stat label="Trades 24h" value={stats.bets24h.toString()} />
-          <Stat label="Avg Volume" value={`${stats.activeMarkets ? formatDora(stats.volume24h / stats.activeMarkets) : "0"} DORA`} />
+      <div className="bg-surface rounded-xl border border-surface-3 p-2">
+        <p className="text-[9px] uppercase tracking-widest text-muted mb-2">24h Stats</p>
+        <div className="space-y-2">
+          <Stat label="Volume" value={`${formatDora(stats.volume24h)}`} highlight />
+          <Stat label="Markets" value={stats.activeMarkets.toString()} />
+          <Stat label="Trades" value={stats.bets24h.toString()} />
         </div>
       </div>
 
       {/* Live Bets Feed */}
-      <div className="bg-surface rounded-xl border border-surface-3 p-4 flex-1">
-        <div className="flex items-center gap-2 mb-3">
+      <div className="bg-surface rounded-xl border border-surface-3 p-2 flex-1">
+        <div className="flex items-center gap-1.5 mb-2">
           <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse-slow" />
-          <p className="text-[10px] uppercase tracking-widest text-muted">Live Bets</p>
+          <p className="text-[9px] uppercase tracking-widest text-muted">Live Bets</p>
         </div>
 
         {liveBets.length === 0 ? (
-          <p className="text-xs text-muted text-center py-4">No bets yet. Be first!</p>
+          <p className="text-[10px] text-muted text-center py-3">No bets yet.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {liveBets.map((bet) => {
               const isBuy = bet.type === "buy";
               const badgeClass = isBuy
@@ -181,9 +180,9 @@ export default function RightPanel({ rounds }: RightPanelProps) {
 
 function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs text-muted">{label}</span>
-      <span className={`text-xs font-mono font-semibold ${highlight ? "text-brand" : "text-white"}`}>
+    <div className="flex items-center justify-between gap-1">
+      <span className="text-[10px] text-muted truncate">{label}</span>
+      <span className={`text-[10px] font-mono font-semibold shrink-0 ${highlight ? "text-brand" : "text-white"}`}>
         {value}
       </span>
     </div>
