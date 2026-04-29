@@ -70,9 +70,6 @@ export default function Navbar({ rounds }: NavbarProps) {
         <Link href="/portfolio" className="text-xs text-muted hover:text-white transition-colors">
           Portfolio
         </Link>
-        <Link href="/faq" className="text-xs text-muted hover:text-white transition-colors">
-          FAQ
-        </Link>
         {isAdmin && (
           <Link href="/admin" className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
             Admin

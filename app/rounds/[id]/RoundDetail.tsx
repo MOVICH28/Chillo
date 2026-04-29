@@ -596,6 +596,16 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                       </svg>
                     </button>
+                    {round.isPumpFun && (
+                      <a
+                        href={`https://pump.fun/coin/${round.tokenAddress}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-orange-400/70 hover:text-orange-400 transition-colors"
+                      >
+                        pump.fun ↗
+                      </a>
+                    )}
                   </>
                 )}
                 {round.twitterUrl && (
@@ -610,7 +620,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                       <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.253 5.622 5.91-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                       </svg>
-                      {round.twitterUsername ? `@${round.twitterUsername}` : "X / Twitter"} →
+                      /{round.twitterUrl.replace("https://x.com/", "").replace("https://twitter.com/", "")} →
                     </a>
                   </>
                 )}
@@ -669,7 +679,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                             ? <span className="text-[#22c55e] text-xs shrink-0 w-3">✓</span>
                             : <span className="w-3 shrink-0" />
                           }
-                          <span className="text-xs text-white/30 truncate">{o.label}</span>
+                          <span className="text-xs text-white/30 break-words min-w-0">{o.label}</span>
                         </div>
                       );
                     })}
@@ -801,7 +811,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                       <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.253 5.622 5.91-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                       </svg>
-                      {round.twitterUsername ? `@${round.twitterUsername}` : "X / Twitter"} →
+                      /{round.twitterUrl.replace("https://x.com/", "").replace("https://twitter.com/", "")} →
                     </a>
                   )}
                 </div>
@@ -866,7 +876,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
         </main>
 
         {/* Right column: Bet Panel (desktop) */}
-        <div className="hidden lg:block w-72 shrink-0 py-6 sticky top-14 self-start">
+        <div className="hidden lg:block w-80 shrink-0 py-6 sticky top-14 self-start">
           {outcomes.length > 0 && (
             <div ref={betPanelRef}>
               <LMSRBetPanel
