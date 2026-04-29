@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Sidebar from "@/components/Sidebar";
+import RightPanel from "@/components/RightPanel";
 import { useAuth } from "@/lib/useAuth";
 import AuthModal from "@/components/AuthModal";
 
@@ -137,9 +138,11 @@ function SellModal({ pos, onClose, onSuccess, getToken }: {
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState("");
 
-  const c            = OUTCOME_COLORS[pos.outcome] ?? { text: "text-white", bg: "bg-white/5", border: "border-white/10" };
-  const sharesToSell = parseFloat(((pct / 100) * pos.shares).toFixed(6));
-  const estimated    = sharesToSell * pos.currentPrice * 0.99; // ~1% fee approximation
+  const c           = OUTCOME_COLORS[pos.outcome] ?? { text: "text-white", bg: "bg-white/5", border: "border-white/10" };
+  const invested    = pos.shares * pos.avgCost;          // DORA spent to acquire position
+  const currentVal  = pos.currentValue;                  // current DORA value
+  const doraToSell  = parseFloat(((pct / 100) * currentVal).toFixed(4));
+  const estimated   = doraToSell * 0.99;                 // ~1% fee
 
   async function handleSell() {
     setBusy(true);
@@ -151,7 +154,8 @@ function SellModal({ pos, onClose, onSuccess, getToken }: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getToken() ?? ""}`,
         },
-        body: JSON.stringify({ roundId: pos.roundId, outcome: pos.outcome, type: "sell", shares: sharesToSell }),
+        // Send doraAmount; API derives shares = min(doraAmount/currentPrice, pos.shares)
+        body: JSON.stringify({ roundId: pos.roundId, outcome: pos.outcome, type: "sell", doraAmount: doraToSell }),
       });
       if (res.ok) { onSuccess(); onClose(); }
       else { const d = await res.json(); setError(d.error ?? "Sell failed"); }
@@ -180,10 +184,19 @@ function SellModal({ pos, onClose, onSuccess, getToken }: {
           </span>
           <span className="text-white/60 text-sm line-clamp-1">{pos.question}</span>
         </div>
-        <div className="mb-4 text-[11px] text-muted space-x-3">
-          <span>Shares: <span className="text-white font-mono">{pos.shares.toFixed(4)}</span></span>
-          <span>Avg cost: <span className="text-white font-mono">{pos.avgCost.toFixed(4)}</span></span>
-          <span>Cur price: <span className="text-white font-mono">{pos.currentPrice.toFixed(4)}</span></span>
+
+        {/* DORA value summary */}
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <div className="px-3 py-2 rounded-lg bg-white/[0.03] border border-white/5">
+            <p className="text-[9px] uppercase tracking-widest text-muted mb-0.5">Invested</p>
+            <p className="text-sm font-mono font-semibold text-white">{invested.toFixed(2)} DORA</p>
+          </div>
+          <div className="px-3 py-2 rounded-lg bg-white/[0.03] border border-white/5">
+            <p className="text-[9px] uppercase tracking-widest text-muted mb-0.5">Current value</p>
+            <p className={`text-sm font-mono font-semibold ${currentVal >= invested ? "text-[#22c55e]" : "text-red-400"}`}>
+              {currentVal.toFixed(2)} DORA
+            </p>
+          </div>
         </div>
 
         {/* Sell percentage */}
@@ -206,8 +219,8 @@ function SellModal({ pos, onClose, onSuccess, getToken }: {
         {/* Preview */}
         <div className="mb-4 px-3 py-2.5 rounded-lg bg-white/[0.03] border border-white/5 text-xs space-y-1.5">
           <div className="flex justify-between">
-            <span className="text-muted">Shares to sell</span>
-            <span className="font-mono text-white">{sharesToSell.toFixed(4)}</span>
+            <span className="text-muted">Selling</span>
+            <span className="font-mono text-white">{doraToSell.toFixed(2)} DORA worth</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted">Est. proceeds (after ~1% fee)</span>
@@ -219,10 +232,10 @@ function SellModal({ pos, onClose, onSuccess, getToken }: {
 
         <button
           onClick={handleSell}
-          disabled={busy || sharesToSell <= 0}
+          disabled={busy || doraToSell <= 0}
           className="w-full py-2.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-400 font-semibold text-sm transition-colors disabled:opacity-50"
         >
-          {busy ? "Selling…" : `Sell ${sharesToSell.toFixed(4)} shares`}
+          {busy ? "Selling…" : `Sell ${pct}% · ${doraToSell.toFixed(2)} DORA`}
         </button>
       </div>
     </div>
@@ -288,7 +301,7 @@ export default function PortfolioPage() {
       <div className="flex flex-row gap-3 max-w-[1400px] mx-auto w-full px-2 mt-14">
 
         {/* Left Sidebar */}
-        <div className="hidden lg:block w-40 shrink-0 overflow-y-auto py-6 no-scrollbar sticky top-14 self-start">
+        <div className="hidden lg:block w-40 shrink-0 overflow-y-auto py-6 no-scrollbar sticky top-14 self-start h-[calc(100vh-3.5rem)]">
           <Sidebar active="all" onSelect={() => {}} counts={{}} />
           <SidebarStats />
         </div>
@@ -440,6 +453,12 @@ export default function PortfolioPage() {
             </div>
           )}
         </main>
+
+        {/* Right Panel */}
+        <div className="hidden xl:block w-64 shrink-0 py-6 sticky top-14 self-start h-[calc(100vh-3.5rem)] overflow-y-auto no-scrollbar">
+          <RightPanel rounds={[]} />
+        </div>
+
       </div>
 
       {/* Sell modal */}

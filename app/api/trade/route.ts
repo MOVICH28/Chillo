@@ -72,12 +72,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing or invalid fields" }, { status: 400 });
 
   // Validate amount fields before fetching round
-  const doraAmount    = type === "buy"  ? parseFloat(rawDora)   : 0;
-  const rawSharesNum  = type === "sell" ? parseFloat(rawShares) : 0;
-  if (type === "buy"  && (!doraAmount  || doraAmount  <= 0))
+  const doraAmount   = parseFloat(rawDora) || 0;
+  const rawSharesNum = parseFloat(rawShares) || 0;
+  if (type === "buy" && doraAmount <= 0)
     return NextResponse.json({ error: "doraAmount must be positive" }, { status: 400 });
-  if (type === "sell" && (!rawSharesNum || rawSharesNum <= 0))
-    return NextResponse.json({ error: "shares must be positive" }, { status: 400 });
+  if (type === "sell" && doraAmount <= 0 && rawSharesNum <= 0)
+    return NextResponse.json({ error: "doraAmount or shares must be positive" }, { status: 400 });
 
   const round = await prisma.round.findUnique({
     where: { id: roundId },
@@ -115,12 +115,23 @@ export async function POST(req: NextRequest) {
     fee       = rawCost * PLATFORM_FEE;
     totalCost = rawCost + fee; // ≤ doraAmount by construction
   } else {
-    sharesToTrade = rawSharesNum;
     const pos = await prisma.position.findUnique({
       where: { userId_roundId_outcome: { userId: payload.userId, roundId, outcome } },
     });
-    if (!pos || pos.shares < sharesToTrade)
-      return NextResponse.json({ error: "Insufficient shares to sell" }, { status: 400 });
+    if (!pos || pos.shares <= 0)
+      return NextResponse.json({ error: "No shares to sell" }, { status: 400 });
+
+    if (doraAmount > 0) {
+      // doraAmount mode: derive shares from current LMSR price, cap at actual position
+      const prices = getAllPrices(currentShares, b, activeOutcomes);
+      const currentPrice = prices[outcome] ?? 0;
+      if (currentPrice <= 0) return NextResponse.json({ error: "Cannot price this outcome" }, { status: 400 });
+      sharesToTrade = Math.min(doraAmount / currentPrice, pos.shares);
+    } else {
+      sharesToTrade = Math.min(rawSharesNum, pos.shares);
+    }
+    if (sharesToTrade <= 0)
+      return NextResponse.json({ error: "Sell amount too small" }, { status: 400 });
     rawCost           = costToBuy(currentShares, outcome, -sharesToTrade, b, activeOutcomes); // < 0
     const rawProceeds = -rawCost;
     fee               = rawProceeds * PLATFORM_FEE;
