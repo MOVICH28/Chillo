@@ -484,9 +484,7 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
         return; // explicit: nothing below runs, viewport is never touched again
       }
 
-      // ── FIRST LOAD: populate full dataset and fitContent exactly once ─────────
-      fittedRef.current = true;
-
+      // ── FIRST LOAD: populate full dataset, fitContent once enough data is present ──
       if (chartType === "candles" && isKline) {
         prog(() => lineRef.current.setData([]));
         const candleData = data
@@ -518,7 +516,11 @@ export default function CandleChart({ data, chartType, isKline, priceToBeat, tim
         }
       }
 
-      prog(() => chartRef.current.timeScale().fitContent());
+      // Only lock viewport once enough candles are present (avoids fitting to sparse early data)
+      if (data.length > 10) {
+        fittedRef.current = true;
+        prog(() => chartRef.current.timeScale().fitContent());
+      }
     } catch { /**/ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, chartType, isKline, priceToBeat]);

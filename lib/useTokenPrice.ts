@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export type Timeframe = "1s" | "5s" | "30s" | "1m" | "5m" | "15m" | "30m" | "1h" | "4h" | "6h" | "24h";
 
@@ -225,6 +225,11 @@ export function useTokenPrice(opts: {
     price: null, history: [], status: "connecting", label: defaultLabel, isKline: isKlineMode,
   });
 
+  // Persists GeckoTerminal 1m candles across timeframe changes for the same token.
+  // Reset only when tokenAddress changes so switching TFs reuses cached history.
+  const historicalCandlesRef     = useRef<OHLCPoint[]>([]);
+  const historicalCandlesAddrRef = useRef<string | null>(null);
+
   useEffect(() => {
     const label = binanceSymbol ? (LABEL_MAP[sym] ?? "TOKEN/USDT") : "TOKEN/USD";
 
@@ -364,19 +369,23 @@ export function useTokenPrice(opts: {
 
       // Load and prune persisted ticks (up to 24h old)
       const cutoff = Date.now() - HISTORY_TTL_MS;
-      let ticks: StoredTick[]       = lsLoad(tokenAddress).filter(t => t.t >= cutoff);
-      let symbol                    = "TOKEN";
-      let historicalCandles: OHLCPoint[] = []; // GeckoTerminal 1m candles
-      let historicalFetched         = false;
+      let ticks: StoredTick[] = lsLoad(tokenAddress).filter(t => t.t >= cutoff);
+      let symbol              = "TOKEN";
+
+      // Reset historical candles when token changes; preserve across timeframe changes
+      // so switching from Live → Line/Candles reuses already-fetched GeckoTerminal data.
+      if (historicalCandlesAddrRef.current !== tokenAddress) {
+        historicalCandlesRef.current     = [];
+        historicalCandlesAddrRef.current = tokenAddress;
+      }
 
       // Merge GeckoTerminal 1m history + live StoredTicks into OHLCV for any kline TF.
       // GeckoTerminal provides true OHLCV; live ticks extend beyond the last historical candle.
       // For showMcap: GeckoTerminal has no mcap data so skip it — live ticks only.
       const buildKlineHistory = (): OHLCPoint[] => {
         if (showMcap) return aggregateCandles(ticks, periodMs, true);
-        const resampled  = resampleCandles(historicalCandles, periodMs);
-        // Append live ticks that fall in periods AFTER the last historical period
-        const liveStart  = resampled.length ? resampled[resampled.length - 1].time + periodMs : 0;
+        const resampled   = resampleCandles(historicalCandlesRef.current, periodMs);
+        const liveStart   = resampled.length ? resampled[resampled.length - 1].time + periodMs : 0;
         const liveCandles = aggregateCandles(ticks.filter(t => t.t >= liveStart), periodMs, false);
         return [...resampled, ...liveCandles];
       };
@@ -415,17 +424,6 @@ export function useTokenPrice(opts: {
           if (!isFinite(price) || price <= 0) return;
           symbol = pair.baseToken?.symbol ?? "TOKEN";
 
-          // Fallback: if prefetch failed to get history, try on first poll
-          if (!historicalFetched && pair.pairAddress && !isStreamingTF && !showMcap) {
-            historicalFetched = true;
-            fetchGeckoOHLCV(pair.pairAddress as string, ac.signal).then(candles => {
-              if (cancelled || !candles.length) return;
-              historicalCandles = candles;
-              const merged = buildKlineHistory();
-              if (merged.length) setState(s => ({ ...s, history: merged, isKline: true }));
-            });
-          }
-
           // Append tick, prune to 24h + max 500, persist
           ticks.push({ t: Date.now(), p: price, m: mcap });
           const cutoffNow = Date.now() - HISTORY_TTL_MS;
@@ -460,9 +458,14 @@ export function useTokenPrice(opts: {
         } catch { /**/ }
       };
 
-      if (!isStreamingTF && !showMcap) {
-        // Prefetch: DexScreener → pairAddress → GeckoTerminal pool OHLCV → then start poll
-        historicalFetched = true; // prevent poll fallback from double-fetching
+      // Always start polling immediately regardless of TF
+      poll();
+      pollInterval = setInterval(poll, DEX_POLL_MS);
+
+      // Fetch GeckoTerminal OHLCV history in background for ALL timeframes (not just kline).
+      // Stored in a ref so the data survives timeframe changes — when user switches from
+      // Live mode (streaming TF) to Line/Candles, history is already available.
+      if (!showMcap && historicalCandlesRef.current.length === 0) {
         (async () => {
           let pairAddress: string | null = null;
           try {
@@ -487,21 +490,15 @@ export function useTokenPrice(opts: {
           if (!cancelled && pairAddress) {
             const candles = await fetchGeckoOHLCV(pairAddress, ac.signal);
             if (!cancelled && candles.length) {
-              historicalCandles = candles;
-              const merged = buildKlineHistory();
-              if (merged.length) setState(s => ({ ...s, history: merged, isKline: true }));
+              historicalCandlesRef.current = candles;
+              // Immediately update chart if already in kline mode
+              if (!isStreamingTF) {
+                const merged = buildKlineHistory();
+                if (merged.length) setState(s => ({ ...s, history: merged, isKline: true }));
+              }
             }
           }
-
-          if (!cancelled) {
-            poll();
-            pollInterval = setInterval(poll, DEX_POLL_MS);
-          }
         })();
-      } else {
-        // Streaming TF or showMcap: start poll immediately
-        poll();
-        pollInterval = setInterval(poll, DEX_POLL_MS);
       }
     }
 
