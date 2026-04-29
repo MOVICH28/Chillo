@@ -74,8 +74,10 @@ function formatMcap(v: number): string {
 }
 
 /** Build price outcomes. Boundaries placed symmetrically around center. */
-function buildPriceOutcomesNew(step: number, center: number, numRanges: number, refPrice: number): OutcomeInput[] {
-  const fmt  = (n: number) => fmtPrice(Math.max(0, n), refPrice);
+function buildPriceOutcomesNew(step: number, center: number, numRanges: number, refPrice: number, decimals?: number): OutcomeInput[] {
+  const fmt  = decimals != null
+    ? (n: number) => `$${Math.max(0, n).toFixed(decimals)}`
+    : (n: number) => fmtPrice(Math.max(0, n), refPrice);
   const s    = Math.max(step, 1e-12);
   const n    = Math.max(2, Math.min(6, numRanges));
   if (n === 2) return [
@@ -159,6 +161,33 @@ function validTwitterUsername(u: string): boolean {
 function fmtPrice(n: number, ref: number): string {
   if (ref >= 1000) return `$${Math.round(n).toLocaleString()}`;
   return `$${n.toFixed(ref < 0.01 ? 6 : 4)}`;
+}
+
+function parseUnitValue(numStr: string, unit: "K"|"M"|"B"): number {
+  const n = parseFloat(numStr);
+  if (!isFinite(n) || n <= 0) return 0;
+  return unit === "K" ? n * 1_000 : unit === "M" ? n * 1_000_000 : n * 1_000_000_000;
+}
+
+function autoUnit(v: number): { num: string; unit: "K"|"M"|"B" } {
+  if (v >= 1_000_000_000) return { num: String(+(v / 1_000_000_000).toFixed(2)), unit: "B" };
+  if (v >= 1_000_000)     return { num: String(+(v / 1_000_000).toFixed(2)),     unit: "M" };
+  return                         { num: String(+(v / 1_000).toFixed(1)),          unit: "K" };
+}
+
+function buildRangeLabelMcap(min: number | null, max: number | null): string {
+  if (min == null) return `Below ${formatMcap(max!)}`;
+  if (max == null) return `${formatMcap(min)} and above`;
+  return `${formatMcap(min)} – ${formatMcap(max)}`;
+}
+
+function buildRangeLabelPrice(min: number | null, max: number | null, refPrice: number, decimals: number): string {
+  const fmt = (v: number) => decimals === 0 && refPrice >= 1000
+    ? `$${Math.round(v).toLocaleString()}`
+    : `$${Math.max(0, v).toFixed(decimals)}`;
+  if (min == null) return `Below ${fmt(max!)}`;
+  if (max == null) return `${fmt(min)} and above`;
+  return `${fmt(min)} – ${fmt(max)}`;
 }
 
 // ── Image upload ──────────────────────────────────────────────────────────────
@@ -290,8 +319,11 @@ export default function CreatePage() {
   const [priceStepInput,   setPriceStepInput]   = useState("");
   const [priceCenterInput, setPriceCenterInput] = useState("");
   const [priceNumRanges,   setPriceNumRanges]   = useState(6);
-  const [mcapMinInput,     setMcapMinInput]     = useState("");
-  const [mcapMaxInput,     setMcapMaxInput]     = useState("");
+  const [priceDecimals,    setPriceDecimals]    = useState(6);
+  const [mcapMinNum,       setMcapMinNum]       = useState("");
+  const [mcapMinUnit,      setMcapMinUnit]      = useState<"K"|"M"|"B">("K");
+  const [mcapMaxNum,       setMcapMaxNum]       = useState("");
+  const [mcapMaxUnit,      setMcapMaxUnit]      = useState<"K"|"M"|"B">("M");
   const [mcapScaleType,    setMcapScaleType]    = useState<"linear" | "logarithmic">("logarithmic");
   const [mcapNumRanges,    setMcapNumRanges]    = useState(6);
 
@@ -376,8 +408,10 @@ export default function CreatePage() {
       setPriceCenterInput(String(price));
     }
     if ((cryptoQType === "mcap" || cryptoQType === "ath_mcap") && mcap > 0) {
-      setMcapMinInput(String(Math.round(mcap * 0.5)));
-      setMcapMaxInput(String(Math.round(mcap * 10)));
+      const minU = autoUnit(Math.round(mcap * 0.5));
+      const maxU = autoUnit(Math.round(mcap * 10));
+      setMcapMinNum(minU.num);  setMcapMinUnit(minU.unit);
+      setMcapMaxNum(maxU.num);  setMcapMaxUnit(maxU.unit);
     }
   }, [cryptoQType, tokenInfo, category]);
 
@@ -390,11 +424,11 @@ export default function CreatePage() {
       const step   = parseFloat(priceStepInput);
       const center = parseFloat(priceCenterInput);
       if (step > 0 && center > 0) {
-        setOutcomes(buildPriceOutcomesNew(step, center, priceNumRanges, price));
+        setOutcomes(buildPriceOutcomesNew(step, center, priceNumRanges, price, priceDecimals));
       }
     } else if (cryptoQType === "mcap" || cryptoQType === "ath_mcap") {
-      const minV = parseFloat(mcapMinInput);
-      const maxV = parseFloat(mcapMaxInput);
+      const minV = parseUnitValue(mcapMinNum, mcapMinUnit);
+      const maxV = parseUnitValue(mcapMaxNum, mcapMaxUnit);
       if (minV > 0 && maxV > minV) {
         setOutcomes(
           mcapScaleType === "logarithmic"
@@ -406,7 +440,7 @@ export default function CreatePage() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cryptoQType, priceStepInput, priceCenterInput, priceNumRanges, mcapMinInput, mcapMaxInput, mcapScaleType, mcapNumRanges, tokenInfo, category]);
+  }, [cryptoQType, priceStepInput, priceCenterInput, priceNumRanges, priceDecimals, mcapMinNum, mcapMinUnit, mcapMaxNum, mcapMaxUnit, mcapScaleType, mcapNumRanges, tokenInfo, category]);
 
   // ── Twitter auto-question ─────────────────────────────────────────────────
   const cleanTwitter     = twitterQuery.replace(/^@/, "").trim();
@@ -745,7 +779,7 @@ export default function CreatePage() {
           <div className="space-y-5">
             <div>
               <h2 className="text-white font-semibold mb-1">Outcome Ranges</h2>
-              <p className="text-muted text-xs">Set the ranges below — type exact values or use presets. Outcomes update live.</p>
+              <p className="text-muted text-xs">Configure ranges — outcomes update live. Fine-tune individual breakpoints below.</p>
             </div>
 
             {/* ── Price builder ── */}
@@ -756,32 +790,44 @@ export default function CreatePage() {
                   <span className="text-brand font-mono font-semibold">{fmtPrice(tokenInfo.priceUsd, tokenInfo.priceUsd)}</span>
                 </div>
 
+                {/* Decimal places */}
+                <div>
+                  <label className="block text-xs text-muted mb-1.5">Decimal places</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[0,1,2,3,4,5,6,8].map(d => (
+                      <button key={d}
+                        onClick={() => { setPriceDecimals(d); setPriceStepInput(String(Math.pow(10, -Math.max(d,1)))); }}
+                        className={`px-2.5 py-0.5 rounded text-[10px] font-mono border transition-colors
+                          ${priceDecimals === d ? "bg-brand/20 border-brand/40 text-brand" : "bg-surface border-surface-3 text-muted hover:text-white"}`}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Step size */}
                 <div>
                   <label className="block text-xs text-muted mb-1.5">Step size</label>
-                  <input
-                    type="number" step="any" min="0"
+                  <input type="number" step="any" min="0"
                     value={priceStepInput}
                     onChange={e => setPriceStepInput(e.target.value)}
-                    placeholder={`e.g. ${getPriceSteps(tokenInfo.priceUsd)[defaultStepIdx(tokenInfo.priceUsd)]}`}
-                    className="w-full px-3 py-2 rounded-lg bg-surface border border-surface-3 text-white text-sm font-mono focus:outline-none focus:border-brand transition-colors"
-                  />
+                    placeholder={`e.g. ${Math.pow(10, -priceDecimals)}`}
+                    className="w-full px-3 py-2 rounded-lg bg-surface border border-surface-3 text-white text-sm font-mono focus:outline-none focus:border-brand transition-colors" />
                 </div>
 
                 {/* Center price */}
                 <div>
                   <label className="block text-xs text-muted mb-1.5">Center price</label>
-                  <input
-                    type="number" step="any" min="0"
-                    value={priceCenterInput}
-                    onChange={e => setPriceCenterInput(e.target.value)}
-                    placeholder={`e.g. ${tokenInfo.priceUsd}`}
-                    className="w-full px-3 py-2 rounded-lg bg-surface border border-surface-3 text-white text-sm font-mono focus:outline-none focus:border-brand transition-colors"
-                  />
-                  <button onClick={() => setPriceCenterInput(String(tokenInfo.priceUsd))}
-                    className="mt-1 text-[10px] text-muted hover:text-brand transition-colors">
-                    Reset to current price
-                  </button>
+                  <div className="flex gap-2">
+                    <input type="number" step="any" min="0"
+                      value={priceCenterInput}
+                      onChange={e => setPriceCenterInput(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-lg bg-surface border border-surface-3 text-white text-sm font-mono focus:outline-none focus:border-brand transition-colors" />
+                    <button onClick={() => setPriceCenterInput(String(tokenInfo.priceUsd))}
+                      className="px-3 py-2 rounded-lg bg-surface border border-surface-3 text-xs text-muted hover:text-brand transition-colors whitespace-nowrap">
+                      Reset
+                    </button>
+                  </div>
                 </div>
 
                 {/* Number of ranges */}
@@ -791,14 +837,51 @@ export default function CreatePage() {
                     {[2,3,4,5,6].map(n => (
                       <button key={n} onClick={() => setPriceNumRanges(n)}
                         className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-colors
-                          ${priceNumRanges === n
-                            ? "bg-brand/20 border-brand/40 text-brand"
-                            : "bg-surface border-surface-3 text-muted hover:text-white"}`}>
+                          ${priceNumRanges === n ? "bg-brand/20 border-brand/40 text-brand" : "bg-surface border-surface-3 text-muted hover:text-white"}`}>
                         {n}
                       </button>
                     ))}
                   </div>
                 </div>
+
+                {/* Fine-tune breakpoints */}
+                {outcomes.length > 1 && (
+                  <div>
+                    <label className="block text-xs text-muted mb-2">Fine-tune breakpoints</label>
+                    <div className="space-y-1.5">
+                      {outcomes.slice(0, -1).map((o, i) => (
+                        <div key={`pb-${i}-${o.maxPrice}`} className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-white/40 w-5 shrink-0">{o.id}</span>
+                          <span className="text-[10px] text-muted shrink-0">max:</span>
+                          <input type="number" step="any"
+                            defaultValue={o.maxPrice ?? ""}
+                            onBlur={e => {
+                              const val = parseFloat(e.target.value);
+                              if (!isFinite(val)) return;
+                              const ref = tokenInfo.priceUsd;
+                              const dec = priceDecimals;
+                              setOutcomes(prev => {
+                                const next = prev.map(x => ({ ...x }));
+                                next[i].maxPrice = val;
+                                if (i + 1 < next.length) next[i + 1].minPrice = val;
+                                return next.map((x, j) => ({
+                                  ...x,
+                                  label: buildRangeLabelPrice(
+                                    j === 0 ? null : (x.minPrice ?? null),
+                                    j === next.length - 1 ? null : (x.maxPrice ?? null),
+                                    ref, dec
+                                  )
+                                }));
+                              });
+                            }}
+                            className="flex-1 px-2 py-1 rounded bg-surface border border-surface-3 text-white text-xs font-mono focus:outline-none focus:border-brand transition-colors" />
+                          <span className="text-[10px] text-muted shrink-0">→ {outcomes[i+1].id}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-muted/50 mt-1.5">Editing a breakpoint snaps the adjacent range. Changes override auto-generation until you adjust controls above.</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -819,54 +902,64 @@ export default function CreatePage() {
                   </div>
                 )}
 
-                {/* Min range */}
+                {/* Min value with unit */}
                 <div>
-                  <label className="block text-xs text-muted mb-1.5">Min range (USD) — start of lowest outcome</label>
-                  <input
-                    type="number" step="any" min="0"
-                    value={mcapMinInput}
-                    onChange={e => setMcapMinInput(e.target.value)}
-                    placeholder="e.g. 100000"
-                    className="w-full px-3 py-2 rounded-lg bg-surface border border-surface-3 text-white text-sm font-mono focus:outline-none focus:border-brand transition-colors"
-                  />
-                  {mcapMinInput && parseFloat(mcapMinInput) > 0 && (
-                    <p className="text-[10px] text-brand/70 mt-0.5 font-mono">{formatMcap(parseFloat(mcapMinInput))}</p>
+                  <label className="block text-xs text-muted mb-1.5">Min value</label>
+                  <div className="flex gap-2">
+                    <input type="number" step="any" min="0"
+                      value={mcapMinNum}
+                      onChange={e => setMcapMinNum(e.target.value)}
+                      placeholder="e.g. 50"
+                      className="flex-1 px-3 py-2 rounded-lg bg-surface border border-surface-3 text-white text-sm font-mono focus:outline-none focus:border-brand transition-colors" />
+                    <select value={mcapMinUnit} onChange={e => setMcapMinUnit(e.target.value as "K"|"M"|"B")}
+                      className="px-3 py-2 rounded-lg bg-surface border border-surface-3 text-white text-sm focus:outline-none focus:border-brand transition-colors cursor-pointer">
+                      <option value="K">K</option>
+                      <option value="M">M</option>
+                      <option value="B">B</option>
+                    </select>
+                  </div>
+                  {parseUnitValue(mcapMinNum, mcapMinUnit) > 0 && (
+                    <p className="text-[10px] text-brand/70 mt-0.5 font-mono">= {formatMcap(parseUnitValue(mcapMinNum, mcapMinUnit))}</p>
                   )}
                 </div>
 
-                {/* Max range */}
+                {/* Max value with unit */}
                 <div>
-                  <label className="block text-xs text-muted mb-1.5">Max range (USD) — end of highest outcome</label>
-                  <input
-                    type="number" step="any" min="0"
-                    value={mcapMaxInput}
-                    onChange={e => setMcapMaxInput(e.target.value)}
-                    placeholder="e.g. 10000000"
-                    className="w-full px-3 py-2 rounded-lg bg-surface border border-surface-3 text-white text-sm font-mono focus:outline-none focus:border-brand transition-colors"
-                  />
-                  {mcapMaxInput && parseFloat(mcapMaxInput) > 0 && (
-                    <p className="text-[10px] text-brand/70 mt-0.5 font-mono">{formatMcap(parseFloat(mcapMaxInput))}</p>
+                  <label className="block text-xs text-muted mb-1.5">Max value</label>
+                  <div className="flex gap-2">
+                    <input type="number" step="any" min="0"
+                      value={mcapMaxNum}
+                      onChange={e => setMcapMaxNum(e.target.value)}
+                      placeholder="e.g. 10"
+                      className="flex-1 px-3 py-2 rounded-lg bg-surface border border-surface-3 text-white text-sm font-mono focus:outline-none focus:border-brand transition-colors" />
+                    <select value={mcapMaxUnit} onChange={e => setMcapMaxUnit(e.target.value as "K"|"M"|"B")}
+                      className="px-3 py-2 rounded-lg bg-surface border border-surface-3 text-white text-sm focus:outline-none focus:border-brand transition-colors cursor-pointer">
+                      <option value="K">K</option>
+                      <option value="M">M</option>
+                      <option value="B">B</option>
+                    </select>
+                  </div>
+                  {parseUnitValue(mcapMaxNum, mcapMaxUnit) > 0 && (
+                    <p className="text-[10px] text-brand/70 mt-0.5 font-mono">= {formatMcap(parseUnitValue(mcapMaxNum, mcapMaxUnit))}</p>
                   )}
                 </div>
 
-                {/* Scale type */}
+                {/* Scale */}
                 <div>
                   <label className="block text-xs text-muted mb-1.5">Scale</label>
                   <div className="flex gap-2">
                     {(["logarithmic","linear"] as const).map(s => (
                       <button key={s} onClick={() => setMcapScaleType(s)}
                         className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors
-                          ${mcapScaleType === s
-                            ? "bg-brand/20 border-brand/40 text-brand"
-                            : "bg-surface border-surface-3 text-muted hover:text-white"}`}>
-                        {s === "logarithmic" ? "Logarithmic (rec.)" : "Linear"}
+                          ${mcapScaleType === s ? "bg-brand/20 border-brand/40 text-brand" : "bg-surface border-surface-3 text-muted hover:text-white"}`}>
+                        {s === "logarithmic" ? "Logarithmic" : "Linear"}
                       </button>
                     ))}
                   </div>
                   <p className="text-[10px] text-muted mt-1">
                     {mcapScaleType === "logarithmic"
-                      ? "Equal percentage steps — best for volatile tokens with wide mcap ranges."
-                      : "Equal dollar steps — best for stable or predictable assets."}
+                      ? "Equal % steps — best for volatile tokens."
+                      : "Equal $ steps — best for stable assets."}
                   </p>
                 </div>
 
@@ -877,41 +970,89 @@ export default function CreatePage() {
                     {[2,3,4,5,6].map(n => (
                       <button key={n} onClick={() => setMcapNumRanges(n)}
                         className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-colors
-                          ${mcapNumRanges === n
-                            ? "bg-brand/20 border-brand/40 text-brand"
-                            : "bg-surface border-surface-3 text-muted hover:text-white"}`}>
+                          ${mcapNumRanges === n ? "bg-brand/20 border-brand/40 text-brand" : "bg-surface border-surface-3 text-muted hover:text-white"}`}>
                         {n}
                       </button>
                     ))}
                   </div>
                 </div>
+
+                {/* Fine-tune breakpoints */}
+                {outcomes.length > 1 && (
+                  <div>
+                    <label className="block text-xs text-muted mb-2">Fine-tune breakpoints</label>
+                    <div className="space-y-1.5">
+                      {outcomes.slice(0, -1).map((o, i) => (
+                        <div key={`mb-${i}-${o.maxPrice}`} className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-white/40 w-5 shrink-0">{o.id}</span>
+                          <span className="text-[10px] text-muted shrink-0">max:</span>
+                          <input type="number" step="any"
+                            defaultValue={o.maxPrice ?? ""}
+                            onBlur={e => {
+                              const val = parseFloat(e.target.value);
+                              if (!isFinite(val)) return;
+                              setOutcomes(prev => {
+                                const next = prev.map(x => ({ ...x }));
+                                next[i].maxPrice = val;
+                                if (i + 1 < next.length) next[i + 1].minPrice = val;
+                                return next.map((x, j) => ({
+                                  ...x,
+                                  label: buildRangeLabelMcap(
+                                    j === 0 ? null : (x.minPrice ?? null),
+                                    j === next.length - 1 ? null : (x.maxPrice ?? null)
+                                  )
+                                }));
+                              });
+                            }}
+                            className="flex-1 px-2 py-1 rounded bg-surface border border-surface-3 text-white text-xs font-mono focus:outline-none focus:border-brand transition-colors" />
+                          <span className="text-[10px] text-muted font-mono shrink-0">{formatMcap(o.maxPrice ?? 0)}</span>
+                          <span className="text-[10px] text-muted shrink-0">→ {outcomes[i+1].id}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-muted/50 mt-1.5">Editing a breakpoint snaps the adjacent range. Changes override auto-generation until you adjust controls above.</p>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* ── Live outcome preview ── */}
-            <div className="space-y-1.5">
+            {/* ── Live preview table ── */}
+            <div>
               <p className="text-xs text-muted uppercase tracking-wider mb-2">Live preview</p>
-              {outcomes.map((o, i) => {
-                const colors = ["#f87171","#fb923c","#facc15","#4ade80","#38bdf8","#c084fc"];
-                const fmtBound = (v: number | null | undefined, open: "min" | "max") => {
-                  if (v == null) return open === "min" ? "—" : "∞";
-                  return cryptoQType === "price" && tokenInfo
-                    ? fmtPrice(v, tokenInfo.priceUsd)
-                    : formatMcap(v);
-                };
-                return (
-                  <div key={o.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-surface-2 border border-surface-3">
-                    <span className="w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center shrink-0 text-black"
-                      style={{ backgroundColor: colors[i] }}>{o.id}</span>
-                    <span className="flex-1 text-white text-xs">{o.label || "—"}</span>
-                    {(o.minPrice != null || o.maxPrice != null) && (
-                      <span className="text-[10px] font-mono text-muted shrink-0">
-                        {fmtBound(o.minPrice, "min")} → {fmtBound(o.maxPrice, "max")}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+              <div className="overflow-hidden rounded-lg border border-surface-3">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-surface-3 bg-surface-2">
+                      <th className="px-3 py-2 text-left text-[10px] text-muted uppercase tracking-wider w-8">#</th>
+                      <th className="px-3 py-2 text-left text-[10px] text-muted uppercase tracking-wider">Label</th>
+                      <th className="px-3 py-2 text-right text-[10px] text-muted uppercase tracking-wider">Min</th>
+                      <th className="px-3 py-2 text-right text-[10px] text-muted uppercase tracking-wider">Max</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {outcomes.map((o, i) => {
+                      const colors = ["#f87171","#fb923c","#facc15","#4ade80","#38bdf8","#c084fc"];
+                      const fmtBound = (v: number | null | undefined, open: "min"|"max") => {
+                        if (v == null) return open === "min" ? "—" : "∞";
+                        return cryptoQType === "price" && tokenInfo
+                          ? fmtPrice(v, tokenInfo.priceUsd)
+                          : formatMcap(v);
+                      };
+                      return (
+                        <tr key={o.id} className={`border-b border-surface-3/50 last:border-0 ${i % 2 === 0 ? "bg-surface" : "bg-surface-2/50"}`}>
+                          <td className="px-3 py-2">
+                            <span className="w-5 h-5 rounded text-[9px] font-bold inline-flex items-center justify-center text-black"
+                              style={{ backgroundColor: colors[i] }}>{o.id}</span>
+                          </td>
+                          <td className="px-3 py-2 text-white/80">{o.label || "—"}</td>
+                          <td className="px-3 py-2 text-right font-mono text-muted">{fmtBound(o.minPrice, "min")}</td>
+                          <td className="px-3 py-2 text-right font-mono text-muted">{fmtBound(o.maxPrice, "max")}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <div className="flex justify-between pt-2">
