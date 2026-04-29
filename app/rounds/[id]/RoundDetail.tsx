@@ -11,6 +11,7 @@ import { Outcome } from "@/lib/types";
 import { useTokenPrice, Timeframe } from "@/lib/useTokenPrice";
 import { useAuth } from "@/lib/useAuth";
 import TokenStats from "@/components/TokenStats";
+import Sidebar from "@/components/Sidebar";
 
 const CandleChart   = dynamic(() => import("@/components/CandleChart"),   { ssr: false });
 const BettingChart  = dynamic(() => import("@/components/BettingChart"),  { ssr: false });
@@ -477,8 +478,13 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
     <div className="min-h-screen bg-base text-white">
       <div className="flex flex-row gap-3 max-w-[1400px] mx-auto w-full px-2 mt-14">
 
+        {/* Left Sidebar */}
+        <div className="hidden lg:block w-40 shrink-0 overflow-y-auto py-6 no-scrollbar sticky top-14 self-start">
+          <Sidebar active={round.category} onSelect={() => {}} counts={{}} />
+        </div>
+
         {/* Main content */}
-        <main className="min-w-0 flex-[3] py-6">
+        <main className="min-w-0 flex-1 py-6">
 
             {/* Back arrow */}
             <Link href="/" className="flex items-center text-white/40 hover:text-white/70 transition-colors mb-4 w-fit">
@@ -859,8 +865,8 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
 
         </main>
 
-        {/* Right column: Bet Panel (desktop) — 40% of space after sidebar */}
-        <div className="hidden lg:block flex-[2] min-w-[320px] py-6 sticky top-14 self-start">
+        {/* Right column: Bet Panel (desktop) */}
+        <div className="hidden lg:block w-72 shrink-0 py-6 sticky top-14 self-start">
           {outcomes.length > 0 && (
             <div ref={betPanelRef}>
               <LMSRBetPanel
