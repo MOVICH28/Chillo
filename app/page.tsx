@@ -95,7 +95,7 @@ export default function Home() {
         </div>
 
         {/* Main content */}
-        <main id="markets" className="flex-1 min-w-0 max-w-lg overflow-y-auto py-6 no-scrollbar">
+        <main id="markets" className="flex-1 min-w-0 overflow-y-auto py-6 no-scrollbar">
           {/* Page header */}
           <div className="flex items-center justify-between mb-5">
             <div>
