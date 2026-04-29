@@ -31,6 +31,8 @@ interface PortfolioPosition {
   amountInvested:  number;
   unrealizedPnl:   number;
   isSoleTrader:    boolean;
+  isSold:          boolean;
+  soldProceeds:    number;
   updatedAt:       string;
   bettingClosesAt: string | null;
   endsAt:          string;
@@ -360,6 +362,8 @@ export default function PortfolioPage() {
                 const roundPnl   = positions.reduce((s, p) => s + p.unrealizedPnl, 0);
                 const isResolved = first.status === "resolved";
                 const allSole    = positions.every(p => p.isSoleTrader);
+                const allSold    = positions.every(p => p.isSold);
+                const totalSoldProceeds = positions.reduce((s, p) => s + p.soldProceeds, 0);
 
                 return (
                   <div key={roundId} className="bg-surface border border-surface-3 rounded-xl overflow-hidden">
@@ -392,14 +396,23 @@ export default function PortfolioPage() {
                         )}
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-xs text-muted">Value</p>
-                        <p className="font-mono font-bold text-sm text-white">{roundValue.toFixed(3)} DORA</p>
-                        {allSole ? (
-                          <p className="text-[10px] text-white/30 italic">Awaiting traders</p>
+                        {allSold ? (
+                          <>
+                            <p className="text-xs text-muted">Received</p>
+                            <p className="font-mono font-bold text-sm text-[#22c55e]">{totalSoldProceeds.toFixed(2)} DORA</p>
+                          </>
                         ) : (
-                          <p className={`font-mono text-xs ${roundPnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
-                            {roundPnl >= 0 ? "+" : ""}{roundPnl.toFixed(3)}
-                          </p>
+                          <>
+                            <p className="text-xs text-muted">Value</p>
+                            <p className="font-mono font-bold text-sm text-white">{roundValue.toFixed(3)} DORA</p>
+                            {allSole ? (
+                              <p className="text-[10px] text-white/30 italic">Awaiting traders</p>
+                            ) : (
+                              <p className={`font-mono text-xs ${roundPnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
+                                {roundPnl >= 0 ? "+" : ""}{roundPnl.toFixed(3)}
+                              </p>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
@@ -424,30 +437,50 @@ export default function PortfolioPage() {
                             return (
                               <tr key={pos.id} className={`border-b border-surface-3/30 ${isWinner ? c.bg : "hover:bg-white/[0.02]"}`}>
                                 <td className="px-4 py-2.5">
-                                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold border ${c.bg} ${c.text} ${c.border}`}>
-                                    {pos.outcome}
-                                    {isWinner && <span>✓</span>}
-                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold border ${c.bg} ${c.text} ${c.border}`}>
+                                      {pos.outcome}
+                                      {isWinner && <span>✓</span>}
+                                    </span>
+                                    {pos.isSold && (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-[#22c55e]/10 text-[#22c55e] border border-[#22c55e]/25">
+                                        Sold
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
-                                <td className="px-3 py-2.5 text-right font-mono text-muted">
-                                  {pos.amountInvested.toFixed(2)}
-                                </td>
-                                <td className="px-3 py-2.5 text-right font-mono text-white/80">
-                                  {pos.currentValue.toFixed(2)}
-                                </td>
-                                <td className={`px-3 py-2.5 text-right font-mono font-semibold ${pos.isSoleTrader ? "text-white/30 italic text-[10px]" : pnlColor}`}>
-                                  {pos.isSoleTrader ? "Awaiting" : `${pos.unrealizedPnl >= 0 ? "+" : ""}${pos.unrealizedPnl.toFixed(2)}`}
-                                </td>
-                                {!isResolved && (
-                                  <td className="px-4 py-2.5 text-right">
+                                {pos.isSold ? (
+                                  <>
+                                    <td className="px-3 py-2.5 text-right font-mono text-muted text-[11px]" colSpan={2}>
+                                      <span className="text-[#22c55e] font-semibold">
+                                        {pos.soldProceeds > 0 ? `${pos.soldProceeds.toFixed(2)} DORA received` : "—"}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-2.5 text-right" />
+                                  </>
+                                ) : (
+                                  <>
+                                    <td className="px-3 py-2.5 text-right font-mono text-muted">
+                                      {pos.amountInvested.toFixed(2)}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-right font-mono text-white/80">
+                                      {pos.currentValue.toFixed(2)}
+                                    </td>
+                                    <td className={`px-3 py-2.5 text-right font-mono font-semibold ${pos.isSoleTrader ? "text-white/30 italic text-[10px]" : pnlColor}`}>
+                                      {pos.isSoleTrader ? "Awaiting" : `${pos.unrealizedPnl >= 0 ? "+" : ""}${pos.unrealizedPnl.toFixed(2)}`}
+                                    </td>
+                                  </>
+                                )}
+                                <td className="px-4 py-2.5 text-right">
+                                  {!isResolved && !pos.isSold && (
                                     <button
                                       onClick={() => setSellPos(pos)}
                                       className="px-2.5 py-1 rounded text-[10px] font-semibold bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 transition-colors"
                                     >
                                       Sell
                                     </button>
-                                  </td>
-                                )}
+                                  )}
+                                </td>
                               </tr>
                             );
                           })}
