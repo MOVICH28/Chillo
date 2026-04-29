@@ -241,7 +241,7 @@ function ResolvedRangeCard({ round }: { round: Round }) {
             <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-8 h-8 rounded-full shrink-0" />
           ) : null}
           <div className="min-w-0 flex-1">
-            <p className="text-white/80 text-sm font-medium truncate whitespace-nowrap overflow-hidden">{round.question}</p>
+            <p className="text-white/80 text-sm font-medium truncate whitespace-nowrap overflow-hidden" title={round.question}>{round.question}</p>
           </div>
         </div>
 
@@ -416,7 +416,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
             <img src={TOKEN_LOGOS[round.targetToken]} alt={round.targetToken} className="w-8 h-8 rounded-full shrink-0" />
           ) : null}
           <div className="min-w-0 flex-1">
-            <p className="text-white text-sm font-medium truncate whitespace-nowrap overflow-hidden">{round.question}</p>
+            <p className="text-white text-sm font-medium truncate whitespace-nowrap overflow-hidden" title={round.question}>{round.question}</p>
           </div>
         </div>
 
