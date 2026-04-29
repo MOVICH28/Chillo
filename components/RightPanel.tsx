@@ -89,7 +89,7 @@ export default function RightPanel({ rounds }: RightPanelProps) {
   }, []);
 
   return (
-    <aside className="w-36 shrink-0 flex flex-col gap-3 pt-2">
+    <aside className="w-full flex flex-col gap-3 pt-2">
       {/* Today's Stats */}
       <div className="bg-surface rounded-xl border border-surface-3 p-2">
         <p className="text-[9px] uppercase tracking-widest text-muted mb-2">24h Stats</p>
