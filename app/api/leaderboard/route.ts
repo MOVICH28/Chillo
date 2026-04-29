@@ -48,7 +48,7 @@ export async function GET() {
     }
 
     // Count markets created per user
-    const userIds = [...new Set(Array.from(map.values()).map(e => e.userId).filter((id): id is string => !!id))];
+    const userIds = Array.from(new Set(Array.from(map.values()).map(e => e.userId).filter((id): id is string => !!id)));
     const roundCounts = userIds.length
       ? await prisma.round.groupBy({ by: ["creatorId"], where: { creatorId: { in: userIds } }, _count: { id: true } })
       : [];
