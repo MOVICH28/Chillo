@@ -895,7 +895,7 @@ export default function CreatePage() {
                       <div>
                         <label className="block text-xs text-muted mb-1.5">Range multiplier — each range is Nx the previous</label>
                         <div className="flex gap-1.5">
-                          {[1.5, 2, 3, 5, 10].map(m => (
+                          {[1.1, 1.2, 1.3, 1.4, 1.5, 2, 3].map(m => (
                             <button key={m} onClick={() => setMcapMultiplier(m)}
                               className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-colors
                                 ${mcapMultiplier === m ? "bg-brand/20 border-brand/40 text-brand" : "bg-surface border-surface-3 text-muted hover:text-white"}`}>
@@ -1373,6 +1373,34 @@ export default function CreatePage() {
   );
 }
 
+// ── MiniSparkline ─────────────────────────────────────────────────────────────
+
+function MiniSparkline({ data, width = 80, height = 28 }: { data: number[]; width?: number; height?: number }) {
+  if (data.length < 2) return <div style={{ width, height }} className="shrink-0" />;
+  const min   = Math.min(...data);
+  const max   = Math.max(...data);
+  const range = max - min || min * 0.01 || 1;
+  const positive = data[data.length - 1] >= data[0];
+  const color    = positive ? "#22c55e" : "#ef4444";
+  const pad      = height * 0.1;
+  const pts = data.map((v, i) => ({
+    x: (i / (data.length - 1)) * width,
+    y: pad + (1 - (v - min) / range) * (height - pad * 2),
+  }));
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) {
+    const dx  = (pts[i].x - pts[i - 1].x) / 2.5;
+    const cp1 = `${(pts[i - 1].x + dx).toFixed(1)} ${pts[i - 1].y.toFixed(1)}`;
+    const cp2 = `${(pts[i].x - dx).toFixed(1)} ${pts[i].y.toFixed(1)}`;
+    d += ` C ${cp1}, ${cp2}, ${pts[i].x.toFixed(1)} ${pts[i].y.toFixed(1)}`;
+  }
+  return (
+    <svg width={width} height={height} className="shrink-0 overflow-visible">
+      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 // ── Crypto review step ────────────────────────────────────────────────────────
 
 const QTYPE_LABELS: Record<string, string> = {
@@ -1392,6 +1420,34 @@ function ReviewStep({
 }) {
   const tfLabel      = formatDuration(betDuration);
   const resultBuffer = betDuration <= 3 ? 2 : 5;
+  const isMcap       = cryptoQType === "mcap" || cryptoQType === "ath_mcap";
+
+  const [priceHistory, setPriceHistory] = useState<number[]>(
+    tokenInfo ? [tokenInfo.priceUsd] : []
+  );
+  const [livePrice, setLivePrice] = useState<number>(tokenInfo?.priceUsd ?? 0);
+  const [liveMcap,  setLiveMcap]  = useState<number>(tokenInfo?.mcapUsd  ?? 0);
+
+  useEffect(() => {
+    if (!tokenInfo?.address) return;
+    const addr = tokenInfo.address;
+    async function poll() {
+      try {
+        const res = await fetch(`/api/markets/token-lookup?address=${encodeURIComponent(addr)}`);
+        if (!res.ok) return;
+        const d: TokenInfo = await res.json();
+        setLivePrice(d.priceUsd);
+        setLiveMcap(d.mcapUsd);
+        setPriceHistory(prev => [...prev.slice(-19), d.priceUsd]);
+      } catch { /* ignore */ }
+    }
+    const id = setInterval(poll, 5_000);
+    return () => clearInterval(id);
+  }, [tokenInfo?.address]);
+
+  const formattedValue = isMcap
+    ? formatMcap(liveMcap)
+    : fmtPrice(livePrice, tokenInfo?.priceUsd ?? livePrice);
 
   return (
     <div className="space-y-4">
@@ -1419,6 +1475,15 @@ function ReviewStep({
             <p className="text-white text-sm font-medium leading-snug pt-0.5">{question}</p>
           </div>
           {description && <p className="text-muted text-xs mb-3">{description}</p>}
+          {tokenInfo && (livePrice > 0 || liveMcap > 0) && (
+            <div className="flex items-center justify-between px-3 py-2 bg-white/[0.03] rounded-lg border border-white/5 mb-3">
+              <div>
+                <div className="text-[9px] text-white/30 uppercase">{isMcap ? "Mkt Cap" : "Price"}</div>
+                <div className="text-sm font-bold text-white">{formattedValue}</div>
+              </div>
+              <MiniSparkline data={priceHistory} width={80} height={28} />
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-1.5">
             {outcomes.map(o => (
               <div key={o.id} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-2 border border-surface-3 text-[11px]">
