@@ -90,7 +90,7 @@ export default function Home() {
       {/* Main layout */}
       <div className="flex flex-row gap-6 max-w-[1400px] mx-auto w-full px-4 h-[calc(100vh-56px)] mt-14">
         {/* Sidebar */}
-        <div id="categories" className="hidden lg:block w-64 shrink-0 overflow-y-auto py-6 no-scrollbar">
+        <div id="categories" className="hidden lg:block w-48 shrink-0 overflow-y-auto py-6 no-scrollbar">
           <Sidebar active={category} onSelect={setCategory} counts={counts} />
         </div>
 
@@ -239,7 +239,7 @@ export default function Home() {
         </main>
 
         {/* Right panel */}
-        <div className="hidden xl:block w-72 shrink-0 overflow-y-auto py-6 no-scrollbar">
+        <div className="hidden xl:block w-56 shrink-0 overflow-y-auto py-6 no-scrollbar">
           <RightPanel rounds={rounds} />
         </div>
       </div>
