@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma";
-import { getAllPrices } from "@/lib/lmsr";
+import { getAllPrices, costToBuy, PLATFORM_FEE } from "@/lib/lmsr";
 import { Outcome } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -36,8 +36,12 @@ export async function GET(req: NextRequest) {
     const activeOutcomes = ((round.outcomes as unknown as Outcome[]) ?? []).map(o => o.id);
     const prices = getAllPrices(currentShares, round.lmsrB, activeOutcomes);
     const currentPrice = prices[pos.outcome] ?? 0;
-    const unrealizedPnl = (currentPrice - pos.avgCost) * pos.shares;
-    const currentValue  = currentPrice * pos.shares;
+    const rawProceeds = -costToBuy(currentShares, pos.outcome, -pos.shares, round.lmsrB, activeOutcomes);
+    const currentValue = Math.max(0, rawProceeds * (1 - PLATFORM_FEE));
+    const amountInvested = pos.shares * pos.avgCost;
+    const unrealizedPnl = currentValue - amountInvested;
+    const totalOutcomeShares = currentShares[pos.outcome] ?? 0;
+    const isSoleTrader = totalOutcomeShares > 0 && pos.shares >= totalOutcomeShares * 0.99;
 
     return {
       id:           pos.id,
@@ -50,7 +54,9 @@ export async function GET(req: NextRequest) {
       avgCost:      pos.avgCost,
       currentPrice,
       currentValue,
+      amountInvested,
       unrealizedPnl,
+      isSoleTrader,
       updatedAt:      pos.updatedAt.toISOString(),
       bettingClosesAt: round.bettingClosesAt?.toISOString() ?? null,
       endsAt:          round.endsAt.toISOString(),
@@ -58,7 +64,7 @@ export async function GET(req: NextRequest) {
   });
 
   const totalValue  = enriched.reduce((s, p) => s + p.currentValue, 0);
-  const totalCost   = enriched.reduce((s, p) => s + p.avgCost * p.shares, 0);
+  const totalCost   = enriched.reduce((s, p) => s + p.amountInvested, 0);
   const totalPnl    = totalValue - totalCost;
 
   return NextResponse.json({ positions: enriched, totalValue, totalCost, totalPnl });

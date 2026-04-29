@@ -28,7 +28,9 @@ interface PortfolioPosition {
   avgCost:         number;
   currentPrice:    number;
   currentValue:    number;
+  amountInvested:  number;
   unrealizedPnl:   number;
+  isSoleTrader:    boolean;
   updatedAt:       string;
   bettingClosesAt: string | null;
   endsAt:          string;
@@ -357,6 +359,7 @@ export default function PortfolioPage() {
                 const roundValue = positions.reduce((s, p) => s + p.currentValue, 0);
                 const roundPnl   = positions.reduce((s, p) => s + p.unrealizedPnl, 0);
                 const isResolved = first.status === "resolved";
+                const allSole    = positions.every(p => p.isSoleTrader);
 
                 return (
                   <div key={roundId} className="bg-surface border border-surface-3 rounded-xl overflow-hidden">
@@ -391,9 +394,13 @@ export default function PortfolioPage() {
                       <div className="text-right shrink-0">
                         <p className="text-xs text-muted">Value</p>
                         <p className="font-mono font-bold text-sm text-white">{roundValue.toFixed(3)} DORA</p>
-                        <p className={`font-mono text-xs ${roundPnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
-                          {roundPnl >= 0 ? "+" : ""}{roundPnl.toFixed(3)}
-                        </p>
+                        {allSole ? (
+                          <p className="text-[10px] text-white/30 italic">Awaiting traders</p>
+                        ) : (
+                          <p className={`font-mono text-xs ${roundPnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
+                            {roundPnl >= 0 ? "+" : ""}{roundPnl.toFixed(3)}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -423,13 +430,13 @@ export default function PortfolioPage() {
                                   </span>
                                 </td>
                                 <td className="px-3 py-2.5 text-right font-mono text-muted">
-                                  {(pos.shares * pos.avgCost).toFixed(2)}
+                                  {pos.amountInvested.toFixed(2)}
                                 </td>
                                 <td className="px-3 py-2.5 text-right font-mono text-white/80">
                                   {pos.currentValue.toFixed(2)}
                                 </td>
-                                <td className={`px-3 py-2.5 text-right font-mono font-semibold ${pnlColor}`}>
-                                  {pos.unrealizedPnl >= 0 ? "+" : ""}{pos.unrealizedPnl.toFixed(2)}
+                                <td className={`px-3 py-2.5 text-right font-mono font-semibold ${pos.isSoleTrader ? "text-white/30 italic text-[10px]" : pnlColor}`}>
+                                  {pos.isSoleTrader ? "Awaiting" : `${pos.unrealizedPnl >= 0 ? "+" : ""}${pos.unrealizedPnl.toFixed(2)}`}
                                 </td>
                                 {!isResolved && (
                                   <td className="px-4 py-2.5 text-right">
