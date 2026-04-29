@@ -88,14 +88,14 @@ export default function Home() {
       <Navbar rounds={rounds} />
 
       {/* Main layout */}
-      <div className="flex flex-row gap-6 max-w-[1400px] mx-auto w-full px-4 h-[calc(100vh-56px)] mt-14">
+      <div className="flex flex-row gap-6 max-w-[1400px] mx-auto w-full px-4 h-[calc(100vh-56px)] mt-14 overflow-x-hidden">
         {/* Sidebar */}
         <div id="categories" className="hidden lg:block w-40 shrink-0 overflow-y-auto py-6 no-scrollbar">
           <Sidebar active={category} onSelect={setCategory} counts={counts} />
         </div>
 
         {/* Main content */}
-        <main id="markets" className="flex-1 min-w-0 max-w-2xl overflow-y-auto py-6 no-scrollbar">
+        <main id="markets" className="flex-1 min-w-0 overflow-y-auto py-6 no-scrollbar">
           {/* Page header */}
           <div className="flex items-center justify-between mb-5">
             <div>
@@ -239,7 +239,7 @@ export default function Home() {
         </main>
 
         {/* Right panel */}
-        <div className="hidden xl:block w-36 shrink-0 overflow-y-auto overflow-x-hidden py-6 no-scrollbar">
+        <div className="hidden xl:block w-44 shrink-0 overflow-y-auto overflow-x-hidden px-2 py-6 no-scrollbar">
           <RightPanel rounds={rounds} />
         </div>
       </div>
