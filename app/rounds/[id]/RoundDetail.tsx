@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Avatar from "@/components/Avatar";
 import LMSRBetPanel from "@/components/LMSRBetPanel";
@@ -391,7 +391,6 @@ function CommentsSection({ roundId }: { roundId: string }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function RoundDetail({ initialRound }: { initialRound: RoundData }) {
-  const router          = useRouter();
   const searchParams    = useSearchParams();
   const initialOutcome  = searchParams.get("outcome");
   const betPanelRef     = useRef<HTMLDivElement>(null);
