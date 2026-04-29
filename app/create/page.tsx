@@ -766,17 +766,6 @@ export default function CreatePage() {
                     placeholder={`e.g. ${getPriceSteps(tokenInfo.priceUsd)[defaultStepIdx(tokenInfo.priceUsd)]}`}
                     className="w-full px-3 py-2 rounded-lg bg-surface border border-surface-3 text-white text-sm font-mono focus:outline-none focus:border-brand transition-colors"
                   />
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {getPriceSteps(tokenInfo.priceUsd).map(s => (
-                      <button key={s} onClick={() => setPriceStepInput(String(s))}
-                        className={`px-2.5 py-0.5 rounded text-[10px] font-mono border transition-colors
-                          ${priceStepInput === String(s)
-                            ? "bg-brand/20 border-brand/40 text-brand"
-                            : "bg-surface border-surface-3 text-muted hover:text-white"}`}>
-                        {fmtPrice(s, tokenInfo.priceUsd)}
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
                 {/* Center price */}
