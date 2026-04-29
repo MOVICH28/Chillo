@@ -876,7 +876,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
         </main>
 
         {/* Right column: Bet Panel (desktop) */}
-        <div className="hidden lg:block w-80 shrink-0 py-6 sticky top-14 self-start">
+        <div className="hidden lg:block w-96 shrink-0 py-6 sticky top-14 self-start">
           {outcomes.length > 0 && (
             <div ref={betPanelRef}>
               <LMSRBetPanel

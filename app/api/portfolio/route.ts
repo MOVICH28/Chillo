@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
         select: {
           id: true, question: true, status: true, winningOutcome: true,
           lmsrB: true, shares: true, outcomes: true,
+          bettingClosesAt: true, endsAt: true,
         },
       },
     },
@@ -50,7 +51,9 @@ export async function GET(req: NextRequest) {
       currentPrice,
       currentValue,
       unrealizedPnl,
-      updatedAt:    pos.updatedAt.toISOString(),
+      updatedAt:      pos.updatedAt.toISOString(),
+      bettingClosesAt: round.bettingClosesAt?.toISOString() ?? null,
+      endsAt:          round.endsAt.toISOString(),
     };
   });
 

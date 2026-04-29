@@ -8,6 +8,7 @@ export async function GET() {
     const bets = await prisma.bet.findMany({
       select: {
         walletAddress: true,
+        userId: true,
         side: true,
         amount: true,
         payout: true,
@@ -17,12 +18,14 @@ export async function GET() {
     });
 
     const map = new Map<string, {
+      userId: string | null;
       totalWins: number; totalLosses: number; totalBets: number;
       totalWagered: number; totalPayout: number; username: string | null; avatarUrl: string | null;
     }>();
 
     for (const bet of bets) {
       const entry = map.get(bet.walletAddress) ?? {
+        userId: bet.userId ?? null,
         totalWins: 0, totalLosses: 0, totalBets: 0,
         totalWagered: 0, totalPayout: 0,
         username: bet.user?.username ?? null,
@@ -44,6 +47,13 @@ export async function GET() {
       map.set(bet.walletAddress, entry);
     }
 
+    // Count markets created per user
+    const userIds = [...new Set(Array.from(map.values()).map(e => e.userId).filter((id): id is string => !!id))];
+    const roundCounts = userIds.length
+      ? await prisma.round.groupBy({ by: ["creatorId"], where: { creatorId: { in: userIds } }, _count: { id: true } })
+      : [];
+    const mktsMap = Object.fromEntries(roundCounts.map(r => [r.creatorId!, r._count.id]));
+
     const rows = Array.from(map.entries()).map(([walletAddress, s]) => {
       const resolved = s.totalWins + s.totalLosses;
       const winRate  = resolved > 0 ? (s.totalWins / resolved) * 100 : 0;
@@ -59,6 +69,7 @@ export async function GET() {
         totalPayout:  parseFloat(s.totalPayout.toFixed(4)),
         profit:       parseFloat(profit.toFixed(4)),
         winRate:      parseFloat(winRate.toFixed(1)),
+        marketsCreated: s.userId ? (mktsMap[s.userId] ?? 0) : 0,
       };
     });
 
