@@ -477,7 +477,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
 
   return (
     <div className="min-h-screen bg-base text-white">
-      <div className="flex flex-row gap-6 max-w-[1400px] mx-auto w-full px-4 mt-14">
+      <div className="flex flex-row gap-3 max-w-[1400px] mx-auto w-full px-2 mt-14">
 
         {/* Left Sidebar */}
         <div className="hidden lg:block w-64 shrink-0 overflow-y-auto py-6 no-scrollbar sticky top-14 self-start">

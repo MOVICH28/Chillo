@@ -12,7 +12,7 @@ export async function GET() {
         _sum: { totalCost: true },
       }),
       prisma.trade.count({ where: { createdAt: { gte: since } } }),
-      prisma.round.count({ where: { status: "open" } }),
+      prisma.round.count({ where: { createdAt: { gte: since } } }),
     ]);
     return NextResponse.json({
       volume24h:     volumeAgg._sum.totalCost ?? 0,
