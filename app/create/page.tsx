@@ -9,17 +9,17 @@ import { useAuth } from "@/lib/useAuth";
 const SNAP_POINTS = [1, 3, 5, 10, 15, 30, 45, 60, 90, 120, 180, 240, 360, 480, 720, 1440];
 
 function formatDuration(min: number): string {
-  if (min < 60) return `${min} minute${min === 1 ? "" : "s"}`;
-  if (min < 120) return `1 hour${min > 60 ? ` ${min - 60} min` : ""}`;
-  return `${Math.round(min / 60)} hours`;
+  if (min < 60) return `${min} min`;
+  if (min < 120) return `1h${min > 60 ? ` ${min - 60}min` : ""}`;
+  return `${Math.round(min / 60)}h`;
 }
 
 // Twitter durations (legacy — betting closes = ends - 5min)
 const TWITTER_DURATIONS = [
-  { label: "15 min",   value: 15 },
-  { label: "1 hour",   value: 60 },
-  { label: "4 hours",  value: 240 },
-  { label: "24 hours", value: 1440 },
+  { label: "15 min", value: 15 },
+  { label: "1h",     value: 60 },
+  { label: "4h",     value: 240 },
+  { label: "24h",    value: 1440 },
 ];
 
 const POSTS_COUNT_OUTCOMES = [
@@ -416,7 +416,7 @@ export default function CreatePage() {
   useEffect(() => {
     if (!cleanTwitter) return;
     if (twitterQuestion === "posts_count") {
-      setQuestion(`How many posts will @${cleanTwitter} make in 24 hours?`);
+      setQuestion(`How many posts will @${cleanTwitter} make in 24h?`);
       setOutcomes(POSTS_COUNT_OUTCOMES.map(o => ({ ...o })));
     } else {
       setQuestion(`When will @${cleanTwitter} make their next post?`);
@@ -1005,8 +1005,8 @@ export default function CreatePage() {
             </div>
             <div className="space-y-3">
               {([
-                { value: "posts_count"    as const, label: "Post count in 24 hours",
-                  desc: `How many posts will @${cleanTwitter} make in the next 24 hours?`, icon: "📊" },
+                { value: "posts_count"    as const, label: "Post count in 24h",
+                  desc: `How many posts will @${cleanTwitter} make in the next 24h?`, icon: "📊" },
                 { value: "next_post_time" as const, label: "Time until next post",
                   desc: `When will @${cleanTwitter} make their next post?`, icon: "⏱" },
               ]).map(opt => (
