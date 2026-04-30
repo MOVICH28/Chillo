@@ -132,6 +132,8 @@ export async function POST(req: NextRequest) {
     }
     if (sharesToTrade <= 0)
       return NextResponse.json({ error: "Sell amount too small" }, { status: 400 });
+    // Snap to full position if within 0.1% to avoid dust remainders
+    if (sharesToTrade >= pos.shares * 0.999) sharesToTrade = pos.shares;
     rawCost           = costToBuy(currentShares, outcome, -sharesToTrade, b, activeOutcomes); // < 0
     const rawProceeds = -rawCost;
     fee               = rawProceeds * PLATFORM_FEE;

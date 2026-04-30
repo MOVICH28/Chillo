@@ -475,6 +475,9 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
           {outcomes.map((o) => {
             const c   = OUTCOME_COLORS[o.id];
             const pct = prices[o.id] != null ? (prices[o.id] * 100).toFixed(1) : null;
+            const battleToken = round.questionType === "token_battle"
+              ? round.tokenBattleTokens?.find(t => t.outcomeId === o.id)
+              : undefined;
             return (
               <button
                 key={o.id}
@@ -489,10 +492,21 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
                     : `${c.bg} ${c.border} hover:opacity-90 active:scale-[0.98]`}`}
               >
                 <div className="flex items-center gap-1 min-w-0">
-                  <span className={`w-4 h-4 text-[9px] font-bold flex items-center justify-center rounded shrink-0 ${c.bg} ${c.text} border ${c.border}`}>
-                    {o.id}
-                  </span>
-                  <span className="text-[11px] font-medium text-white/80 leading-tight truncate">{o.label}</span>
+                  {battleToken ? (
+                    <>
+                      {battleToken.logoUrl
+                        ? <img src={battleToken.logoUrl} alt={battleToken.symbol} className="w-4 h-4 rounded-full shrink-0 object-cover" />
+                        : <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold shrink-0 ${c.bg} ${c.text}`}>{battleToken.symbol[0]}</div>}
+                      <span className={`text-[11px] font-bold leading-tight truncate ${c.text}`}>${battleToken.symbol}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className={`w-4 h-4 text-[9px] font-bold flex items-center justify-center rounded shrink-0 ${c.bg} ${c.text} border ${c.border}`}>
+                        {o.id}
+                      </span>
+                      <span className="text-[11px] font-medium text-white/80 leading-tight truncate">{o.label}</span>
+                    </>
+                  )}
                 </div>
                 {pct !== null
                   ? <span className={`text-[10px] font-mono font-bold shrink-0 ${c.text}`}>{pct}%</span>

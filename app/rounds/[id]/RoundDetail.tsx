@@ -264,7 +264,7 @@ function BattleSparkline({ history, color }: { history: number[]; color: string 
   );
 }
 
-function BattleTokenCard({ token, color }: { token: BattleTokenInfo; color: typeof OUTCOME_COLORS[string] }) {
+function BattleTokenCard({ token, color, rank }: { token: BattleTokenInfo; color: typeof OUTCOME_COLORS[string]; rank?: string }) {
   const { mcap, history }    = useBattleTokenLive(token.address, token.currentMcap);
   const [copied, setCopied]  = useState(false);
   const trend = history.length >= 2
@@ -282,9 +282,12 @@ function BattleTokenCard({ token, color }: { token: BattleTokenInfo; color: type
           <p className={`text-sm font-bold leading-tight ${color.text}`}>${token.symbol}</p>
           <p className="text-[9px] text-white/40 truncate leading-tight">{token.name}</p>
         </div>
-        <span className={`text-[9px] font-bold px-1 py-0.5 rounded border shrink-0 ${color.bg} ${color.text} ${color.border}`}>
-          {token.outcomeId}
-        </span>
+        <div className="flex flex-col items-end gap-0.5 shrink-0">
+          {rank && <span className="text-[10px] leading-none">{rank}</span>}
+          <span className={`text-[9px] font-bold px-1 py-0.5 rounded border ${color.bg} ${color.text} ${color.border}`}>
+            {token.outcomeId}
+          </span>
+        </div>
       </div>
 
       {/* Mcap + sparkline */}
@@ -324,12 +327,15 @@ function BattleTokenCard({ token, color }: { token: BattleTokenInfo; color: type
 }
 
 function TokenBattleSection({ tokens }: { tokens: BattleTokenInfo[] }) {
+  // Sort by stored mcap descending (leader first); live values update within cards
+  const sorted = [...tokens].sort((a, b) => (b.currentMcap ?? 0) - (a.currentMcap ?? 0));
+  const RANK_LABELS = ["🥇", "🥈", "🥉", "4th", "5th", "6th"];
   return (
     <div className="mb-4">
       <p className="text-[10px] uppercase tracking-widest text-white/30 mb-2">⚔️ Token Battle</p>
       <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-        {tokens.map(t => (
-          <BattleTokenCard key={t.address} token={t} color={OUTCOME_COLORS[t.outcomeId] ?? OUTCOME_COLORS.A} />
+        {sorted.map((t, i) => (
+          <BattleTokenCard key={t.address} token={t} color={OUTCOME_COLORS[t.outcomeId] ?? OUTCOME_COLORS.A} rank={RANK_LABELS[i] ?? `${i + 1}`} />
         ))}
       </div>
     </div>
@@ -338,7 +344,7 @@ function TokenBattleSection({ tokens }: { tokens: BattleTokenInfo[] }) {
 
 // ── Pool distribution bar (LMSR probabilities) ───────────────────────────────
 
-function PoolBar({ outcomes, prices }: { outcomes: Outcome[]; prices: Record<string, number> }) {
+function PoolBar({ outcomes, prices, tokenLogoMap }: { outcomes: Outcome[]; prices: Record<string, number>; tokenLogoMap?: Record<string, { symbol: string; logoUrl: string | null }> }) {
   const hasPrices = outcomes.some(o => prices[o.id] != null);
   if (!hasPrices) {
     return (
@@ -363,10 +369,17 @@ function PoolBar({ outcomes, prices }: { outcomes: Outcome[]; prices: Record<str
       <div className="flex justify-between mt-2">
         {outcomes.map(o => {
           const pct = (prices[o.id] ?? 0) * 100;
-          const c = OUTCOME_COLORS[o.id];
+          const c   = OUTCOME_COLORS[o.id];
+          const tok = tokenLogoMap?.[o.id];
           return (
-            <div key={o.id} className="text-center">
-              <div className={`text-[10px] font-bold ${c.text}`}>{o.id}</div>
+            <div key={o.id} className="text-center flex flex-col items-center gap-0.5">
+              {tok ? (
+                tok.logoUrl
+                  ? <img src={tok.logoUrl} alt={tok.symbol} className="w-4 h-4 rounded-full" />
+                  : <div className="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[7px] font-bold text-white/50">{tok.symbol[0]}</div>
+              ) : (
+                <div className={`text-[10px] font-bold ${c.text}`}>{o.id}</div>
+              )}
               <div className="text-[9px] text-white/30">{pct.toFixed(0)}%</div>
             </div>
           );
@@ -845,12 +858,18 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
             )}
 
             {/* Token Battle cards */}
-            {round.questionType === "token_battle" && round.tokenBattleTokens && round.tokenBattleTokens.length > 0 && (
-              <>
-                <TokenBattleSection tokens={round.tokenBattleTokens as BattleTokenInfo[]} />
-                {outcomes.length > 0 && <PoolBar outcomes={outcomes} prices={lmsrPrices} />}
-              </>
-            )}
+            {round.questionType === "token_battle" && round.tokenBattleTokens && round.tokenBattleTokens.length > 0 && (() => {
+              const battleTokens = round.tokenBattleTokens as BattleTokenInfo[];
+              const tokenLogoMap = Object.fromEntries(
+                battleTokens.map(t => [t.outcomeId, { symbol: t.symbol, logoUrl: t.logoUrl }])
+              );
+              return (
+                <>
+                  <TokenBattleSection tokens={battleTokens} />
+                  {outcomes.length > 0 && <PoolBar outcomes={outcomes} prices={lmsrPrices} tokenLogoMap={tokenLogoMap} />}
+                </>
+              );
+            })()}
 
             {/* Betting probability chart — Twitter rounds */}
             {round.category === "twitter" && outcomes.length > 0 && (

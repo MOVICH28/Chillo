@@ -1387,6 +1387,7 @@ export default function CreatePage() {
             betDuration={betDuration} uploadedImage={uploadedImage}
             username={user.username} tokenInfo={tokenInfo}
             cryptoQType={cryptoQType} isPumpFun={isPumpFun}
+            battleTokens={battleTokens}
             creating={creating} createError={createError}
             onBack={() => setStep(3)} onCreate={handleCreate}
           />
@@ -1612,22 +1613,29 @@ const QTYPE_LABELS: Record<string, string> = {
 
 function ReviewStep({
   question, description, outcomes, betDuration, uploadedImage, username, tokenInfo,
-  cryptoQType, isPumpFun, creating, createError, onBack, onCreate,
+  cryptoQType, isPumpFun, battleTokens, creating, createError, onBack, onCreate,
 }: {
   question: string; description: string; outcomes: OutcomeInput[];
   betDuration: number; uploadedImage: string; username: string;
   tokenInfo: TokenInfo | null; cryptoQType: CryptoQType; isPumpFun: boolean;
+  battleTokens: BattleToken[];
   creating: boolean; createError: string; onBack: () => void; onCreate: () => void;
 }) {
   const tfLabel      = formatDuration(betDuration);
   const resultBuffer = betDuration <= 3 ? 2 : 5;
   const isMcap       = cryptoQType === "mcap" || cryptoQType === "ath_mcap";
+  const isBattle     = cryptoQType === "token_battle";
 
   const [priceHistory, setPriceHistory] = useState<number[]>(
     tokenInfo ? [tokenInfo.priceUsd] : []
   );
   const [livePrice, setLivePrice] = useState<number>(tokenInfo?.priceUsd ?? 0);
   const [liveMcap,  setLiveMcap]  = useState<number>(tokenInfo?.mcapUsd  ?? 0);
+
+  // Live mcap map for token_battle: address → current mcap
+  const [battleMcaps, setBattleMcaps] = useState<Record<string, number>>(() =>
+    Object.fromEntries(battleTokens.map(t => [t.address, t.currentMcap]))
+  );
 
   useEffect(() => {
     if (!tokenInfo?.address) return;
@@ -1646,6 +1654,36 @@ function ReviewStep({
     return () => clearInterval(id);
   }, [tokenInfo?.address]);
 
+  // Poll DexScreener for each battle token every 5s
+  useEffect(() => {
+    if (!isBattle || battleTokens.length === 0) return;
+    let cancelled = false;
+    async function pollAll() {
+      await Promise.all(battleTokens.map(async t => {
+        try {
+          const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${t.address}`, { cache: "no-store" });
+          if (!res.ok || cancelled) return;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const data = await res.json() as { pairs?: any[] };
+          const pairs = (data.pairs ?? []).sort((a: any, b: any) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0));
+          const m = pairs[0]?.marketCap ?? pairs[0]?.fdv ?? 0;
+          if (m > 0 && !cancelled) setBattleMcaps(prev => ({ ...prev, [t.address]: m }));
+        } catch { /* ignore */ }
+      }));
+    }
+    pollAll();
+    const id = setInterval(pollAll, 5_000);
+    return () => { cancelled = true; clearInterval(id); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBattle]);
+
+  function fmtMcap(v: number): string {
+    if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+    if (v >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
+    if (v >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
+    return `$${v.toFixed(0)}`;
+  }
+
   const formattedValue = isMcap
     ? formatMcap(liveMcap)
     : fmtPrice(livePrice, tokenInfo?.priceUsd ?? livePrice);
@@ -1658,7 +1696,7 @@ function ReviewStep({
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">Community</span>
             <span className="text-[10px] px-2 py-0.5 rounded border bg-white/5 text-white/40 border-white/10">{QTYPE_LABELS[cryptoQType]}</span>
-            {tokenInfo && (
+            {tokenInfo && !isBattle && (
               <div className="flex items-center gap-1.5">
                 {tokenInfo.logoUrl && <img src={tokenInfo.logoUrl} alt={tokenInfo.symbol} className="w-4 h-4 rounded-full" />}
                 <span className="text-[10px] text-muted font-mono">{tokenInfo.symbol}</span>
@@ -1669,14 +1707,55 @@ function ReviewStep({
             )}
             <span className="ml-auto text-[10px] text-muted">{tfLabel} betting</span>
           </div>
+
+          {/* Token Battle: overlapping logos row */}
+          {isBattle && battleTokens.length > 0 && (
+            <div className="flex items-center gap-3 mb-2">
+              <div className="flex">
+                {battleTokens.map((t, i) => (
+                  t.logoUrl
+                    ? <img key={t.address} src={t.logoUrl} alt={t.symbol}
+                        className="w-7 h-7 rounded-full border-2 border-surface object-cover"
+                        style={{ marginLeft: i === 0 ? 0 : -10, zIndex: i }} />
+                    : <div key={t.address}
+                        className="w-7 h-7 rounded-full border-2 border-surface bg-purple-500/30 flex items-center justify-center text-[9px] font-bold text-purple-300"
+                        style={{ marginLeft: i === 0 ? 0 : -10, zIndex: i }}>{t.symbol[0]}</div>
+                ))}
+              </div>
+              <span className="text-[10px] text-white/40">{battleTokens.length} tokens competing</span>
+            </div>
+          )}
+
           <div className="flex items-start gap-3 mb-3">
-            {uploadedImage && (
+            {uploadedImage && !isBattle && (
               <img src={uploadedImage} alt="Market" className="w-20 h-20 rounded-lg object-cover shrink-0" />
             )}
             <p className="text-white text-sm font-medium leading-snug pt-0.5">{question}</p>
           </div>
           {description && <p className="text-muted text-xs mb-3">{description}</p>}
-          {tokenInfo && (livePrice > 0 || liveMcap > 0) && (
+
+          {/* Token Battle: live mcap cards */}
+          {isBattle && battleTokens.length > 0 && (
+            <div className="grid grid-cols-2 gap-1.5 mb-3">
+              {battleTokens.map(t => {
+                const mcap = battleMcaps[t.address] ?? t.currentMcap;
+                return (
+                  <div key={t.address} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-surface-2 border border-surface-3">
+                    {t.logoUrl
+                      ? <img src={t.logoUrl} alt={t.symbol} className="w-5 h-5 rounded-full shrink-0" />
+                      : <div className="w-5 h-5 rounded-full bg-purple-500/30 flex items-center justify-center text-[8px] font-bold text-purple-300 shrink-0">{t.symbol[0]}</div>}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold text-white leading-tight">${t.symbol}</p>
+                      <p className="text-[9px] font-mono text-white/40 leading-tight">{mcap > 0 ? fmtMcap(mcap) : "—"}</p>
+                    </div>
+                    <span className="text-[9px] text-white/25 font-mono shrink-0">{t.outcomeId}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {tokenInfo && !isBattle && (livePrice > 0 || liveMcap > 0) && (
             <div className="flex items-center justify-between px-3 py-2 bg-white/[0.03] rounded-lg border border-white/5 mb-3">
               <div>
                 <div className="text-[9px] text-white/30 uppercase">{isMcap ? "Mkt Cap" : "Price"}</div>
@@ -1685,14 +1764,16 @@ function ReviewStep({
               <MiniSparkline data={priceHistory} width={80} height={28} />
             </div>
           )}
-          <div className="grid grid-cols-2 gap-1.5">
-            {outcomes.map(o => (
-              <div key={o.id} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-2 border border-surface-3 text-[11px]">
-                <span className="font-bold text-muted">{o.id}</span>
-                <span className="text-white/70 truncate">{o.label}</span>
-              </div>
-            ))}
-          </div>
+          {!isBattle && (
+            <div className="grid grid-cols-2 gap-1.5">
+              {outcomes.map(o => (
+                <div key={o.id} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-2 border border-surface-3 text-[11px]">
+                  <span className="font-bold text-muted">{o.id}</span>
+                  <span className="text-white/70 truncate">{o.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div className="px-4 pb-3 flex items-center justify-between text-[10px] text-muted border-t border-surface-3/50 pt-2">
           <span>Created by <span className="text-white">{username}</span></span>

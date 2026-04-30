@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 
   const enriched = positions.map(pos => {
     const round = pos.round;
-    const isSold = pos.shares <= 0;
+    const isSold = pos.shares < 0.001;
     const key = `${round.id}:${pos.outcome}`;
     const soldProceeds = parseFloat((sellMap[key] ?? 0).toFixed(4));
 

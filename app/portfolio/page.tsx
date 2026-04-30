@@ -158,8 +158,10 @@ function SellModal({ pos, onClose, onSuccess, getToken }: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getToken() ?? ""}`,
         },
-        // Send doraAmount; API derives shares = min(doraAmount/currentPrice, pos.shares)
-        body: JSON.stringify({ roundId: pos.roundId, outcome: pos.outcome, type: "sell", doraAmount: doraToSell }),
+        // 100%: send exact shares to avoid LMSR marginal-price rounding leaving dust
+        body: JSON.stringify(pct === 100
+          ? { roundId: pos.roundId, outcome: pos.outcome, type: "sell", shares: pos.shares }
+          : { roundId: pos.roundId, outcome: pos.outcome, type: "sell", doraAmount: doraToSell }),
       });
       if (res.ok) { onSuccess(); onClose(); }
       else { const d = await res.json(); setError(d.error ?? "Sell failed"); }
