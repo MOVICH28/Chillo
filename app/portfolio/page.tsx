@@ -557,14 +557,33 @@ export default function PortfolioPage() {
                                   </>
                                 )}
                                 <td className="px-4 py-2.5 text-right">
-                                  {!isResolved && !pos.isSold && (
-                                    <button
-                                      onClick={() => setSellPos(pos)}
-                                      className="px-2.5 py-1 rounded text-[10px] font-semibold bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 transition-colors"
-                                    >
-                                      Sell
-                                    </button>
-                                  )}
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    {!isResolved && !pos.isSold && (
+                                      <button
+                                        onClick={() => setSellPos(pos)}
+                                        className="px-2.5 py-1 rounded text-[10px] font-semibold bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 transition-colors"
+                                      >
+                                        Sell
+                                      </button>
+                                    )}
+                                    {(() => {
+                                      const pnl = pos.isSold ? pos.realizedPnl : pos.unrealizedPnl;
+                                      if (Math.abs(pnl) < 0.01) return null;
+                                      const sign = pnl >= 0 ? "+" : "";
+                                      const text = `I ${pnl >= 0 ? "made" : "lost"} ${sign}${pnl.toFixed(1)} DORA on outcome ${pos.outcome} on @pumpdora! pumpdora.com?ref=${user?.username ?? ""}\n#PredictionMarket #Solana #DORA`;
+                                      return (
+                                        <button
+                                          onClick={() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer")}
+                                          title="Share on X"
+                                          className="flex items-center gap-0.5 px-1.5 py-1 rounded text-[10px] font-semibold bg-[#1d9bf0]/10 hover:bg-[#1d9bf0]/20 border border-[#1d9bf0]/30 text-[#1d9bf0] transition-colors"
+                                        >
+                                          <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.253 5.622 5.91-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                                          </svg>
+                                        </button>
+                                      );
+                                    })()}
+                                  </div>
                                 </td>
                               </tr>
                             );

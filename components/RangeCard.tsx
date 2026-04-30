@@ -331,12 +331,6 @@ function ResolvedRangeCard({ round }: { round: Round }) {
           </p>
         )}
 
-        {round.questionType === "token_battle" && round.tokenBattleTokens && (
-          <div className="mb-2">
-            <BattleLeaderboard tokens={(round.tokenBattleTokens as any[]).map((t: any) => ({ ...t, mcap: t.currentMcap ?? 0 }))} />
-          </div>
-        )}
-
         <div className="grid grid-cols-2 gap-1 mb-3">
           {outcomes.map(o => {
             const isWinner = o.id === round.winningOutcome;
@@ -402,6 +396,13 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
   const bettingClosed = round.bettingClosesAt
     ? new Date() > new Date(round.bettingClosesAt)
     : isEnded;
+
+  // Live mcaps for token_battle outcome buttons
+  const battleEntries = (round.questionType === "token_battle" && round.tokenBattleTokens)
+    ? (round.tokenBattleTokens as any[]).map((t: any) => ({ ...t, mcap: t.currentMcap ?? 0 })) as BattleEntry[]
+    : null;
+  const rankedBattle   = useBattleLeaderboard(battleEntries);
+  const battleMcapMap  = Object.fromEntries(rankedBattle.map(t => [t.outcomeId, t.mcap]));
 
   const hasChart   = round.targetToken === "bitcoin" || round.targetToken === "solana";
   const isMcapQ    = round.questionType === "mcap" || round.questionType === "ath_mcap";
@@ -519,11 +520,6 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
           </div>
         </div>
 
-        {/* Token Battle leaderboard */}
-        {round.questionType === "token_battle" && round.tokenBattleTokens && (
-          <BattleLeaderboard tokens={(round.tokenBattleTokens as any[]).map((t: any) => ({ ...t, mcap: t.currentMcap ?? 0 }))} />
-        )}
-
         {/* Price / mcap info box — all crypto rounds with token data */}
         {showInfoBox && (
           <div className="flex items-center justify-between px-2 py-1 bg-white/[0.03] rounded-lg mb-2 border border-white/5">
@@ -556,6 +552,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
             const battleToken = round.questionType === "token_battle"
               ? round.tokenBattleTokens?.find(t => t.outcomeId === o.id)
               : undefined;
+            const battleMcap = battleToken ? (battleMcapMap[o.id] ?? 0) : 0;
             return (
               <button
                 key={o.id}
@@ -569,7 +566,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
                     ? "opacity-40 cursor-not-allowed bg-surface-2 border-surface-3"
                     : `${c.bg} ${c.border} hover:opacity-90 active:scale-[0.98]`}`}
               >
-                <div className="flex items-center gap-1 min-w-0">
+                <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden">
                   {battleToken ? (
                     <>
                       {battleToken.logoUrl
@@ -586,9 +583,14 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
                     </>
                   )}
                 </div>
-                {pct !== null
-                  ? <span className={`text-[10px] font-mono font-bold shrink-0 ${c.text}`}>{pct}%</span>
-                  : <span className="text-[10px] text-muted font-mono shrink-0">—</span>}
+                <div className="flex items-center gap-1 shrink-0">
+                  {battleToken && battleMcap > 0 && (
+                    <span className="text-[9px] font-mono text-white/40">{fmtMcapCard(battleMcap)}</span>
+                  )}
+                  {pct !== null
+                    ? <span className={`text-[10px] font-mono font-bold ${c.text}`}>{pct}%</span>
+                    : <span className="text-[10px] text-muted font-mono">—</span>}
+                </div>
               </button>
             );
           })}

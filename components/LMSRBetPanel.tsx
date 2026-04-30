@@ -29,11 +29,12 @@ interface LMSRBetPanelProps {
   winningOutcome: string | null;
   initialOutcome?: string | null;
   onTradeSuccess?: () => void;
+  tokenBattleTokens?: Array<{ outcomeId: string; symbol: string; logoUrl: string | null }> | null;
 }
 
 export default function LMSRBetPanel({
   roundId, outcomes, lmsrB, initialShares,
-  bettingClosed, roundStatus, winningOutcome, initialOutcome, onTradeSuccess,
+  bettingClosed, roundStatus, winningOutcome, initialOutcome, onTradeSuccess, tokenBattleTokens,
 }: LMSRBetPanelProps) {
   const { user, getToken, refreshUser } = useAuth();
   const activeOutcomes = outcomes.map(o => o.id);
@@ -182,8 +183,9 @@ export default function LMSRBetPanel({
           const arrow    = price > prev + 0.001 ? "↑" : price < prev - 0.001 ? "↓" : null;
           const arrowClr = arrow === "↑" ? "text-green-400" : "text-red-400";
           const pos      = positionMap[o.id];
-          const isWinner = winningOutcome === o.id;
-          const isSel    = selected === o.id;
+          const isWinner   = winningOutcome === o.id;
+          const isSel      = selected === o.id;
+          const battleToken = tokenBattleTokens?.find(t => t.outcomeId === o.id);
 
           return (
             <div key={o.id}>
@@ -203,11 +205,17 @@ export default function LMSRBetPanel({
                     : resolved || bettingClosed ? "bg-white/[0.02] border-white/5 opacity-60 cursor-default"
                     : "bg-white/[0.02] border-white/5 hover:bg-white/[0.04] cursor-pointer"}`}
               >
-                <span className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold shrink-0 ${c.bg} ${c.text} border ${c.border}`}>
-                  {o.id}
-                </span>
+                {battleToken ? (
+                  battleToken.logoUrl
+                    ? <img src={battleToken.logoUrl} alt={battleToken.symbol} className="w-5 h-5 rounded-full shrink-0 object-cover" />
+                    : <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${c.bg} ${c.text} border ${c.border}`}>{battleToken.symbol[0]}</div>
+                ) : (
+                  <span className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold shrink-0 ${c.bg} ${c.text} border ${c.border}`}>
+                    {o.id}
+                  </span>
+                )}
                 <span className={`flex-1 text-xs font-medium min-w-0 truncate whitespace-nowrap ${isSel || isWinner ? c.text : "text-white/70"}`}>
-                  {o.label}{isWinner && <span className="ml-1 text-[10px]">✓</span>}
+                  {battleToken ? `$${battleToken.symbol}` : o.label}{isWinner && <span className="ml-1 text-[10px]">✓</span>}
                 </span>
                 {arrow && <span className={`text-[10px] font-bold shrink-0 ${arrowClr}`}>{arrow}</span>}
                 <div className="flex flex-col items-end gap-0.5 shrink-0 w-12">

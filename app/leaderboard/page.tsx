@@ -7,6 +7,7 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Sidebar from "@/components/Sidebar";
 import Avatar from "@/components/Avatar";
+import { useAuth } from "@/lib/useAuth";
 
 interface LeaderboardEntry {
   walletAddress:  string;
@@ -73,15 +74,25 @@ function SidebarStats() {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+type Period = "24h" | "7d" | "all";
+
+const PERIOD_LABELS: { key: Period; label: string }[] = [
+  { key: "24h", label: "24h"      },
+  { key: "7d",  label: "7 days"   },
+  { key: "all", label: "All time" },
+];
+
 export default function LeaderboardPage() {
+  const { user }                      = useAuth();
   const [rows,        setRows]        = useState<LeaderboardEntry[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [usernameMap, setUsernameMap] = useState<Record<string, string>>({});
+  const [period,      setPeriod]      = useState<Period>("all");
 
   const fetchLeaderboard = useCallback(async () => {
     try {
-      const res = await fetch("/api/leaderboard", { cache: "no-store" });
+      const res = await fetch(`/api/leaderboard?period=${period}`, { cache: "no-store" });
       if (!res.ok) return;
       const data: LeaderboardEntry[] = await res.json();
       setRows(data);
@@ -98,9 +109,10 @@ export default function LeaderboardPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [period]);
 
   useEffect(() => {
+    setLoading(true);
     fetchLeaderboard();
     const id = setInterval(fetchLeaderboard, 30_000);
     return () => clearInterval(id);
@@ -129,16 +141,31 @@ export default function LeaderboardPage() {
           </Link>
 
           {/* Header */}
-          <div className="flex items-center gap-3 mb-6">
-            <span className="text-3xl">🏆</span>
-            <div>
-              <h1 className="text-white font-bold text-2xl">Leaderboard</h1>
-              <p className="text-muted text-xs mt-0.5">
-                Top 50 traders by profit · refreshes every 30s
-                {lastUpdated && (
-                  <span className="ml-2 text-surface-3">· updated {lastUpdated.toLocaleTimeString()}</span>
-                )}
-              </p>
+          <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">🏆</span>
+              <div>
+                <h1 className="text-white font-bold text-2xl">Leaderboard</h1>
+                <p className="text-muted text-xs mt-0.5">
+                  Top 50 traders by profit · refreshes every 30s
+                  {lastUpdated && (
+                    <span className="ml-2 text-surface-3">· updated {lastUpdated.toLocaleTimeString()}</span>
+                  )}
+                </p>
+              </div>
+            </div>
+            {/* Time filter tabs */}
+            <div className="flex items-center gap-1 rounded-lg overflow-hidden border border-surface-3 bg-surface">
+              {PERIOD_LABELS.map(p => (
+                <button
+                  key={p.key}
+                  onClick={() => setPeriod(p.key)}
+                  className={`px-3 py-1.5 text-xs font-semibold transition-colors
+                    ${period === p.key ? "bg-brand text-black" : "text-muted hover:text-white"}`}
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -164,16 +191,25 @@ export default function LeaderboardPage() {
                   </thead>
                   <tbody>
                     {rows.map((row, idx) => {
-                      const rank          = idx + 1;
-                      const rankStyle     = RANK_STYLES[rank];
-                      const displayName   = usernameMap[row.walletAddress] || shortAddress(row.walletAddress);
+                      const rank           = idx + 1;
+                      const rankStyle      = RANK_STYLES[rank];
+                      const displayName    = usernameMap[row.walletAddress] || shortAddress(row.walletAddress);
                       const profitPositive = row.profit >= 0;
+                      const isCurrentUser  = user && (user.username === row.username);
+
+                      function handleShareX() {
+                        const name = row.username ?? displayName;
+                        const sign = row.profit >= 0 ? "+" : "";
+                        const text = `🏆 I'm ranked #${rank} on @pumpdora with ${sign}${row.profit.toFixed(0)} DORA profit!\nJoin with my referral link: pumpdora.com?ref=${name}\n#PredictionMarket #Solana #DORA`;
+                        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+                      }
 
                       return (
                         <tr
                           key={row.walletAddress}
                           className={[
                             "border-b border-surface-3/50 transition-colors",
+                            isCurrentUser ? "ring-1 ring-inset ring-brand/30" : "",
                             rank <= 3
                               ? `${rankStyle.bg} hover:brightness-110`
                               : "hover:bg-surface-2/50",
@@ -242,11 +278,25 @@ export default function LeaderboardPage() {
                             {row.marketsCreated > 0 ? row.marketsCreated : <span className="text-muted">—</span>}
                           </td>
 
-                          {/* Profit */}
+                          {/* Profit + share */}
                           <td className="px-4 py-3 text-right">
-                            <span className={`font-mono font-bold text-sm ${profitPositive ? "text-yes" : "text-no"}`}>
-                              {profitPositive ? "+" : ""}{row.profit.toFixed(0)} DORA
-                            </span>
+                            <div className="flex items-center justify-end gap-2">
+                              <span className={`font-mono font-bold text-sm ${profitPositive ? "text-yes" : "text-no"}`}>
+                                {profitPositive ? "+" : ""}{row.profit.toFixed(0)} DORA
+                              </span>
+                              {isCurrentUser && (
+                                <button
+                                  onClick={handleShareX}
+                                  title="Share on X"
+                                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#1d9bf0]/10 hover:bg-[#1d9bf0]/20 border border-[#1d9bf0]/30 text-[#1d9bf0] transition-colors shrink-0"
+                                >
+                                  <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.253 5.622 5.91-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                                  </svg>
+                                  Share
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );

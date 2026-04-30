@@ -347,7 +347,6 @@ function TokenBattleSection({ tokens }: { tokens: BattleTokenInfo[] }) {
 const BATTLE_COLORS = ["#f87171","#fb923c","#facc15","#4ade80","#38bdf8","#c084fc"];
 
 function TokenBattleChart({ tokens }: { tokens: BattleTokenInfo[] }) {
-  // series[i] = array of mcap readings for tokens[i]
   const [series, setSeries] = useState<number[][]>(() =>
     tokens.map(t => t.currentMcap > 0 ? [t.currentMcap] : [])
   );
@@ -379,77 +378,85 @@ function TokenBattleChart({ tokens }: { tokens: BattleTokenInfo[] }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Normalize each series to % change from first reading
   const maxLen = Math.max(...series.map(s => s.length), 1);
-  const normalised = series.map(s => {
-    if (s.length === 0) return [];
-    const base = s[0];
-    return s.map(v => base > 0 ? (v / base - 1) * 100 : 0);
-  });
-
-  const W = 320, H = 120, padL = 4, padR = 4, padT = 8, padB = 24;
+  const W = 320, H = 130, padL = 44, padR = 6, padT = 10, padB = 8;
   const innerW = W - padL - padR;
   const innerH = H - padT - padB;
 
-  // Combined y range
-  const allVals = normalised.flat();
-  const yMin = Math.min(...allVals, -1);
-  const yMax = Math.max(...allVals,  1);
+  const allVals = series.flat().filter(v => v > 0);
+  const rawMin = allVals.length > 0 ? Math.min(...allVals) : 0;
+  const rawMax = allVals.length > 0 ? Math.max(...allVals) : 1;
+  const pad5   = (rawMax - rawMin) * 0.05 || rawMax * 0.05 || 1;
+  const yMin   = rawMin - pad5;
+  const yMax   = rawMax + pad5;
   const yRange = yMax - yMin || 1;
 
   function toX(idx: number, seriesLen: number): number {
-    if (seriesLen <= 1) return padL;
+    if (seriesLen <= 1) return padL + innerW / 2;
     return padL + (idx / (Math.max(maxLen, seriesLen) - 1)) * innerW;
   }
-  function toY(pct: number): number {
-    return padT + (1 - (pct - yMin) / yRange) * innerH;
+  function toY(val: number): number {
+    return padT + (1 - (val - yMin) / yRange) * innerH;
   }
 
-  const hasData = normalised.some(s => s.length >= 2);
+  const hasData = series.some(s => s.length >= 2);
+  const yTicks  = [yMax, (yMax + yMin) / 2, yMin];
+  const currentMcaps = series.map(s => s.length > 0 ? s[s.length - 1] : 0);
 
   return (
     <div className="mb-4 rounded-xl border border-white/5 bg-white/[0.02] p-3">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] text-white/30 uppercase tracking-wider">Mcap % Change</span>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-          {tokens.map((t, i) => (
-            <div key={t.address} className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: BATTLE_COLORS[i % BATTLE_COLORS.length] }} />
-              <span className="text-[9px] font-mono" style={{ color: BATTLE_COLORS[i % BATTLE_COLORS.length] }}>${t.symbol}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <span className="text-[10px] text-white/30 uppercase tracking-wider">Market Cap</span>
       {!hasData ? (
-        <div className="flex items-center justify-center" style={{ height: H }}>
+        <div className="flex items-center justify-center mt-2" style={{ height: H }}>
           <span className="text-white/20 text-xs">Collecting data…</span>
         </div>
       ) : (
-        <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="overflow-visible">
-          {/* Zero line */}
-          <line x1={padL} y1={toY(0)} x2={W - padR} y2={toY(0)} stroke="rgba(255,255,255,0.08)" strokeWidth="1" strokeDasharray="3 3" />
-          {/* Series lines */}
-          {normalised.map((pts, i) => {
-            if (pts.length < 2) return null;
-            const color = BATTLE_COLORS[i % BATTLE_COLORS.length];
-            let d = `M ${toX(0, pts.length).toFixed(1)} ${toY(pts[0]).toFixed(1)}`;
-            for (let j = 1; j < pts.length; j++) {
-              const x0 = toX(j - 1, pts.length), y0 = toY(pts[j - 1]);
-              const x1 = toX(j, pts.length),     y1 = toY(pts[j]);
-              const dx = (x1 - x0) / 3;
-              d += ` C ${(x0 + dx).toFixed(1)} ${y0.toFixed(1)} ${(x1 - dx).toFixed(1)} ${y1.toFixed(1)} ${x1.toFixed(1)} ${y1.toFixed(1)}`;
-            }
-            return <path key={i} d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />;
-          })}
-          {/* Y-axis labels */}
-          {[yMax, 0, yMin].map(v => (
-            <text key={v} x={padL} y={toY(v) + 3} fontSize="7" fill="rgba(255,255,255,0.25)" textAnchor="start">
-              {v >= 0 ? "+" : ""}{v.toFixed(1)}%
-            </text>
-          ))}
-          {/* X-axis label */}
-          <text x={W / 2} y={H - 4} fontSize="7" fill="rgba(255,255,255,0.2)" textAnchor="middle">10s intervals</text>
-        </svg>
+        <>
+          <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="overflow-visible mt-2">
+            {/* Y-axis gridlines + labels */}
+            {yTicks.map((v, ti) => (
+              <g key={ti}>
+                <line x1={padL} y1={toY(v)} x2={W - padR} y2={toY(v)} stroke="rgba(255,255,255,0.05)" strokeWidth="1" strokeDasharray="3 3" />
+                <text x={padL - 3} y={toY(v) + 3} fontSize="7" fill="rgba(255,255,255,0.35)" textAnchor="end">
+                  {fmtMcapBattle(v)}
+                </text>
+              </g>
+            ))}
+            {/* Series lines */}
+            {series.map((pts, i) => {
+              if (pts.length < 2) return null;
+              const color = BATTLE_COLORS[i % BATTLE_COLORS.length];
+              const sw    = i === 0 ? 2.5 : i === 1 ? 2 : 1.5;
+              let d = `M ${toX(0, pts.length).toFixed(1)} ${toY(pts[0]).toFixed(1)}`;
+              for (let j = 1; j < pts.length; j++) {
+                const x0 = toX(j - 1, pts.length), y0 = toY(pts[j - 1]);
+                const x1 = toX(j, pts.length),     y1 = toY(pts[j]);
+                const dx = (x1 - x0) / 3;
+                d += ` C ${(x0 + dx).toFixed(1)} ${y0.toFixed(1)} ${(x1 - dx).toFixed(1)} ${y1.toFixed(1)} ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+              }
+              const lx = toX(pts.length - 1, pts.length);
+              const ly = toY(pts[pts.length - 1]);
+              return (
+                <g key={i}>
+                  <path d={d} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx={lx} cy={ly} r="2.5" fill={color} />
+                </g>
+              );
+            })}
+          </svg>
+          {/* Legend: dot + $SYMBOL + current mcap */}
+          <div className="flex items-center gap-3 flex-wrap mt-1">
+            {tokens.map((t, i) => (
+              <div key={t.address} className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: BATTLE_COLORS[i % BATTLE_COLORS.length] }} />
+                <span className="text-[9px] font-bold font-mono" style={{ color: BATTLE_COLORS[i % BATTLE_COLORS.length] }}>${t.symbol}</span>
+                {currentMcaps[i] > 0 && (
+                  <span className="text-[9px] font-mono text-white/40">{fmtMcapBattle(currentMcaps[i])}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
@@ -1159,6 +1166,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                 winningOutcome={round.winningOutcome}
                 initialOutcome={initialOutcome}
                 onTradeSuccess={refreshRound}
+                tokenBattleTokens={round.tokenBattleTokens ?? null}
               />
             </div>
           )}
@@ -1189,6 +1197,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                 winningOutcome={round.winningOutcome}
                 initialOutcome={initialOutcome}
                 onTradeSuccess={refreshRound}
+                tokenBattleTokens={round.tokenBattleTokens ?? null}
               />
             </div>
           )}

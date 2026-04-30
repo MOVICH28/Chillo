@@ -1,11 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const period = req.nextUrl.searchParams.get("period") ?? "all";
+    const cutoff = period === "24h" ? new Date(Date.now() - 86_400_000)
+                 : period === "7d"  ? new Date(Date.now() - 7 * 86_400_000)
+                 : null;
+
     const bets = await prisma.bet.findMany({
+      where: cutoff ? { createdAt: { gte: cutoff } } : {},
       select: {
         walletAddress: true,
         userId: true,
