@@ -131,7 +131,8 @@ function matchOutcomeBracket(value: number, outcomes: Outcome[]): string | null 
   return outcomes[outcomes.length - 1]?.id ?? null;
 }
 
-async function resolveTokenBattleRound(round: { id: string; tokenBattleTokens: unknown }): Promise<string | null> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolveTokenBattleRound(round: { id: string; tokenBattleTokens?: any }): Promise<string | null> {
   const tokens = (round.tokenBattleTokens as Array<{ address: string; outcomeId: string }> | null) ?? [];
   if (tokens.length < 2) {
     console.warn(`[cron/battle] ${round.id}: fewer than 2 tokens`);

@@ -409,7 +409,7 @@ export default function CreatePage() {
   // ── Auto-generate crypto question from type + token + timeframe ───────────
   useEffect(() => {
     if (category !== "crypto") return;
-    const raw = tokenInfo?.symbol ?? tokenQuery.trim() || "Token";
+    const raw = tokenInfo?.symbol ?? (tokenQuery.trim() || "Token");
     const sym = `$${raw}`;
     const tf  = formatDuration(betDuration);
     switch (cryptoQType) {
