@@ -226,27 +226,6 @@ function fmtMcapCard(v: number): string {
   return v > 0 ? `$${v.toFixed(0)}` : "—";
 }
 
-function BattleLeaderboard({ tokens }: { tokens: BattleEntry[] | null | undefined }) {
-  const ranked = useBattleLeaderboard(tokens);
-  if (ranked.length === 0) return null;
-  const RANKS = ["🥇", "🥈", "🥉", "4", "5", "6"];
-  return (
-    <div className="mb-2 space-y-1">
-      {ranked.map((t, i) => (
-        <div key={t.address} className="flex items-center gap-2 px-1">
-          <span className="text-[10px] w-4 shrink-0 text-center leading-none">{RANKS[i] ?? `${i+1}`}</span>
-          {t.logoUrl
-            ? <img src={t.logoUrl} alt={t.symbol} className="w-4 h-4 rounded-full shrink-0 object-cover" />
-            : <div className="w-4 h-4 rounded-full bg-purple-500/30 flex items-center justify-center text-[7px] font-bold text-purple-300 shrink-0">{t.symbol[0]}</div>}
-          <span className="text-[10px] font-bold text-white/80 shrink-0">${t.symbol}</span>
-          <span className="flex-1" />
-          <span className="text-[10px] font-mono text-white/40">{fmtMcapCard(t.mcap)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ── Resolved card ─────────────────────────────────────────────────────────────
 
 function ResolvedRangeCard({ round }: { round: Round }) {
