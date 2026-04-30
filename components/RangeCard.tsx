@@ -333,7 +333,7 @@ function ResolvedRangeCard({ round }: { round: Round }) {
 
         {round.questionType === "token_battle" && round.tokenBattleTokens && (
           <div className="mb-2">
-            <BattleLeaderboard tokens={round.tokenBattleTokens as BattleEntry[]} />
+            <BattleLeaderboard tokens={(round.tokenBattleTokens as any[]).map((t: any) => ({ ...t, mcap: t.currentMcap ?? 0 }))} />
           </div>
         )}
 
@@ -521,7 +521,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
 
         {/* Token Battle leaderboard */}
         {round.questionType === "token_battle" && round.tokenBattleTokens && (
-          <BattleLeaderboard tokens={round.tokenBattleTokens as BattleEntry[]} />
+          <BattleLeaderboard tokens={(round.tokenBattleTokens as any[]).map((t: any) => ({ ...t, mcap: t.currentMcap ?? 0 }))} />
         )}
 
         {/* Price / mcap info box — all crypto rounds with token data */}
