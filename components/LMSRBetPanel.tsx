@@ -440,43 +440,43 @@ export default function LMSRBetPanel({
             {positions.map(pos => {
               const c           = OUTCOME_COLORS[pos.outcome];
               const invested    = pos.shares * pos.avgCost;
-              // LMSR integral: actual sell proceeds for full position
-              const rawFull     = -costToBuy(curShares, pos.outcome, -pos.shares, lmsrB, activeOutcomes);
+              // Use LMSR integral for actual sell value (not marginal price × shares)
+              const rawFull      = -costToBuy(curShares, pos.outcome, -pos.shares, lmsrB, activeOutcomes);
               const currentValue = Math.max(0, rawFull * (1 - PLATFORM_FEE));
+              // Sole-trader: user holds ≥95% of this outcome's total shares
               const outcomeShares = curShares[pos.outcome] ?? 0;
-              const isSole       = outcomeShares > 0 && pos.shares >= outcomeShares * 0.99;
-              const pnl          = isSole ? null : currentValue - invested;
-              const label        = outcomes.find(o => o.id === pos.outcome)?.label ?? pos.outcome;
+              const isSole        = outcomeShares > 0 && pos.shares >= outcomeShares * 0.95;
+              const pnl           = isSole ? null : currentValue - invested;
+              const label         = outcomes.find(o => o.id === pos.outcome)?.label ?? pos.outcome;
               return (
-                <div key={pos.outcome} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs ${c.bg} ${c.border}`}>
-                  <span className={`font-bold shrink-0 ${c.text}`}>{pos.outcome}</span>
-                  <span className="flex-1 min-w-0 truncate text-white/40 text-[10px]">{label}</span>
-                  <div className="flex flex-col items-end gap-0.5 shrink-0">
-                    <span className="font-mono text-white/60 text-[10px]">{invested.toFixed(2)} in</span>
-                    <span className="font-mono text-white/80 text-[10px]">{currentValue.toFixed(2)} now</span>
+                <div key={pos.outcome} className={`flex flex-col gap-1 px-3 py-2 rounded-lg border ${c.bg} ${c.border}`}>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className={`font-bold shrink-0 ${c.text}`}>{pos.outcome}</span>
+                    <span className="flex-1 min-w-0 truncate text-white/40 text-[10px]">{label}</span>
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                      <span className="font-mono text-white/60 text-[10px]">{invested.toFixed(2)} in</span>
+                      {isSole
+                        ? <span className="text-white/25 text-[9px] italic">waiting for other traders</span>
+                        : <span className="font-mono text-white/80 text-[10px]">{currentValue.toFixed(2)} now</span>}
+                    </div>
+                    {pnl === null ? (
+                      <span className="font-mono text-white/25 shrink-0 text-[10px]">—</span>
+                    ) : (
+                      <span className={`font-mono font-semibold shrink-0 ${pnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
+                        {pnl >= 0 ? "+" : ""}{pnl.toFixed(2)}
+                      </span>
+                    )}
                   </div>
-                  {pnl === null ? (
-                    <span className="font-mono text-white/25 shrink-0 text-[10px] italic">—</span>
-                  ) : (
-                    <span className={`font-mono font-semibold shrink-0 ${pnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
-                      {pnl >= 0 ? "+" : ""}{pnl.toFixed(2)}
-                    </span>
-                  )}
-                  {!resolved && !bettingClosed && (
-                    <button
-                      onClick={() => { setSelected(pos.outcome); setTradeType("sell"); setError(""); setTxStatus("idle"); }}
-                      className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-semibold border transition-colors
-                        ${selected === pos.outcome && tradeType === "sell"
-                          ? "bg-red-500/20 text-red-400 border-red-500/40"
-                          : "bg-white/5 text-white/40 border-white/10 hover:text-white/70"}`}
-                    >
-                      Sell
-                    </button>
-                  )}
                 </div>
               );
             })}
           </div>
+          {positions.some(p => {
+            const os = curShares[p.outcome] ?? 0;
+            return os > 0 && p.shares >= os * 0.95;
+          }) && (
+            <p className="text-[9px] text-white/20 italic mt-1.5">P&L shows once other traders join</p>
+          )}
         </div>
       )}
     </div>

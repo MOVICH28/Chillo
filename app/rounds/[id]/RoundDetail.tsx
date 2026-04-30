@@ -342,6 +342,119 @@ function TokenBattleSection({ tokens }: { tokens: BattleTokenInfo[] }) {
   );
 }
 
+// ── Token Battle multi-line comparison chart ──────────────────────────────────
+
+const BATTLE_COLORS = ["#f87171","#fb923c","#facc15","#4ade80","#38bdf8","#c084fc"];
+
+function TokenBattleChart({ tokens }: { tokens: BattleTokenInfo[] }) {
+  // series[i] = array of mcap readings for tokens[i]
+  const [series, setSeries] = useState<number[][]>(() =>
+    tokens.map(t => t.currentMcap > 0 ? [t.currentMcap] : [])
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    async function pollAll() {
+      const updates = await Promise.all(tokens.map(async (t, i) => {
+        try {
+          const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${t.address}`, { cache: "no-store" });
+          if (!res.ok || cancelled) return { i, m: 0 };
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const data = await res.json() as { pairs?: any[] };
+          const pairs = (data.pairs ?? []).sort((a: any, b: any) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0));
+          const m = pairs[0]?.marketCap ?? pairs[0]?.fdv ?? 0;
+          return { i, m };
+        } catch { return { i, m: 0 }; }
+      }));
+      if (cancelled) return;
+      setSeries(prev => {
+        const next = prev.map(s => [...s]);
+        updates.forEach(({ i, m }) => { if (m > 0) next[i] = [...next[i], m].slice(-60); });
+        return next;
+      });
+    }
+    pollAll();
+    const id = setInterval(pollAll, 10_000);
+    return () => { cancelled = true; clearInterval(id); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Normalize each series to % change from first reading
+  const maxLen = Math.max(...series.map(s => s.length), 1);
+  const normalised = series.map(s => {
+    if (s.length === 0) return [];
+    const base = s[0];
+    return s.map(v => base > 0 ? (v / base - 1) * 100 : 0);
+  });
+
+  const W = 320, H = 120, padL = 4, padR = 4, padT = 8, padB = 24;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+
+  // Combined y range
+  const allVals = normalised.flat();
+  const yMin = Math.min(...allVals, -1);
+  const yMax = Math.max(...allVals,  1);
+  const yRange = yMax - yMin || 1;
+
+  function toX(idx: number, seriesLen: number): number {
+    if (seriesLen <= 1) return padL;
+    return padL + (idx / (Math.max(maxLen, seriesLen) - 1)) * innerW;
+  }
+  function toY(pct: number): number {
+    return padT + (1 - (pct - yMin) / yRange) * innerH;
+  }
+
+  const hasData = normalised.some(s => s.length >= 2);
+
+  return (
+    <div className="mb-4 rounded-xl border border-white/5 bg-white/[0.02] p-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] text-white/30 uppercase tracking-wider">Mcap % Change</span>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {tokens.map((t, i) => (
+            <div key={t.address} className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: BATTLE_COLORS[i % BATTLE_COLORS.length] }} />
+              <span className="text-[9px] font-mono" style={{ color: BATTLE_COLORS[i % BATTLE_COLORS.length] }}>${t.symbol}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      {!hasData ? (
+        <div className="flex items-center justify-center" style={{ height: H }}>
+          <span className="text-white/20 text-xs">Collecting data…</span>
+        </div>
+      ) : (
+        <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="overflow-visible">
+          {/* Zero line */}
+          <line x1={padL} y1={toY(0)} x2={W - padR} y2={toY(0)} stroke="rgba(255,255,255,0.08)" strokeWidth="1" strokeDasharray="3 3" />
+          {/* Series lines */}
+          {normalised.map((pts, i) => {
+            if (pts.length < 2) return null;
+            const color = BATTLE_COLORS[i % BATTLE_COLORS.length];
+            let d = `M ${toX(0, pts.length).toFixed(1)} ${toY(pts[0]).toFixed(1)}`;
+            for (let j = 1; j < pts.length; j++) {
+              const x0 = toX(j - 1, pts.length), y0 = toY(pts[j - 1]);
+              const x1 = toX(j, pts.length),     y1 = toY(pts[j]);
+              const dx = (x1 - x0) / 3;
+              d += ` C ${(x0 + dx).toFixed(1)} ${y0.toFixed(1)} ${(x1 - dx).toFixed(1)} ${y1.toFixed(1)} ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+            }
+            return <path key={i} d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />;
+          })}
+          {/* Y-axis labels */}
+          {[yMax, 0, yMin].map(v => (
+            <text key={v} x={padL} y={toY(v) + 3} fontSize="7" fill="rgba(255,255,255,0.25)" textAnchor="start">
+              {v >= 0 ? "+" : ""}{v.toFixed(1)}%
+            </text>
+          ))}
+          {/* X-axis label */}
+          <text x={W / 2} y={H - 4} fontSize="7" fill="rgba(255,255,255,0.2)" textAnchor="middle">10s intervals</text>
+        </svg>
+      )}
+    </div>
+  );
+}
+
 // ── Pool distribution bar (LMSR probabilities) ───────────────────────────────
 
 function PoolBar({ outcomes, prices, tokenLogoMap }: { outcomes: Outcome[]; prices: Record<string, number>; tokenLogoMap?: Record<string, { symbol: string; logoUrl: string | null }> }) {
@@ -705,6 +818,18 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                     @{round.twitterUsername}
                   </a>
                 </div>
+              ) : round.questionType === "token_battle" && round.tokenBattleTokens && round.tokenBattleTokens.length >= 2 ? (
+                <div className="flex shrink-0">
+                  {(round.tokenBattleTokens as BattleTokenInfo[]).slice(0, 4).map((t, i) => (
+                    t.logoUrl
+                      ? <img key={t.address} src={t.logoUrl} alt={t.symbol}
+                          className="w-10 h-10 rounded-full border-2 border-[#0d0f14] object-cover"
+                          style={{ marginLeft: i === 0 ? 0 : -12, zIndex: i }} />
+                      : <div key={t.address}
+                          className="w-10 h-10 rounded-full border-2 border-[#0d0f14] bg-purple-500/30 flex items-center justify-center text-xs font-bold text-purple-300"
+                          style={{ marginLeft: i === 0 ? 0 : -12, zIndex: i }}>{t.symbol[0]}</div>
+                  ))}
+                </div>
               ) : round.customImage ? (
                 <img src={round.customImage} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
               ) : round.targetToken && TOKEN_LOGOS[round.targetToken] ? (
@@ -866,6 +991,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
               return (
                 <>
                   <TokenBattleSection tokens={battleTokens} />
+                  <TokenBattleChart tokens={battleTokens} />
                   {outcomes.length > 0 && <PoolBar outcomes={outcomes} prices={lmsrPrices} tokenLogoMap={tokenLogoMap} />}
                 </>
               );

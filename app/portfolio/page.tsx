@@ -108,15 +108,13 @@ function SidebarStats() {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-}
-
-function fmtDate(iso: string): string {
+function fmtTimestamp(iso: string): string {
   const d = new Date(iso);
   const today = new Date();
-  if (d.toDateString() === today.toDateString()) return fmtTime(iso);
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit" }) + " " + fmtTime(iso);
+  const timeStr = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  if (d.toDateString() === today.toDateString()) return timeStr;
+  const dateStr = d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit" });
+  return `${dateStr} ${timeStr}`;
 }
 
 // ── Trade history row ─────────────────────────────────────────────────────────
@@ -124,26 +122,32 @@ function fmtDate(iso: string): string {
 function TradeHistory({ trades, isSoleTrader }: { trades: TradeRecord[]; isSoleTrader: boolean }) {
   if (trades.length === 0) return null;
   return (
-    <div className="px-4 pb-3 space-y-1">
+    <div className="px-4 pb-3 space-y-1.5">
       {trades.map((t, i) => {
-        const isBuy = t.type === "buy";
+        const isBuy   = t.type === "buy";
         const doraAmt = isBuy ? t.totalCost : -t.totalCost;
         return (
-          <div key={i} className="flex items-center gap-2 text-[10px] font-mono text-white/30">
-            <span className={`px-1 py-px rounded font-semibold shrink-0 ${isBuy ? "bg-[#22c55e]/10 text-[#22c55e]" : "bg-red-500/10 text-red-400"}`}>
-              {isBuy ? "BUY" : "SELL"}
-            </span>
-            <span className="text-white/50">{doraAmt.toFixed(2)} DORA</span>
-            <span>·</span>
-            <span>{fmtDate(t.createdAt)}</span>
-            {!isBuy && t.profitLoss !== null && (
-              <>
-                <span>·</span>
-                <span className={t.profitLoss >= 0 ? "text-[#22c55e]" : "text-red-400"}>
-                  {t.profitLoss >= 0 ? "+" : ""}{t.profitLoss.toFixed(2)} P&L
-                </span>
-              </>
-            )}
+          <div key={i} className="flex items-start gap-1.5 text-[10px] font-mono">
+            <span className="shrink-0 text-[11px] leading-none mt-px">{isBuy ? "🟢" : "🔴"}</span>
+            <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 min-w-0">
+              <span className={`font-semibold shrink-0 ${isBuy ? "text-[#22c55e]" : "text-red-400"}`}>
+                {isBuy ? "Bought" : "Sold"}
+              </span>
+              <span className="text-white/20 shrink-0">·</span>
+              <span className="text-white/30 shrink-0">{fmtTimestamp(t.createdAt)}</span>
+              <span className="text-white/20 shrink-0">·</span>
+              <span className="text-white/60 shrink-0">
+                {doraAmt.toFixed(2)} DORA{!isBuy ? " received" : ""}
+              </span>
+              {!isBuy && t.profitLoss !== null && (
+                <>
+                  <span className="text-white/20 shrink-0">·</span>
+                  <span className={`font-semibold shrink-0 ${t.profitLoss >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
+                    {t.profitLoss >= 0 ? "+" : ""}{t.profitLoss.toFixed(2)} P&L
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         );
       })}
