@@ -180,6 +180,73 @@ function useLiveStats(
   return stats;
 }
 
+// ── Token Battle leaderboard hook ─────────────────────────────────────────────
+
+type BattleEntry = {
+  address: string; symbol: string; name: string;
+  logoUrl: string | null; outcomeId: string; mcap: number;
+};
+
+function useBattleLeaderboard(tokens: BattleEntry[] | null | undefined): BattleEntry[] {
+  const [mcaps, setMcaps] = useState<Record<string, number>>(() =>
+    Object.fromEntries((tokens ?? []).map(t => [t.address, t.mcap]))
+  );
+
+  useEffect(() => {
+    if (!tokens || tokens.length === 0) return;
+    let cancelled = false;
+    async function pollAll() {
+      await Promise.all(tokens!.map(async t => {
+        try {
+          const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${t.address}`, { cache: "no-store" });
+          if (!res.ok || cancelled) return;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const data = await res.json() as { pairs?: any[] };
+          const pairs = (data.pairs ?? []).sort((a: any, b: any) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0));
+          const m = pairs[0]?.marketCap ?? pairs[0]?.fdv ?? 0;
+          if (m > 0 && !cancelled) setMcaps(prev => ({ ...prev, [t.address]: m }));
+        } catch { /**/ }
+      }));
+    }
+    pollAll();
+    const id = setInterval(pollAll, 10_000);
+    return () => { cancelled = true; clearInterval(id); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return [...(tokens ?? [])]
+    .map(t => ({ ...t, mcap: mcaps[t.address] ?? t.mcap }))
+    .sort((a, b) => b.mcap - a.mcap);
+}
+
+function fmtMcapCard(v: number): string {
+  if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
+  if (v >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
+  return v > 0 ? `$${v.toFixed(0)}` : "—";
+}
+
+function BattleLeaderboard({ tokens }: { tokens: BattleEntry[] | null | undefined }) {
+  const ranked = useBattleLeaderboard(tokens);
+  if (ranked.length === 0) return null;
+  const RANKS = ["🥇", "🥈", "🥉", "4", "5", "6"];
+  return (
+    <div className="mb-2 space-y-1">
+      {ranked.map((t, i) => (
+        <div key={t.address} className="flex items-center gap-2 px-1">
+          <span className="text-[10px] w-4 shrink-0 text-center leading-none">{RANKS[i] ?? `${i+1}`}</span>
+          {t.logoUrl
+            ? <img src={t.logoUrl} alt={t.symbol} className="w-4 h-4 rounded-full shrink-0 object-cover" />
+            : <div className="w-4 h-4 rounded-full bg-purple-500/30 flex items-center justify-center text-[7px] font-bold text-purple-300 shrink-0">{t.symbol[0]}</div>}
+          <span className="text-[10px] font-bold text-white/80 shrink-0">${t.symbol}</span>
+          <span className="flex-1" />
+          <span className="text-[10px] font-mono text-white/40">{fmtMcapCard(t.mcap)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Resolved card ─────────────────────────────────────────────────────────────
 
 function ResolvedRangeCard({ round }: { round: Round }) {
@@ -262,6 +329,12 @@ function ResolvedRangeCard({ round }: { round: Round }) {
           <p className={`text-xs mb-3 font-mono ${colors?.text ?? "text-muted"}`}>
             Result: {winning.label} ✓
           </p>
+        )}
+
+        {round.questionType === "token_battle" && round.tokenBattleTokens && (
+          <div className="mb-2">
+            <BattleLeaderboard tokens={round.tokenBattleTokens as BattleEntry[]} />
+          </div>
         )}
 
         <div className="grid grid-cols-2 gap-1 mb-3">
@@ -445,6 +518,11 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
             <p className="text-white text-base font-semibold truncate whitespace-nowrap overflow-hidden" title={round.question}>{round.question}</p>
           </div>
         </div>
+
+        {/* Token Battle leaderboard */}
+        {round.questionType === "token_battle" && round.tokenBattleTokens && (
+          <BattleLeaderboard tokens={round.tokenBattleTokens as BattleEntry[]} />
+        )}
 
         {/* Price / mcap info box — all crypto rounds with token data */}
         {showInfoBox && (

@@ -17,6 +17,14 @@ const OUTCOME_COLORS: Record<string, { text: string; bg: string; border: string 
   F: { text: "text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/30" },
 };
 
+interface TradeRecord {
+  type:       "buy" | "sell";
+  shares:     number;
+  totalCost:  number;
+  profitLoss: number | null;
+  createdAt:  string;
+}
+
 interface PortfolioPosition {
   id:              string;
   roundId:         string;
@@ -30,9 +38,11 @@ interface PortfolioPosition {
   currentValue:    number;
   amountInvested:  number;
   unrealizedPnl:   number;
+  realizedPnl:     number;
   isSoleTrader:    boolean;
   isSold:          boolean;
   soldProceeds:    number;
+  trades:          TradeRecord[];
   updatedAt:       string;
   bettingClosesAt: string | null;
   endsAt:          string;
@@ -92,6 +102,54 @@ function SidebarStats() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmtTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+}
+
+function fmtDate(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  if (d.toDateString() === today.toDateString()) return fmtTime(iso);
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit" }) + " " + fmtTime(iso);
+}
+
+// ── Trade history row ─────────────────────────────────────────────────────────
+
+function TradeHistory({ trades, isSoleTrader }: { trades: TradeRecord[]; isSoleTrader: boolean }) {
+  if (trades.length === 0) return null;
+  return (
+    <div className="px-4 pb-3 space-y-1">
+      {trades.map((t, i) => {
+        const isBuy = t.type === "buy";
+        const doraAmt = isBuy ? t.totalCost : -t.totalCost;
+        return (
+          <div key={i} className="flex items-center gap-2 text-[10px] font-mono text-white/30">
+            <span className={`px-1 py-px rounded font-semibold shrink-0 ${isBuy ? "bg-[#22c55e]/10 text-[#22c55e]" : "bg-red-500/10 text-red-400"}`}>
+              {isBuy ? "BUY" : "SELL"}
+            </span>
+            <span className="text-white/50">{doraAmt.toFixed(2)} DORA</span>
+            <span>·</span>
+            <span>{fmtDate(t.createdAt)}</span>
+            {!isBuy && t.profitLoss !== null && (
+              <>
+                <span>·</span>
+                <span className={t.profitLoss >= 0 ? "text-[#22c55e]" : "text-red-400"}>
+                  {t.profitLoss >= 0 ? "+" : ""}{t.profitLoss.toFixed(2)} P&L
+                </span>
+              </>
+            )}
+          </div>
+        );
+      })}
+      {isSoleTrader && (
+        <p className="text-[9px] text-white/20 italic pt-0.5">P&L updates as other traders join</p>
+      )}
     </div>
   );
 }
@@ -434,8 +492,12 @@ export default function PortfolioPage() {
                         <tbody>
                           {positions.map(pos => {
                             const c        = OUTCOME_COLORS[pos.outcome];
-                            const pnlColor = pos.unrealizedPnl >= 0 ? "text-[#22c55e]" : "text-red-400";
                             const isWinner = pos.winningOutcome === pos.outcome;
+                            // Show realized P&L if any sells, else unrealized (hide if sole trader)
+                            const hasSells    = pos.trades.some(t => t.type === "sell");
+                            const displayPnl  = hasSells ? pos.realizedPnl : (pos.isSoleTrader ? null : pos.unrealizedPnl);
+                            const pnlLabel    = hasSells ? "Realized" : (pos.isSoleTrader ? null : "Unrealized");
+                            const pnlColor    = (displayPnl ?? 0) >= 0 ? "text-[#22c55e]" : "text-red-400";
                             return (
                               <tr key={pos.id} className={`border-b border-surface-3/30 ${isWinner ? c.bg : "hover:bg-white/[0.02]"}`}>
                                 <td className="px-4 py-2.5">
@@ -458,7 +520,13 @@ export default function PortfolioPage() {
                                         {pos.soldProceeds > 0 ? `${pos.soldProceeds.toFixed(2)} DORA received` : "—"}
                                       </span>
                                     </td>
-                                    <td className="px-3 py-2.5 text-right" />
+                                    <td className="px-3 py-2.5 text-right font-mono text-[11px]">
+                                      {pos.realizedPnl !== 0 && (
+                                        <span className={pos.realizedPnl >= 0 ? "text-[#22c55e]" : "text-red-400"}>
+                                          {pos.realizedPnl >= 0 ? "+" : ""}{pos.realizedPnl.toFixed(2)}
+                                        </span>
+                                      )}
+                                    </td>
                                   </>
                                 ) : (
                                   <>
@@ -468,8 +536,19 @@ export default function PortfolioPage() {
                                     <td className="px-3 py-2.5 text-right font-mono text-white/80">
                                       {pos.currentValue.toFixed(2)}
                                     </td>
-                                    <td className={`px-3 py-2.5 text-right font-mono font-semibold ${pos.isSoleTrader ? "text-white/30 italic text-[10px]" : pnlColor}`}>
-                                      {pos.isSoleTrader ? "Awaiting" : `${pos.unrealizedPnl >= 0 ? "+" : ""}${pos.unrealizedPnl.toFixed(2)}`}
+                                    <td className="px-3 py-2.5 text-right">
+                                      {displayPnl === null ? (
+                                        <span className="text-white/25 text-[10px] italic">—</span>
+                                      ) : (
+                                        <div className="flex flex-col items-end">
+                                          <span className={`font-mono font-semibold text-[11px] ${pnlColor}`}>
+                                            {displayPnl >= 0 ? "+" : ""}{displayPnl.toFixed(2)}
+                                          </span>
+                                          {pnlLabel && (
+                                            <span className="text-[8px] text-white/20 uppercase tracking-wide">{pnlLabel}</span>
+                                          )}
+                                        </div>
+                                      )}
                                     </td>
                                   </>
                                 )}
@@ -489,6 +568,11 @@ export default function PortfolioPage() {
                         </tbody>
                       </table>
                     </div>
+
+                    {/* Trade history per position */}
+                    {positions.map(pos => (
+                      <TradeHistory key={pos.id} trades={pos.trades} isSoleTrader={pos.isSoleTrader} />
+                    ))}
                   </div>
                 );
               })}

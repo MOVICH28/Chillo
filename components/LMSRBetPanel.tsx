@@ -347,10 +347,13 @@ export default function LMSRBetPanel({
 
                           {/* Sell preview */}
                           {(() => {
-                            const posInvested     = selPos.shares * selPos.avgCost;
-                            const curPrice        = prices[selected!] ?? getPrice(curShares, selected!, lmsrB, activeOutcomes);
-                            const posCurrentValue = selPos.shares * curPrice;
-                            const posPnl          = posCurrentValue - posInvested;
+                            const posInvested = selPos.shares * selPos.avgCost;
+                            // Use LMSR integral for full position value (not marginal price × shares)
+                            const fullRaw   = -costToBuy(curShares, selected!, -selPos.shares, lmsrB, activeOutcomes);
+                            const fullValue = Math.max(0, fullRaw * (1 - PLATFORM_FEE));
+                            const outcomeShares = curShares[selected!] ?? 0;
+                            const isSoleTrader  = outcomeShares > 0 && selPos.shares >= outcomeShares * 0.99;
+                            const posPnl        = isSoleTrader ? null : fullValue - posInvested;
                             return (
                               <div className="space-y-1 mb-3 px-0.5">
                                 <div className="flex justify-between text-xs">
@@ -359,13 +362,17 @@ export default function LMSRBetPanel({
                                 </div>
                                 <div className="flex justify-between text-xs">
                                   <span className="text-white/40">Current value</span>
-                                  <span className="font-mono text-white/70">{posCurrentValue.toFixed(2)} DORA</span>
+                                  <span className="font-mono text-white/70">{fullValue.toFixed(2)} DORA</span>
                                 </div>
                                 <div className="flex justify-between text-xs">
                                   <span className="text-white/40">Profit / Loss</span>
-                                  <span className={`font-mono font-semibold ${posPnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
-                                    {posPnl >= 0 ? "+" : ""}{posPnl.toFixed(2)} DORA
-                                  </span>
+                                  {posPnl === null ? (
+                                    <span className="text-white/30 text-[10px] italic">— awaiting other traders</span>
+                                  ) : (
+                                    <span className={`font-mono font-semibold ${posPnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
+                                      {posPnl >= 0 ? "+" : ""}{posPnl.toFixed(2)} DORA
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex justify-between text-xs pt-0.5 border-t border-white/5">
                                   <span className="text-white/40">You will receive</span>
@@ -431,11 +438,14 @@ export default function LMSRBetPanel({
           <h3 className="text-[10px] uppercase tracking-widest text-white/30 mb-2">My Positions</h3>
           <div className="space-y-1.5">
             {positions.map(pos => {
-              const c            = OUTCOME_COLORS[pos.outcome];
-              const curPrice     = prices[pos.outcome] ?? 0;
-              const invested     = pos.shares * pos.avgCost;
-              const currentValue = pos.shares * curPrice;
-              const pnl          = currentValue - invested;
+              const c           = OUTCOME_COLORS[pos.outcome];
+              const invested    = pos.shares * pos.avgCost;
+              // LMSR integral: actual sell proceeds for full position
+              const rawFull     = -costToBuy(curShares, pos.outcome, -pos.shares, lmsrB, activeOutcomes);
+              const currentValue = Math.max(0, rawFull * (1 - PLATFORM_FEE));
+              const outcomeShares = curShares[pos.outcome] ?? 0;
+              const isSole       = outcomeShares > 0 && pos.shares >= outcomeShares * 0.99;
+              const pnl          = isSole ? null : currentValue - invested;
               const label        = outcomes.find(o => o.id === pos.outcome)?.label ?? pos.outcome;
               return (
                 <div key={pos.outcome} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs ${c.bg} ${c.border}`}>
@@ -445,9 +455,13 @@ export default function LMSRBetPanel({
                     <span className="font-mono text-white/60 text-[10px]">{invested.toFixed(2)} in</span>
                     <span className="font-mono text-white/80 text-[10px]">{currentValue.toFixed(2)} now</span>
                   </div>
-                  <span className={`font-mono font-semibold shrink-0 ${pnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
-                    {pnl >= 0 ? "+" : ""}{pnl.toFixed(2)}
-                  </span>
+                  {pnl === null ? (
+                    <span className="font-mono text-white/25 shrink-0 text-[10px] italic">—</span>
+                  ) : (
+                    <span className={`font-mono font-semibold shrink-0 ${pnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
+                      {pnl >= 0 ? "+" : ""}{pnl.toFixed(2)}
+                    </span>
+                  )}
                   {!resolved && !bettingClosed && (
                     <button
                       onClick={() => { setSelected(pos.outcome); setTradeType("sell"); setError(""); setTxStatus("idle"); }}

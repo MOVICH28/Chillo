@@ -30,16 +30,22 @@ export async function GET(req: NextRequest) {
     orderBy: { updatedAt: "desc" },
   });
 
-  // Fetch all sell trades in one query to compute proceeds per position
-  const sellTrades = await prisma.trade.findMany({
-    where: { userId: payload.userId, type: "sell" },
-    select: { roundId: true, outcome: true, totalCost: true },
+  // Fetch all trades for this user (for proceeds + history)
+  const allTrades = await prisma.trade.findMany({
+    where: { userId: payload.userId },
+    select: { roundId: true, outcome: true, type: true, shares: true, totalCost: true, createdAt: true, profitLoss: true },
+    orderBy: { createdAt: "asc" },
   });
+
   const sellMap: Record<string, number> = {};
-  for (const t of sellTrades) {
+  const tradesByPos: Record<string, typeof allTrades> = {};
+  for (const t of allTrades) {
     const key = `${t.roundId}:${t.outcome}`;
-    // totalCost is stored as negative for sells; negate to get proceeds
-    sellMap[key] = (sellMap[key] ?? 0) + (-t.totalCost);
+    (tradesByPos[key] ??= []).push(t);
+    if (t.type === "sell") {
+      // totalCost is negative for sells; negate to get proceeds received
+      sellMap[key] = (sellMap[key] ?? 0) + (-t.totalCost);
+    }
   }
 
   const enriched = positions.map(pos => {
@@ -47,6 +53,16 @@ export async function GET(req: NextRequest) {
     const isSold = pos.shares < 0.001;
     const key = `${round.id}:${pos.outcome}`;
     const soldProceeds = parseFloat((sellMap[key] ?? 0).toFixed(4));
+    const trades = (tradesByPos[key] ?? []).map(t => ({
+      type:       t.type as "buy" | "sell",
+      shares:     t.shares,
+      totalCost:  t.totalCost,   // positive=buy cost, negative=sell proceeds
+      profitLoss: t.profitLoss,
+      createdAt:  t.createdAt.toISOString(),
+    }));
+    const realizedPnl = trades
+      .filter(t => t.type === "sell")
+      .reduce((s, t) => s + (t.profitLoss ?? 0), 0);
 
     const currentShares = (round.shares as Record<string, number>) ?? {};
     const activeOutcomes = ((round.outcomes as unknown as Outcome[]) ?? []).map(o => o.id);
@@ -77,6 +93,8 @@ export async function GET(req: NextRequest) {
       isSoleTrader,
       isSold,
       soldProceeds,
+      realizedPnl:    parseFloat(realizedPnl.toFixed(4)),
+      trades,
       updatedAt:      pos.updatedAt.toISOString(),
       bettingClosesAt: round.bettingClosesAt?.toISOString() ?? null,
       endsAt:          round.endsAt.toISOString(),
