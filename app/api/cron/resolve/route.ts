@@ -131,6 +131,21 @@ function matchOutcomeBracket(value: number, outcomes: Outcome[]): string | null 
   return outcomes[outcomes.length - 1]?.id ?? null;
 }
 
+async function resolveTokenBattleRound(round: { id: string; tokenBattleTokens: unknown }): Promise<string | null> {
+  const tokens = (round.tokenBattleTokens as Array<{ address: string; outcomeId: string }> | null) ?? [];
+  if (tokens.length < 2) {
+    console.warn(`[cron/battle] ${round.id}: fewer than 2 tokens`);
+    return null;
+  }
+  const results = await Promise.all(tokens.map(async t => {
+    const data = await fetchDexScreenerData(t.address);
+    return { outcomeId: t.outcomeId, mcap: data?.mcapUsd ?? 0 };
+  }));
+  const winner = results.reduce((best, curr) => curr.mcap > best.mcap ? curr : best);
+  console.log(`[cron/battle] ${round.id}: ${results.map(r => `${r.outcomeId}=${r.mcap}`).join(",")} → winner=${winner.outcomeId}`);
+  return winner.mcap > 0 ? winner.outcomeId : null;
+}
+
 async function resolveCustomCryptoRound(round: RoundRow): Promise<string | null> {
   if (!round.tokenAddress || !round.questionType) return null;
 
@@ -377,7 +392,9 @@ async function runCron(): Promise<NextResponse> {
     try {
       if (round.outcomes !== null) {
         // Custom crypto rounds with questionType use DexScreener
-        if (round.questionType && round.tokenAddress) {
+        if (round.questionType === "token_battle") {
+          winner = await resolveTokenBattleRound(round);
+        } else if (round.questionType && round.tokenAddress) {
           winner = await resolveCustomCryptoRound(round);
         } else {
           winner = determineRangeOutcome(round, cryptoPrices);

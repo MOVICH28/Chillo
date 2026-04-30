@@ -36,6 +36,8 @@ export async function POST(req: NextRequest) {
     betDuration,
     // pump.fun token flag (auto-detected or manually set)
     isPumpFun,
+    // Token battle: [{address, symbol, name, logoUrl, currentMcap, outcomeId}]
+    tokenBattleTokens,
   } = body;
 
   const isTwitterMarket = !!twitterUsername;
@@ -59,6 +61,11 @@ export async function POST(req: NextRequest) {
   if (isTwitterMarket) {
     if (!["posts_count", "next_post_time"].includes(twitterQuestion))
       return NextResponse.json({ error: "Invalid twitterQuestion type" }, { status: 400 });
+  }
+
+  if (questionType === "token_battle") {
+    if (!Array.isArray(tokenBattleTokens) || tokenBattleTokens.length < 2)
+      return NextResponse.json({ error: "Token battle requires at least 2 tokens" }, { status: 400 });
   }
 
   const user = await prisma.user.findUnique({ where: { id: payload.userId } });
@@ -150,6 +157,7 @@ export async function POST(req: NextRequest) {
         twitterPeriodHours: twitterPeriodHours     || null,
         questionType:       questionType           || null,
         isPumpFun:          Boolean(isPumpFun),
+        tokenBattleTokens:  tokenBattleTokens      || null,
       },
     }),
   ]);

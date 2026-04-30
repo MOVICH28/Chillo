@@ -49,7 +49,7 @@ const MCAP_OUTCOME_DEFAULTS = [
   { id: "F", label: "Above $10M",       minPrice: 10_000_000, maxPrice: null       },
 ];
 
-type CryptoQType = "price" | "ath_mcap" | "mcap";
+type CryptoQType = "price" | "ath_mcap" | "mcap" | "token_battle";
 
 // ── Smart builder helpers ─────────────────────────────────────────────────────
 
@@ -147,6 +147,15 @@ interface TokenInfo {
   logoUrl: string | null;
   address: string;
   isPumpFun?: boolean;
+}
+
+interface BattleToken {
+  address:     string;
+  symbol:      string;
+  name:        string;
+  logoUrl:     string | null;
+  currentMcap: number;
+  outcomeId:   string;
 }
 
 interface OutcomeInput {
@@ -310,6 +319,12 @@ export default function CreatePage() {
   const [tokenError,   setTokenError]   = useState("");
   const [isPumpFun,    setIsPumpFun]    = useState(false);
 
+  // ── Token battle state ────────────────────────────────────────────────────
+  const [battleTokens,  setBattleTokens]  = useState<BattleToken[]>([]);
+  const [battleInput,   setBattleInput]   = useState("");
+  const [battleLoading, setBattleLoading] = useState(false);
+  const [battleError,   setBattleError]   = useState("");
+
   // ── Crypto: Step 2 — question type + timeframe ────────────────────────────
   const [cryptoQType,        setCryptoQType]        = useState<CryptoQType>("price");
   const [betDuration,        setBetDuration]        = useState(60);
@@ -394,12 +409,14 @@ export default function CreatePage() {
   // ── Auto-generate crypto question from type + token + timeframe ───────────
   useEffect(() => {
     if (category !== "crypto") return;
-    const sym = tokenInfo?.symbol ?? (tokenQuery.trim() || "Token");
+    const raw = tokenInfo?.symbol ?? tokenQuery.trim() || "Token";
+    const sym = `$${raw}`;
     const tf  = formatDuration(betDuration);
     switch (cryptoQType) {
-      case "price":    setQuestion(`What price will ${sym} reach in ${tf}?`); break;
-      case "ath_mcap": setQuestion(`What ATH market cap will ${sym} reach in ${tf}?`); break;
-      case "mcap":     setQuestion(`What will ${sym}'s market cap be after ${tf}?`); break;
+      case "price":        setQuestion(`What price will ${sym} reach in ${tf}?`); break;
+      case "ath_mcap":     setQuestion(`What ATH market cap will ${sym} reach in ${tf}?`); break;
+      case "mcap":         setQuestion(`What will ${sym}'s market cap be after ${tf}?`); break;
+      case "token_battle": setQuestion("Which token will have the highest market cap?"); break;
     }
   }, [cryptoQType, tokenInfo, tokenQuery, betDuration, category]);
 
@@ -455,6 +472,35 @@ export default function CreatePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, advancedMode, cryptoQType, mcapMinNum, mcapMinUnit, mcapMaxNum, mcapMaxUnit, mcapScaleType, mcapNumRanges]);
 
+  // ── Sync outcomes from battleTokens for token_battle ─────────────────────
+  useEffect(() => {
+    if (cryptoQType !== "token_battle") return;
+    setOutcomes(battleTokens.map(t => ({
+      id: t.outcomeId, label: `$${t.symbol} wins`, minPrice: null, maxPrice: null,
+    })));
+  }, [cryptoQType, battleTokens]);
+
+  // ── Battle token lookup ───────────────────────────────────────────────────
+  const lookupBattleToken = useCallback(async (addr: string) => {
+    const address = addr.trim();
+    if (!address || battleTokens.length >= 6) return;
+    setBattleLoading(true);
+    setBattleError("");
+    try {
+      const res = await fetch(`/api/markets/token-lookup?address=${encodeURIComponent(address)}`);
+      if (!res.ok) { setBattleError((await res.json()).error ?? "Token not found"); return; }
+      const info: TokenInfo = await res.json();
+      if (battleTokens.some(t => t.address === info.address)) { setBattleError("Token already added"); return; }
+      setBattleTokens(prev => [...prev, {
+        address: info.address, symbol: info.symbol, name: info.name,
+        logoUrl: info.logoUrl, currentMcap: info.mcapUsd,
+        outcomeId: OUTCOME_IDS[prev.length],
+      }]);
+      setBattleInput("");
+    } catch { setBattleError("Lookup failed"); }
+    finally { setBattleLoading(false); }
+  }, [battleTokens]);
+
   // ── Twitter auto-question ─────────────────────────────────────────────────
   const cleanTwitter     = twitterQuery.replace(/^@/, "").trim();
   const twitterAvatarUrl = cleanTwitter ? `https://unavatar.io/twitter/${cleanTwitter}` : null;
@@ -489,11 +535,15 @@ export default function CreatePage() {
       } else {
         body.betDuration  = betDuration;
         body.questionType = cryptoQType;
-        body.tokenAddress = tokenInfo?.address && tokenInfo.address !== tokenInfo.symbol
-          ? tokenInfo.address : null;
         body.twitterUrl   = twitterUrl;
         body.customImage  = uploadedImage || null;
         body.isPumpFun    = isPumpFun;
+        if (cryptoQType === "token_battle") {
+          body.tokenBattleTokens = battleTokens;
+        } else {
+          body.tokenAddress = tokenInfo?.address && tokenInfo.address !== tokenInfo.symbol
+            ? tokenInfo.address : null;
+        }
       }
 
       const res = await fetch("/api/markets/create", {
@@ -524,7 +574,9 @@ export default function CreatePage() {
   // ── Validation ────────────────────────────────────────────────────────────
   const step1Valid = category === "twitter" ? validTwitterUsername(twitterQuery) : true;
   const step2Valid = question.trim().length >= 5;
-  const step3Valid = outcomes.every(o => o.label.trim().length > 0);
+  const step3Valid = cryptoQType === "token_battle"
+    ? battleTokens.length >= 2
+    : outcomes.every(o => o.label.trim().length > 0);
   const step4Valid = step3Valid && question.trim().length > 0;
 
   function selectCategory(c: "crypto" | "twitter") {
@@ -726,9 +778,10 @@ export default function CreatePage() {
               <label className="block text-xs text-muted mb-2">Question type</label>
               <div className="space-y-2">
                 {([
-                  { value: "price"    as CryptoQType, icon: "📈", label: "Price",          desc: `What price will ${tokenInfo?.symbol ?? "the token"} reach?` },
-                  { value: "ath_mcap" as CryptoQType, icon: "🏆", label: "ATH Market Cap", desc: `What's the highest market cap it will hit in the window?` },
-                  { value: "mcap"     as CryptoQType, icon: "💰", label: "End Market Cap",  desc: `What will market cap be when betting closes?` },
+                  { value: "price"        as CryptoQType, icon: "📈", label: "Price",          desc: `What price will ${tokenInfo?.symbol ? `$${tokenInfo.symbol}` : "the token"} reach?` },
+                  { value: "ath_mcap"     as CryptoQType, icon: "🏆", label: "ATH Market Cap", desc: "What's the highest market cap it will hit in the window?" },
+                  { value: "mcap"         as CryptoQType, icon: "💰", label: "End Market Cap",  desc: "What will market cap be when betting closes?" },
+                  { value: "token_battle" as CryptoQType, icon: "⚔️", label: "Token Battle",   desc: "Which token will have the highest market cap?" },
                 ]).map(opt => (
                   <button key={opt.value} onClick={() => setCryptoQType(opt.value)}
                     className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all
@@ -798,8 +851,139 @@ export default function CreatePage() {
           </div>
         )}
 
+        {/* Crypto Step 3: Token Battle Builder */}
+        {category === "crypto" && step === 3 && cryptoQType === "token_battle" && (
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-white font-semibold mb-1">Token Battle</h2>
+              <p className="text-muted text-xs">Add 2–6 tokens to compare by market cap at end of round.</p>
+            </div>
+
+            {/* Added tokens list */}
+            {battleTokens.length > 0 && (
+              <div className="space-y-2">
+                {battleTokens.map((t, i) => {
+                  const OUTCOME_COLORS_TEXT: Record<string, string> = {
+                    A: "text-red-400", B: "text-orange-400", C: "text-yellow-400",
+                    D: "text-green-400", E: "text-sky-400",  F: "text-purple-400",
+                  };
+                  return (
+                    <div key={t.address} className="flex items-center gap-3 p-3 rounded-xl bg-surface-2 border border-surface-3">
+                      {t.logoUrl
+                        ? <img src={t.logoUrl} alt={t.symbol} className="w-10 h-10 rounded-full shrink-0" />
+                        : <div className="w-10 h-10 rounded-full bg-brand/20 flex items-center justify-center text-brand font-bold text-sm shrink-0">{t.symbol[0]}</div>}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm font-semibold">
+                          ${t.symbol} <span className="text-muted font-normal">· {t.name}</span>
+                        </p>
+                        <p className="text-muted text-xs font-mono">
+                          {t.currentMcap > 0 ? `Mcap: ${formatMcap(t.currentMcap)}` : "Mcap unavailable"}
+                        </p>
+                      </div>
+                      <span className={`text-xs font-bold font-mono shrink-0 ${OUTCOME_COLORS_TEXT[t.outcomeId] ?? "text-white"}`}>
+                        → {t.outcomeId}
+                      </span>
+                      <button
+                        onClick={() => setBattleTokens(prev => {
+                          const next = prev.filter((_, j) => j !== i);
+                          return next.map((tok, j) => ({ ...tok, outcomeId: OUTCOME_IDS[j] }));
+                        })}
+                        className="w-7 h-7 flex items-center justify-center rounded text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors text-sm shrink-0"
+                      >✕</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Add token input */}
+            {battleTokens.length < 6 && (
+              <div className="space-y-2">
+                <label className="block text-xs text-muted">
+                  {battleTokens.length === 0 ? "Add first token" : "Add another token"} · paste contract address
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Solana contract address…"
+                    value={battleInput}
+                    onChange={e => { setBattleInput(e.target.value); setBattleError(""); }}
+                    onPaste={e => {
+                      const val = e.clipboardData.getData("text").trim();
+                      if (val) setTimeout(() => lookupBattleToken(val), 50);
+                    }}
+                    className="flex-1 px-3 py-2.5 rounded-lg bg-surface-2 border border-surface-3 text-white text-sm placeholder:text-muted focus:outline-none focus:border-brand transition-colors font-mono"
+                  />
+                  <button
+                    onClick={() => lookupBattleToken(battleInput)}
+                    disabled={battleLoading || !battleInput.trim()}
+                    className="px-4 py-2 rounded-lg bg-brand hover:bg-brand-dim text-black font-semibold text-sm transition-colors disabled:opacity-40 shrink-0"
+                  >
+                    {battleLoading ? "…" : "Add"}
+                  </button>
+                </div>
+                {battleLoading && <p className="text-muted text-xs">Looking up token…</p>}
+                {battleError && <p className="text-red-400 text-xs">{battleError}</p>}
+              </div>
+            )}
+
+            {battleTokens.length < 2 && !battleLoading && (
+              <p className="text-yellow-400/80 text-xs px-1">Add at least 2 tokens to continue.</p>
+            )}
+
+            {/* Preview table */}
+            {battleTokens.length >= 2 && (
+              <div>
+                <p className="text-xs text-muted uppercase tracking-wider mb-2">Live preview</p>
+                <div className="overflow-hidden rounded-lg border border-surface-3">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-surface-3 bg-surface-2">
+                        <th className="px-3 py-2 text-left text-[10px] text-muted uppercase tracking-wider w-8">#</th>
+                        <th className="px-3 py-2 text-left text-[10px] text-muted uppercase tracking-wider">Token</th>
+                        <th className="px-3 py-2 text-right text-[10px] text-muted uppercase tracking-wider">Mcap</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {battleTokens.map((t, i) => {
+                        const COLORS = ["#f87171","#fb923c","#facc15","#4ade80","#38bdf8","#c084fc"];
+                        return (
+                          <tr key={t.address} className={`border-b border-surface-3/50 last:border-0 ${i % 2 === 0 ? "bg-surface" : "bg-surface-2/50"}`}>
+                            <td className="px-3 py-2">
+                              <span className="w-5 h-5 rounded text-[9px] font-bold inline-flex items-center justify-center text-black"
+                                style={{ backgroundColor: COLORS[i] }}>{t.outcomeId}</span>
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-1.5">
+                                {t.logoUrl && <img src={t.logoUrl} alt={t.symbol} className="w-4 h-4 rounded-full shrink-0" />}
+                                <span className="text-white/80 font-semibold">${t.symbol}</span>
+                                <span className="text-muted">{t.name}</span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono text-muted">
+                              {t.currentMcap > 0 ? formatMcap(t.currentMcap) : "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-between pt-2">
+              <button onClick={() => setStep(2)} className="px-4 py-2 rounded-lg bg-surface-2 border border-surface-3 text-muted hover:text-white text-sm transition-colors">← Back</button>
+              <button onClick={() => setStep(4)} disabled={battleTokens.length < 2}
+                className="px-4 py-2 rounded-lg bg-brand hover:bg-brand-dim text-black font-semibold text-sm transition-colors disabled:opacity-40">
+                Review →
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Crypto Step 3: Outcome Range Builder */}
-        {category === "crypto" && step === 3 && (
+        {category === "crypto" && step === 3 && cryptoQType !== "token_battle" && (
           <div className="space-y-5">
             {/* Header + advanced toggle */}
             <div className="flex items-start justify-between gap-3">
@@ -1404,9 +1588,10 @@ function MiniSparkline({ data, width = 80, height = 28 }: { data: number[]; widt
 // ── Crypto review step ────────────────────────────────────────────────────────
 
 const QTYPE_LABELS: Record<string, string> = {
-  price:    "📈 Price",
-  ath_mcap: "🏆 ATH Market Cap",
-  mcap:     "💰 End Market Cap",
+  price:        "📈 Price",
+  ath_mcap:     "🏆 ATH Market Cap",
+  mcap:         "💰 End Market Cap",
+  token_battle: "⚔️ Token Battle",
 };
 
 function ReviewStep({

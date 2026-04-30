@@ -47,6 +47,7 @@ model Round {
   questionType       String?   // "price" | "ath_mcap" | "mcap" — for custom crypto markets
   maxObservedMcap    Float?    // highest mcap seen during round lifetime (for ath_mcap resolution)
   isPumpFun          Boolean   @default(false) // detected or manually flagged pump.fun token
+  tokenBattleTokens  Json?     // [{address, symbol, name, logoUrl, currentMcap, outcomeId}] for token_battle rounds
   creator         User?      @relation("CreatedRounds", fields: [creatorId], references: [id])
   positions       Position[]
   trades          Trade[]
