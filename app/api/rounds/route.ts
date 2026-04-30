@@ -29,7 +29,7 @@ export async function GET() {
         include: { creator: { select: { username: true, avatarUrl: true } } },
       }),
       prisma.roundPool.findMany(),
-      prisma.trade.groupBy({ by: ["roundId"], _sum: { totalCost: true } }),
+      prisma.trade.groupBy({ by: ["roundId"], where: { type: "buy" }, _sum: { totalCost: true } }),
     ]);
 
     const volumeMap = Object.fromEntries(

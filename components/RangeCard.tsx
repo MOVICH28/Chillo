@@ -220,6 +220,11 @@ function ResolvedRangeCard({ round }: { round: Round }) {
                 pump.fun
               </span>
             )}
+            {round.questionType === "token_battle" && (
+              <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold border bg-purple-500/10 text-purple-400 border-purple-500/20">
+                ⚔️ Token Battle
+              </span>
+            )}
           </div>
           {winning && colors && (
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${colors.bg} ${colors.text} ${colors.border}`}>
@@ -230,7 +235,15 @@ function ResolvedRangeCard({ round }: { round: Round }) {
         </div>
 
         <div className="flex items-center gap-2.5 mb-2">
-          {round.twitterUsername && round.tokenLogo ? (
+          {round.questionType === "token_battle" && round.tokenBattleTokens && round.tokenBattleTokens.length >= 2 ? (
+            <div className="flex shrink-0" style={{ width: 36 + (round.tokenBattleTokens.length - 1) * 14 }}>
+              {round.tokenBattleTokens.slice(0, 4).map((t, i) => (
+                t.logoUrl
+                  ? <img key={t.address} src={t.logoUrl} alt={t.symbol} className="w-8 h-8 rounded-full border-2 border-surface object-cover" style={{ marginLeft: i === 0 ? 0 : -14, zIndex: i }} />
+                  : <div key={t.address} className="w-8 h-8 rounded-full border-2 border-surface bg-purple-500/30 flex items-center justify-center text-[9px] font-bold text-purple-300" style={{ marginLeft: i === 0 ? 0 : -14, zIndex: i }}>{t.symbol[0]}</div>
+              ))}
+            </div>
+          ) : round.twitterUsername && round.tokenLogo ? (
             <div className="flex flex-col items-center gap-0.5 shrink-0">
               <TwitterCardAvatar username={round.twitterUsername} logoUrl={round.tokenLogo} />
               <span className="text-[9px] text-[#1d9bf0] font-mono leading-none">@{round.twitterUsername}</span>
@@ -384,6 +397,11 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
                 pump.fun
               </span>
             )}
+            {round.questionType === "token_battle" && (
+              <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold border bg-purple-500/10 text-purple-400 border-purple-500/20">
+                ⚔️ Token Battle
+              </span>
+            )}
           </div>
           {!isEnded && (
             <div className="text-right shrink-0">
@@ -405,7 +423,15 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
 
         {/* Question — single line, truncated */}
         <div className="flex items-center gap-2.5 mb-2.5 min-w-0 overflow-hidden">
-          {round.twitterUsername && round.tokenLogo ? (
+          {round.questionType === "token_battle" && round.tokenBattleTokens && round.tokenBattleTokens.length >= 2 ? (
+            <div className="flex shrink-0" style={{ width: 36 + (round.tokenBattleTokens.length - 1) * 14 }}>
+              {round.tokenBattleTokens.slice(0, 4).map((t, i) => (
+                t.logoUrl
+                  ? <img key={t.address} src={t.logoUrl} alt={t.symbol} className="w-8 h-8 rounded-full border-2 border-surface object-cover" style={{ marginLeft: i === 0 ? 0 : -14, zIndex: i }} />
+                  : <div key={t.address} className="w-8 h-8 rounded-full border-2 border-surface bg-purple-500/30 flex items-center justify-center text-[9px] font-bold text-purple-300" style={{ marginLeft: i === 0 ? 0 : -14, zIndex: i }}>{t.symbol[0]}</div>
+              ))}
+            </div>
+          ) : round.twitterUsername && round.tokenLogo ? (
             <div className="flex flex-col items-center gap-0.5 shrink-0">
               <TwitterCardAvatar username={round.twitterUsername} logoUrl={round.tokenLogo} />
               <span className="text-[9px] text-[#1d9bf0] font-mono leading-none">@{round.twitterUsername}</span>

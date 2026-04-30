@@ -64,6 +64,10 @@ export default async function RoundDetailPage({ params }: PageProps) {
     creatorAvatarUrl:  round.creator?.avatarUrl ?? null,
     description:       round.description        ?? null,
     twitterUrl:        round.twitterUrl         ?? null,
+    tokenBattleTokens: (round.tokenBattleTokens as Array<{
+      address: string; symbol: string; name: string;
+      logoUrl: string | null; currentMcap: number; outcomeId: string;
+    }> | null) ?? null,
   };
 
   return (

@@ -18,7 +18,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       take: 20,
       include: { user: { select: { username: true, avatarUrl: true } } },
     }),
-    prisma.trade.aggregate({ where: { roundId: id }, _sum: { totalCost: true } }),
+    prisma.trade.aggregate({ where: { roundId: id, type: "buy" }, _sum: { totalCost: true } }),
   ]);
 
   if (!round) return NextResponse.json({ error: "Not found" }, { status: 404 });

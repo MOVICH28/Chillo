@@ -56,6 +56,10 @@ export interface Round {
   questionType?: string | null;
   isPumpFun?: boolean;
   totalVolume?: number;
+  tokenBattleTokens?: Array<{
+    address: string; symbol: string; name: string;
+    logoUrl: string | null; currentMcap: number; outcomeId: string;
+  }> | null;
 }
 
 export interface Bet {

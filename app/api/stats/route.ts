@@ -8,7 +8,7 @@ export async function GET() {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const [volumeAgg, bets24h, activeMarkets] = await Promise.all([
       prisma.trade.aggregate({
-        where: { createdAt: { gte: since } },
+        where: { createdAt: { gte: since }, type: "buy" },
         _sum: { totalCost: true },
       }),
       prisma.trade.count({ where: { createdAt: { gte: since } } }),

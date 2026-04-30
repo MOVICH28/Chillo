@@ -480,6 +480,22 @@ export default function CreatePage() {
     })));
   }, [cryptoQType, battleTokens]);
 
+  // ── Pre-fill first token from Step 1 when switching to token_battle ───────
+  useEffect(() => {
+    if (cryptoQType !== "token_battle") return;
+    if (battleTokens.length > 0) return;
+    if (!tokenInfo?.address || !tokenInfo.symbol) return;
+    setBattleTokens([{
+      address:     tokenInfo.address,
+      symbol:      tokenInfo.symbol,
+      name:        tokenInfo.name,
+      logoUrl:     tokenInfo.logoUrl,
+      currentMcap: tokenInfo.mcapUsd,
+      outcomeId:   OUTCOME_IDS[0],
+    }]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cryptoQType]);
+
   // ── Battle token lookup ───────────────────────────────────────────────────
   const lookupBattleToken = useCallback(async (addr: string) => {
     const address = addr.trim();

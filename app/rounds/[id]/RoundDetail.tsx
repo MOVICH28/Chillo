@@ -53,6 +53,10 @@ interface RoundData {
   totalVolume?:     number;
   description:      string | null;
   twitterUrl:       string | null;
+  tokenBattleTokens?: Array<{
+    address: string; symbol: string; name: string;
+    logoUrl: string | null; currentMcap: number; outcomeId: string;
+  }> | null;
 }
 
 interface RecentTrade {
@@ -191,6 +195,144 @@ function LiveChart({ targetToken, tokenAddress, tokenSymbol, priceToBeat, timefr
       label={label}
       showMcap={showMcap}
     />
+  );
+}
+
+// ── Token Battle ──────────────────────────────────────────────────────────────
+
+type BattleTokenInfo = {
+  address: string; symbol: string; name: string;
+  logoUrl: string | null; currentMcap: number; outcomeId: string;
+};
+
+function fmtMcapBattle(v: number): string {
+  if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
+  if (v >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
+  return `$${v.toFixed(0)}`;
+}
+
+function useBattleTokenLive(address: string, initialMcap: number) {
+  const [mcap, setMcap] = useState(initialMcap);
+  const [history, setHistory] = useState<number[]>(initialMcap > 0 ? [initialMcap] : []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function poll() {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const res  = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`, { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const data = await res.json() as { pairs?: any[] };
+        const pairs = (data.pairs ?? []).sort((a: any, b: any) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0));
+        const pair  = pairs[0];
+        if (!pair || cancelled) return;
+        const m = pair.marketCap ?? pair.fdv ?? 0;
+        if (m > 0 && !cancelled) {
+          setMcap(m);
+          setHistory(prev => [...prev, m].slice(-40));
+        }
+      } catch { /* ignore */ }
+    }
+    poll();
+    const id = setInterval(poll, 5_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [address]);
+
+  return { mcap, history };
+}
+
+function BattleSparkline({ history, color }: { history: number[]; color: string }) {
+  if (history.length < 2) return <div style={{ width: 72, height: 28 }} />;
+  const min = Math.min(...history), max = Math.max(...history);
+  const range = max - min || min * 0.01 || 1;
+  const W = 72, H = 28, pad = 3;
+  const pts = history.map((v, i) => ({
+    x: (i / (history.length - 1)) * W,
+    y: pad + (1 - (v - min) / range) * (H - pad * 2),
+  }));
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) {
+    const dx = (pts[i].x - pts[i - 1].x) / 2.5;
+    d += ` C ${(pts[i-1].x + dx).toFixed(1)} ${pts[i-1].y.toFixed(1)} ${(pts[i].x - dx).toFixed(1)} ${pts[i].y.toFixed(1)} ${pts[i].x.toFixed(1)} ${pts[i].y.toFixed(1)}`;
+  }
+  return (
+    <svg width={W} height={H} className="shrink-0 overflow-visible">
+      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function BattleTokenCard({ token, color }: { token: BattleTokenInfo; color: typeof OUTCOME_COLORS[string] }) {
+  const { mcap, history }    = useBattleTokenLive(token.address, token.currentMcap);
+  const [copied, setCopied]  = useState(false);
+  const trend = history.length >= 2
+    ? (history[history.length - 1] - history[0]) / history[0] * 100
+    : 0;
+
+  return (
+    <div className={`flex-1 min-w-[148px] max-w-[220px] p-3 rounded-xl border ${color.border} ${color.bg}`}>
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-2">
+        {token.logoUrl
+          ? <img src={token.logoUrl} alt={token.symbol} className="w-7 h-7 rounded-full shrink-0" />
+          : <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${color.bg} ${color.text}`}>{token.symbol[0]}</div>}
+        <div className="min-w-0 flex-1">
+          <p className={`text-sm font-bold leading-tight ${color.text}`}>${token.symbol}</p>
+          <p className="text-[9px] text-white/40 truncate leading-tight">{token.name}</p>
+        </div>
+        <span className={`text-[9px] font-bold px-1 py-0.5 rounded border shrink-0 ${color.bg} ${color.text} ${color.border}`}>
+          {token.outcomeId}
+        </span>
+      </div>
+
+      {/* Mcap + sparkline */}
+      <div className="flex items-end justify-between gap-1 mb-2">
+        <div>
+          <p className="text-[8px] text-white/25 uppercase tracking-wider leading-tight">Mcap</p>
+          <p className="text-sm font-mono font-bold text-white leading-tight">
+            {mcap > 0 ? fmtMcapBattle(mcap) : "—"}
+          </p>
+          {history.length >= 2 && (
+            <p className={`text-[9px] font-mono leading-tight ${trend >= 0 ? "text-green-400" : "text-red-400"}`}>
+              {trend >= 0 ? "+" : ""}{trend.toFixed(2)}%
+            </p>
+          )}
+        </div>
+        <BattleSparkline history={history} color={color.hex} />
+      </div>
+
+      {/* Address + links */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => { navigator.clipboard.writeText(token.address); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+          className="flex items-center gap-0.5 text-[9px] font-mono text-white/25 hover:text-white/50 transition-colors"
+        >
+          {token.address.slice(0, 4)}…{token.address.slice(-4)}
+          {copied
+            ? <span className="text-green-400 ml-0.5">✓</span>
+            : <svg className="w-2 h-2 ml-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}
+        </button>
+        <a href={`https://pump.fun/coin/${token.address}`} target="_blank" rel="noopener noreferrer"
+           className="text-[9px] text-orange-400/50 hover:text-orange-400 transition-colors">
+          pump.fun ↗
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function TokenBattleSection({ tokens }: { tokens: BattleTokenInfo[] }) {
+  return (
+    <div className="mb-4">
+      <p className="text-[10px] uppercase tracking-widest text-white/30 mb-2">⚔️ Token Battle</p>
+      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+        {tokens.map(t => (
+          <BattleTokenCard key={t.address} token={t} color={OUTCOME_COLORS[t.outcomeId] ?? OUTCOME_COLORS.A} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -508,6 +650,11 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                   pump.fun
                 </span>
               )}
+              {round.questionType === "token_battle" && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">
+                  ⚔️ Token Battle
+                </span>
+              )}
               {round.status === "resolved" ? (
                 <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-white/5 text-white/30 border-white/10">
                   Resolved {resolvedDate}
@@ -689,12 +836,20 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
             })()}
 
             {/* Token stats bar */}
-            {hasToken && (
+            {hasToken && round.questionType !== "token_battle" && (
               <TokenStats
                 targetToken={round.targetToken}
                 tokenAddress={round.tokenAddress}
                 tokenSymbol={round.tokenSymbol}
               />
+            )}
+
+            {/* Token Battle cards */}
+            {round.questionType === "token_battle" && round.tokenBattleTokens && round.tokenBattleTokens.length > 0 && (
+              <>
+                <TokenBattleSection tokens={round.tokenBattleTokens as BattleTokenInfo[]} />
+                {outcomes.length > 0 && <PoolBar outcomes={outcomes} prices={lmsrPrices} />}
+              </>
             )}
 
             {/* Betting probability chart — Twitter rounds */}
@@ -789,7 +944,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                 />
                 <PoolBar outcomes={outcomes} prices={lmsrPrices} />
               </>
-            ) : round.category !== "twitter" ? (
+            ) : round.category !== "twitter" && round.questionType !== "token_battle" ? (
               <div className="flex items-center justify-center rounded-xl"
                    style={{ height: 350, background: "#0d0f14" }}>
                 <span className="text-white/20 text-sm">No chart available</span>
