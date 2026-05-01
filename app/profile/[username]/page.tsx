@@ -22,38 +22,54 @@ const OUTCOME_COLORS: Record<string, { text: string; bg: string; border: string 
 export default async function PublicProfilePage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
 
-  const user = await prisma.user.findUnique({
-    where: { username },
-    select: {
-      id: true,
-      username: true,
-      doraBalance: true,
-      avatarUrl: true,
-      createdAt: true,
-      _count: { select: { followers: true, following: true } },
-      bets: {
-        where: { currency: "DORA" },
-        orderBy: { createdAt: "desc" },
-        take: 100,
-        select: {
-          id: true, side: true, amount: true, odds: true,
-          result: true, payout: true, createdAt: true, roundId: true,
+  let user;
+  try {
+    user = await prisma.user.findUnique({
+      where: { username },
+      select: {
+        id: true,
+        username: true,
+        doraBalance: true,
+        avatarUrl: true,
+        createdAt: true,
+        _count: { select: { followers: true, following: true } },
+        bets: {
+          where: { currency: "DORA" },
+          orderBy: { createdAt: "desc" },
+          take: 100,
+          select: {
+            id: true, side: true, amount: true, odds: true,
+            result: true, payout: true, createdAt: true, roundId: true,
+          },
         },
       },
-    },
-  });
+    });
+  } catch (err) {
+    console.error("[profile/username] user query failed:", err);
+    notFound();
+  }
 
   if (!user) notFound();
 
-  const createdMarketsCount = await prisma.round.count({ where: { creatorId: user.id } });
+  let createdMarketsCount = 0;
+  try {
+    createdMarketsCount = await prisma.round.count({ where: { creatorId: user.id } });
+  } catch (err) {
+    console.error("[profile/username] markets count failed:", err);
+  }
 
   const roundIds = Array.from(new Set(user.bets.map(b => b.roundId)));
-  const rounds = roundIds.length > 0
-    ? await prisma.round.findMany({
-        where: { id: { in: roundIds } },
-        select: { id: true, question: true, status: true, winningOutcome: true, outcomes: true, roundNumber: true },
-      })
-    : [];
+  let rounds: { id: string; question: string; status: string; winningOutcome: string | null; outcomes: unknown; roundNumber: number | null }[] = [];
+  try {
+    rounds = roundIds.length > 0
+      ? await prisma.round.findMany({
+          where: { id: { in: roundIds } },
+          select: { id: true, question: true, status: true, winningOutcome: true, outcomes: true, roundNumber: true },
+        })
+      : [];
+  } catch (err) {
+    console.error("[profile/username] rounds query failed:", err);
+  }
   const roundMap = new Map(rounds.map(r => [r.id, r]));
 
   type BetRow = typeof user.bets[number] & {
