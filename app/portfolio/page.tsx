@@ -423,7 +423,11 @@ export default function PortfolioPage() {
               {Object.entries(byRound).map(([roundId, positions]) => {
                 const first      = positions[0];
                 const roundValue = positions.reduce((s, p) => s + p.currentValue, 0);
-                const roundPnl   = positions.reduce((s, p) => s + p.unrealizedPnl, 0);
+                const roundPnl   = positions.reduce((s, p) => {
+                  const buyCosts    = p.trades.filter(t => t.type === "buy").reduce((a, t) => a + t.totalCost, 0);
+                  const sellProceed = p.trades.filter(t => t.type === "sell").reduce((a, t) => a + t.totalCost, 0);
+                  return s + sellProceed - buyCosts;
+                }, 0);
                 const isResolved = first.status === "resolved";
                 const allSole    = positions.every(p => p.isSoleTrader);
                 const allSold    = positions.every(p => p.isSold);
@@ -473,7 +477,7 @@ export default function PortfolioPage() {
                               <p className="text-[10px] text-white/30 italic">Awaiting traders</p>
                             ) : (
                               <p className={`font-mono text-xs ${roundPnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
-                                {roundPnl >= 0 ? "+" : ""}{roundPnl.toFixed(3)}
+                                {roundPnl >= 0 ? "+" : ""}{roundPnl.toFixed(2)} DORA
                               </p>
                             )}
                           </>
@@ -497,6 +501,7 @@ export default function PortfolioPage() {
                           {positions.map(pos => {
                             const c        = OUTCOME_COLORS[pos.outcome];
                             const isWinner = pos.winningOutcome === pos.outcome;
+                            const invested = pos.trades.filter(t => t.type === "buy").reduce((s, t) => s + t.totalCost, 0);
                             // Show realized P&L if any sells, else unrealized (hide if sole trader)
                             const hasSells    = pos.trades.some(t => t.type === "sell");
                             const displayPnl  = hasSells ? pos.realizedPnl : (pos.isSoleTrader ? null : pos.unrealizedPnl);
@@ -535,7 +540,7 @@ export default function PortfolioPage() {
                                 ) : (
                                   <>
                                     <td className="px-3 py-2.5 text-right font-mono text-muted">
-                                      {pos.amountInvested.toFixed(2)}
+                                      {invested.toFixed(2)}
                                     </td>
                                     <td className="px-3 py-2.5 text-right font-mono text-white/80">
                                       {pos.currentValue.toFixed(2)}

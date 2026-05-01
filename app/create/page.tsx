@@ -1604,12 +1604,6 @@ function MiniSparkline({ data, width = 80, height = 28 }: { data: number[]; widt
 
 // ── Crypto review step ────────────────────────────────────────────────────────
 
-const QTYPE_LABELS: Record<string, string> = {
-  price:        "📈 Price",
-  ath_mcap:     "🏆 ATH Market Cap",
-  mcap:         "💰 End Market Cap",
-  token_battle: "⚔️ Token Battle",
-};
 
 function ReviewStep({
   question, description, outcomes, betDuration, uploadedImage, username, tokenInfo,
@@ -1694,16 +1688,12 @@ function ReviewStep({
       <div className="rounded-xl border border-surface-3 bg-surface overflow-hidden">
         <div className="p-4">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">Community</span>
-            <span className="text-[10px] px-2 py-0.5 rounded border bg-white/5 text-white/40 border-white/10">{QTYPE_LABELS[cryptoQType]}</span>
-            {tokenInfo && !isBattle && (
-              <div className="flex items-center gap-1.5">
-                {tokenInfo.logoUrl && <img src={tokenInfo.logoUrl} alt={tokenInfo.symbol} className="w-4 h-4 rounded-full" />}
-                <span className="text-[10px] text-muted font-mono">{tokenInfo.symbol}</span>
-                {isPumpFun && (
-                  <span className="bg-orange-500/20 text-orange-400 border border-orange-500/30 text-[10px] px-2 py-0.5 rounded-full">pump.fun</span>
-                )}
-              </div>
+            <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">Crypto</span>
+            {isPumpFun && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-gradient-to-r from-orange-500/10 to-green-500/10 text-orange-400 border-orange-500/20">pump.fun</span>
+            )}
+            {isBattle && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">⚔️ Token Battle</span>
             )}
             <span className="ml-auto text-[10px] text-muted">{tfLabel} betting</span>
           </div>

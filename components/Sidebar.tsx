@@ -13,6 +13,7 @@ const CATEGORIES = [
   { id: "pumpfun", label: "pump.fun", icon: "🚀", available: true },
   { id: "crypto", label: "Crypto", icon: "₿", available: true },
   { id: "twitter", label: "Twitter / X", icon: "𝕏", available: true },
+  { id: "token_battle", label: "Token Battle", icon: "⚔️", available: true },
   { id: "events", label: "Events", icon: "🎯", available: false },
 ];
 

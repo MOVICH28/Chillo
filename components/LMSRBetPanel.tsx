@@ -448,31 +448,46 @@ export default function LMSRBetPanel({
             {positions.map(pos => {
               const c           = OUTCOME_COLORS[pos.outcome];
               const invested    = pos.shares * pos.avgCost;
-              // Use LMSR integral for actual sell value (not marginal price × shares)
               const rawFull      = -costToBuy(curShares, pos.outcome, -pos.shares, lmsrB, activeOutcomes);
               const currentValue = Math.max(0, rawFull * (1 - PLATFORM_FEE));
-              // Sole-trader: user holds ≥95% of this outcome's total shares
               const outcomeShares = curShares[pos.outcome] ?? 0;
               const isSole        = outcomeShares > 0 && pos.shares >= outcomeShares * 0.95;
               const pnl           = isSole ? null : currentValue - invested;
               const label         = outcomes.find(o => o.id === pos.outcome)?.label ?? pos.outcome;
+              const battleToken   = tokenBattleTokens?.find(t => t.outcomeId === pos.outcome);
               return (
                 <div key={pos.outcome} className={`flex flex-col gap-1 px-3 py-2 rounded-lg border ${c.bg} ${c.border}`}>
                   <div className="flex items-center gap-2 text-xs">
-                    <span className={`font-bold shrink-0 ${c.text}`}>{pos.outcome}</span>
-                    <span className="flex-1 min-w-0 truncate text-white/40 text-[10px]">{label}</span>
+                    {battleToken ? (
+                      battleToken.logoUrl
+                        ? <img src={battleToken.logoUrl} alt={battleToken.symbol} className="w-4 h-4 rounded-full shrink-0 object-cover" />
+                        : <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold shrink-0 ${c.bg} ${c.text}`}>{battleToken.symbol[0]}</div>
+                    ) : (
+                      <span className={`font-bold shrink-0 ${c.text}`}>{pos.outcome}</span>
+                    )}
+                    <span className="flex-1 min-w-0 truncate text-white/40 text-[10px]">
+                      {battleToken ? `$${battleToken.symbol}` : label}
+                    </span>
                     <div className="flex flex-col items-end gap-0.5 shrink-0">
                       <span className="font-mono text-white/60 text-[10px]">{invested.toFixed(2)} in</span>
                       {isSole
-                        ? <span className="text-white/25 text-[9px] italic">waiting for other traders</span>
+                        ? <span className="text-white/25 text-[9px] italic">waiting</span>
                         : <span className="font-mono text-white/80 text-[10px]">{currentValue.toFixed(2)} now</span>}
                     </div>
                     {pnl === null ? (
                       <span className="font-mono text-white/25 shrink-0 text-[10px]">—</span>
                     ) : (
-                      <span className={`font-mono font-semibold shrink-0 ${pnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
+                      <span className={`font-mono font-semibold shrink-0 text-[10px] ${pnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
                         {pnl >= 0 ? "+" : ""}{pnl.toFixed(2)}
                       </span>
+                    )}
+                    {!resolved && !bettingClosed && (
+                      <button
+                        onClick={() => { setSelected(pos.outcome); setTradeType("sell"); setError(""); setTxStatus("idle"); }}
+                        className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 transition-colors shrink-0"
+                      >
+                        Sell
+                      </button>
                     )}
                   </div>
                 </div>
