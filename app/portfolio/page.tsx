@@ -423,11 +423,14 @@ export default function PortfolioPage() {
               {Object.entries(byRound).map(([roundId, positions]) => {
                 const first      = positions[0];
                 const roundValue = positions.reduce((s, p) => s + p.currentValue, 0);
-                const roundPnl   = positions.reduce((s, p) => s + p.unrealizedPnl, 0);
                 const isResolved = first.status === "resolved";
                 const allSole    = positions.every(p => p.isSoleTrader);
                 const allSold    = positions.every(p => p.isSold);
                 const totalSoldProceeds = positions.reduce((s, p) => s + p.soldProceeds, 0);
+                // Round P&L = sum(sell proceeds) + sum(current value for open) - sum(total buy costs)
+                const roundPnl = positions.reduce((s, p) =>
+                  s + p.soldProceeds + (p.isSold ? 0 : p.currentValue) - p.amountInvested, 0);
+                const hasSolePositions = positions.some(p => p.isSoleTrader && !p.isSold);
 
                 return (
                   <div key={roundId} className="bg-surface border border-surface-3 rounded-xl overflow-hidden">
@@ -468,15 +471,16 @@ export default function PortfolioPage() {
                         ) : (
                           <>
                             <p className="text-xs text-muted">Value</p>
-                            <p className="font-mono font-bold text-sm text-white">{roundValue.toFixed(3)} DORA</p>
-                            {allSole ? (
-                              <p className="text-[10px] text-white/30 italic">Awaiting traders</p>
-                            ) : (
-                              <p className={`font-mono text-xs ${roundPnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
-                                {roundPnl >= 0 ? "+" : ""}{roundPnl.toFixed(3)}
-                              </p>
-                            )}
+                            <p className="font-mono font-bold text-sm text-white">{roundValue.toFixed(2)} DORA</p>
                           </>
+                        )}
+                        {/* Round P&L */}
+                        {hasSolePositions && !allSold ? (
+                          <p className="text-[10px] text-white/30 italic mt-0.5">Awaiting traders</p>
+                        ) : (
+                          <p className={`font-mono text-xs font-semibold mt-0.5 ${roundPnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
+                            Round P&L: {roundPnl >= 0 ? "+" : ""}{roundPnl.toFixed(2)} DORA
+                          </p>
                         )}
                       </div>
                     </div>

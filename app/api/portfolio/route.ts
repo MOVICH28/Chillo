@@ -63,6 +63,9 @@ export async function GET(req: NextRequest) {
     const realizedPnl = trades
       .filter(t => t.type === "sell")
       .reduce((s, t) => s + (t.profitLoss ?? 0), 0);
+    const totalBuyCost = parseFloat(
+      trades.filter(t => t.type === "buy").reduce((s, t) => s + t.totalCost, 0).toFixed(4)
+    );
 
     const currentShares = (round.shares as Record<string, number>) ?? {};
     const activeOutcomes = ((round.outcomes as unknown as Outcome[]) ?? []).map(o => o.id);
@@ -88,7 +91,7 @@ export async function GET(req: NextRequest) {
       avgCost:      pos.avgCost,
       currentPrice,
       currentValue,
-      amountInvested: parseFloat((pos.avgCost * pos.shares).toFixed(4)),
+      amountInvested: totalBuyCost,
       unrealizedPnl,
       isSoleTrader,
       isSold,

@@ -393,7 +393,7 @@ async function runCron(): Promise<NextResponse> {
     try {
       if (round.outcomes !== null) {
         // Custom crypto rounds with questionType use DexScreener
-        if (round.questionType === "token_battle") {
+        if (round.questionType === "coin_battle") {
           winner = await resolveTokenBattleRound(round);
         } else if (round.questionType && round.tokenAddress) {
           winner = await resolveCustomCryptoRound(round);

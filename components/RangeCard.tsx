@@ -564,7 +564,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {battleToken && battleMcap > 0 && (
-                    <span className="text-[9px] font-mono text-white/40">{fmtMcapCard(battleMcap)}</span>
+                    <span className="text-sm font-bold text-white font-mono">{fmtMcapCard(battleMcap)}</span>
                   )}
                   {pct !== null
                     ? <span className={`text-[10px] font-mono font-bold ${c.text}`}>{pct}%</span>
