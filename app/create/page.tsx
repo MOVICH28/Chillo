@@ -1604,12 +1604,6 @@ function MiniSparkline({ data, width = 80, height = 28 }: { data: number[]; widt
 
 // ── Crypto review step ────────────────────────────────────────────────────────
 
-const QTYPE_LABELS: Record<string, string> = {
-  price:        "📈 Price",
-  ath_mcap:     "🏆 ATH Market Cap",
-  mcap:         "💰 End Market Cap",
-  coin_battle: "⚔️ Token Battle",
-};
 
 function ReviewStep({
   question, description, outcomes, betDuration, uploadedImage, username, tokenInfo,

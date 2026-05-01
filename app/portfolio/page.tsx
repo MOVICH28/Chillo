@@ -424,7 +424,6 @@ export default function PortfolioPage() {
                 const first      = positions[0];
                 const roundValue = positions.reduce((s, p) => s + p.currentValue, 0);
                 const isResolved = first.status === "resolved";
-                const allSole    = positions.every(p => p.isSoleTrader);
                 const allSold    = positions.every(p => p.isSold);
                 const totalSoldProceeds = positions.reduce((s, p) => s + p.soldProceeds, 0);
                 // Round P&L = sum(sell proceeds) + sum(current value for open) - sum(total buy costs)
