@@ -96,7 +96,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
 
         {/* Left Sidebar */}
         <div className="hidden lg:block w-40 shrink-0 overflow-y-auto py-6 no-scrollbar sticky top-14 self-start h-[calc(100vh-3.5rem)]">
-          <Sidebar active="all" onSelect={() => {}} counts={{}} />
+          <Sidebar active="all" counts={{}} />
         </div>
 
         {/* Main content */}

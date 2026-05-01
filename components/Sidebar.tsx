@@ -4,7 +4,7 @@ import Link from "next/link";
 
 interface SidebarProps {
   active: string;
-  onSelect: (cat: string) => void;
+  onSelect?: (cat: string) => void;
   counts: Record<string, number>;
 }
 
@@ -17,7 +17,7 @@ const CATEGORIES = [
   { id: "events",       label: "Events",       icon: "🎯", available: false },
 ];
 
-export default function Sidebar({ active, onSelect, counts }: SidebarProps) {
+export default function Sidebar({ active, onSelect = () => {}, counts }: SidebarProps) {
   return (
     <aside className="w-40 shrink-0 flex flex-col gap-1 pt-2">
       <p className="px-2 text-[10px] uppercase tracking-widest text-muted mb-1">Categories</p>
