@@ -9,11 +9,11 @@ export async function GET(req: NextRequest) {
 
   try {
     // Resolve user
-    let user: { id: string; username: string; avatarUrl: string | null; createdAt: Date } | null = null;
+    let user: { id: string; username: string; avatarUrl: string | null; createdAt: Date; doraBalance: number } | null = null;
     if (userId) {
-      user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true, avatarUrl: true, createdAt: true } });
+      user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true, avatarUrl: true, createdAt: true, doraBalance: true } });
     } else if (username) {
-      user = await prisma.user.findUnique({ where: { username }, select: { id: true, username: true, avatarUrl: true, createdAt: true } });
+      user = await prisma.user.findUnique({ where: { username }, select: { id: true, username: true, avatarUrl: true, createdAt: true, doraBalance: true } });
     }
 
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
       username:       user.username,
       avatarUrl:      user.avatarUrl,
       joinedAt:       user.createdAt.toISOString(),
+      doraBalance:    user.doraBalance,
       volume:         tradeAgg._sum.totalCost ?? 0,
       tradesCount:    tradeAgg._count,
       positionsCount,

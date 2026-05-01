@@ -54,17 +54,21 @@ export default function FollowButton({ targetUserId, targetUsername }: FollowBut
 
   if (loading) return null;
 
+  const isOwnProfile = user && user.username === targetUsername;
+
   return (
     <div className="flex flex-col items-end gap-2">
-      {/* Follower/following counts */}
-      <div className="flex items-center gap-4 text-xs">
-        <span className="text-muted">
-          <span className="text-white font-semibold">{followersCount}</span> followers
-        </span>
-        <span className="text-muted">
-          <span className="text-white font-semibold">{followingCount}</span> following
-        </span>
-      </div>
+      {/* Follower/following counts — hidden on own profile (profile card shows them) */}
+      {!isOwnProfile && (
+        <div className="flex items-center gap-4 text-xs">
+          <span className="text-muted">
+            <span className="text-white font-semibold">{followersCount}</span> followers
+          </span>
+          <span className="text-muted">
+            <span className="text-white font-semibold">{followingCount}</span> following
+          </span>
+        </div>
+      )}
 
       {/* Follow/Unfollow button — only show if viewer is not the profile owner */}
       {user && user.username !== targetUsername && (

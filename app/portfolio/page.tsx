@@ -55,8 +55,6 @@ interface PortfolioData {
   totalPnl:   number;
 }
 
-interface Stats24h { volume24h: number; bets24h: number; activeMarkets: number; }
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatCountdown(ms: number): string {
@@ -67,12 +65,6 @@ function formatCountdown(ms: number): string {
   if (h > 48) return `${Math.floor(h / 24)}d`;
   if (h > 0)  return `${h}h ${m % 60}m`;
   return `${String(m).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-}
-
-function fmtVol(v: number) {
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000)     return `${(v / 1_000).toFixed(1)}K`;
-  return v.toFixed(0);
 }
 
 // ── Personal stats widget ─────────────────────────────────────────────────────
@@ -91,37 +83,6 @@ function MyStats({ data }: { data: { positions: { trades: { type: string; totalC
           { label: "Volume",  value: `${myVolume >= 1000 ? `${(myVolume/1000).toFixed(1)}K` : myVolume.toFixed(0)} DORA`, color: "text-brand" },
           { label: "Trades",  value: String(myTrades),  color: "text-white" },
           { label: "Markets", value: String(myMarkets), color: "text-white" },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="flex items-center justify-between">
-            <span className="text-[11px] text-muted">{label}</span>
-            <span className={`text-[11px] font-mono font-semibold ${color}`}>{value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Sidebar Stats widget ──────────────────────────────────────────────────────
-
-function SidebarStats() {
-  const [stats, setStats] = useState<Stats24h>({ volume24h: 0, bets24h: 0, activeMarkets: 0 });
-
-  useEffect(() => {
-    const load = () => fetch("/api/stats").then(r => r.json()).then(setStats).catch(() => {});
-    load();
-    const id = setInterval(load, 30_000);
-    return () => clearInterval(id);
-  }, []);
-
-  return (
-    <div className="mt-4 pt-3 border-t border-surface-3 flex flex-col gap-1">
-      <p className="px-2 text-[10px] uppercase tracking-widest text-muted mb-1">Today</p>
-      <div className="px-2 flex flex-col gap-1.5">
-        {[
-          { label: "Volume", value: `${fmtVol(stats.volume24h)} DORA`, color: "text-brand" },
-          { label: "Bets",   value: String(stats.bets24h),             color: "text-white" },
-          { label: "Markets",value: String(stats.activeMarkets),        color: "text-white" },
         ].map(({ label, value, color }) => (
           <div key={label} className="flex items-center justify-between">
             <span className="text-[11px] text-muted">{label}</span>
@@ -396,7 +357,6 @@ export default function PortfolioPage() {
         {/* Left Sidebar */}
         <div className="hidden lg:block w-40 shrink-0 overflow-y-auto py-6 no-scrollbar sticky top-14 self-start h-[calc(100vh-3.5rem)]">
           <Sidebar active="all" onSelect={() => {}} counts={{}} />
-          <SidebarStats />
           <MyStats data={data} />
         </div>
 
@@ -451,9 +411,10 @@ export default function PortfolioPage() {
                 const roundValue = positions.reduce((s, p) => s + p.currentValue, 0);
                 const roundPnl   = positions.reduce((s, p) => {
                   const buyCosts    = p.trades.filter(t => t.type === "buy").reduce((a, t) => a + t.totalCost, 0);
-                  const sellProceed = p.trades.filter(t => t.type === "sell").reduce((a, t) => a + t.totalCost, 0);
+                  const sellProceed = p.trades.filter(t => t.type === "sell").reduce((a, t) => a - t.totalCost, 0); // sell totalCost is negative
                   return s + sellProceed - buyCosts;
                 }, 0);
+                const hasSells   = positions.some(p => p.trades.some(t => t.type === "sell"));
                 const isResolved = first.status === "resolved";
                 const allSole    = positions.every(p => p.isSoleTrader);
                 const allSold    = positions.every(p => p.isSold);
@@ -494,6 +455,17 @@ export default function PortfolioPage() {
                           <>
                             <p className="text-xs text-muted">Received</p>
                             <p className="font-mono font-bold text-sm text-[#22c55e]">{totalSoldProceeds.toFixed(2)} DORA</p>
+                            <p className={`font-mono text-xs font-semibold ${roundPnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
+                              P&L: {roundPnl >= 0 ? "+" : ""}{roundPnl.toFixed(2)} DORA
+                            </p>
+                          </>
+                        ) : hasSells ? (
+                          <>
+                            <p className="text-xs text-muted">Value</p>
+                            <p className="font-mono font-bold text-sm text-white">{roundValue.toFixed(3)} DORA</p>
+                            <p className={`font-mono text-xs font-semibold ${roundPnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
+                              P&L: {roundPnl >= 0 ? "+" : ""}{roundPnl.toFixed(2)} DORA
+                            </p>
                           </>
                         ) : (
                           <>
@@ -502,9 +474,7 @@ export default function PortfolioPage() {
                             {allSole ? (
                               <p className="text-[10px] text-white/30 italic">Awaiting traders</p>
                             ) : (
-                              <p className={`font-mono text-xs ${roundPnl >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
-                                {roundPnl >= 0 ? "+" : ""}{roundPnl.toFixed(2)} DORA
-                              </p>
+                              <p className="text-[10px] text-white/30 italic">Open position</p>
                             )}
                           </>
                         )}

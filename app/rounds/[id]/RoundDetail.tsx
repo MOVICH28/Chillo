@@ -517,7 +517,7 @@ interface HoverStats {
   joinedAt: string;
   followersCount: number;
   followingCount: number;
-  positionsCount: number;
+  doraBalance: number;
   volume: number;
   tradesCount: number;
 }
@@ -577,12 +577,12 @@ function ProfileHoverCard({ username, children }: { username: string; children: 
                 {[
                   { label: "Followers",  value: stats.followersCount  },
                   { label: "Following",  value: stats.followingCount  },
-                  { label: "Positions",  value: stats.positionsCount  },
                   { label: "Trades",     value: stats.tradesCount     },
-                ].map(({ label, value }) => (
+                  { label: "Balance", value: `${Math.floor(stats.doraBalance).toLocaleString()} DORA`, isString: true },
+                ].map(({ label, value, isString }) => (
                   <div key={label} className="px-2 py-1.5 bg-white/[0.04] rounded-lg">
                     <p className="text-[9px] text-muted uppercase tracking-wider">{label}</p>
-                    <p className="text-white text-xs font-mono font-semibold">{value}</p>
+                    <p className={`text-xs font-mono font-semibold ${isString ? "text-brand" : "text-white"}`}>{value}</p>
                   </div>
                 ))}
               </div>
@@ -626,33 +626,38 @@ function PositionsTab({ roundId, outcomes }: { roundId: string; outcomes: Outcom
   if (!hasAny) return <p className="text-white/20 text-xs text-center py-8">No open positions yet.</p>;
 
   return (
-    <div className="space-y-4">
+    <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
       {outcomes.map(o => {
         const entries = data[o.id] ?? [];
         if (entries.length === 0) return null;
         const c = OUTCOME_COLORS[o.id];
         const totalInvested = entries.reduce((s, e) => s + e.invested, 0);
         return (
-          <div key={o.id}>
-            <div className={`flex items-center gap-2 mb-2 px-2 py-1 rounded-lg ${c.bg} border ${c.border}`}>
-              <span className={`text-xs font-bold shrink-0 ${c.text}`}>{o.id}</span>
-              <span className="text-xs text-white/50 flex-1 truncate">{o.label}</span>
-              <span className="text-[10px] text-muted shrink-0">{entries.length} trader{entries.length !== 1 ? "s" : ""}</span>
-              <span className="text-[10px] font-mono text-muted shrink-0">{totalInvested.toFixed(1)} DORA</span>
+          <div key={o.id} className="flex-1 min-w-[140px] max-w-[220px]">
+            {/* Column header */}
+            <div className={`flex items-center justify-between gap-1.5 mb-2 px-2 py-1.5 rounded-lg ${c.bg} border ${c.border}`}>
+              <div className="min-w-0">
+                <span className={`text-xs font-bold ${c.text}`}>{o.id}</span>
+                <p className="text-[9px] text-white/40 truncate leading-tight mt-0.5">{o.label}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-[9px] text-muted">{entries.length}×</p>
+                <p className="text-[9px] font-mono text-white/40">{totalInvested.toFixed(0)}</p>
+              </div>
             </div>
+            {/* User list */}
             <div className="space-y-1">
               {entries.map((e, i) => (
-                <div key={i} className="flex items-center gap-2 px-1 text-xs">
+                <div key={i} className="flex items-center gap-1.5 py-0.5">
                   <ProfileHoverCard username={e.username}>
-                    <Link href={`/profile/${e.username}`} className="flex items-center gap-1.5 group shrink-0">
-                      <Avatar username={e.username} avatarUrl={e.avatarUrl} size={20} />
-                      <span className="text-white/60 font-mono text-[11px] group-hover:text-[#22c55e] transition-colors max-w-[80px] truncate">
+                    <Link href={`/profile/${e.username}`} className="flex items-center gap-1.5 group min-w-0 flex-1">
+                      <Avatar username={e.username} avatarUrl={e.avatarUrl} size={18} className="shrink-0" />
+                      <span className="text-white/60 font-mono text-[10px] group-hover:text-[#22c55e] transition-colors truncate">
                         {e.username}
                       </span>
                     </Link>
                   </ProfileHoverCard>
-                  <div className="flex-1 h-px bg-white/5" />
-                  <span className="font-mono text-white/50 text-[10px] shrink-0">{e.invested.toFixed(1)} DORA</span>
+                  <span className="font-mono text-white/40 text-[10px] shrink-0">{e.invested.toFixed(0)}</span>
                 </div>
               ))}
             </div>
