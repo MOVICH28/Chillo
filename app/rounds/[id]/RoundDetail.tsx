@@ -613,11 +613,15 @@ function PositionsTab({ roundId, outcomes }: { roundId: string; outcomes: Outcom
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    fetch(`/api/rounds/${roundId}/positions`)
-      .then(r => r.ok ? r.json() : {})
-      .then((d: Record<string, OutcomePositionEntry[]>) => setData(d))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const load = () =>
+      fetch(`/api/rounds/${roundId}/positions`)
+        .then(r => r.ok ? r.json() : {})
+        .then((d: Record<string, OutcomePositionEntry[]>) => setData(d))
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    load();
+    const id = setInterval(load, 10_000);
+    return () => clearInterval(id);
   }, [roundId]);
 
   if (loading) return <p className="text-white/20 text-xs text-center py-8">Loading…</p>;
