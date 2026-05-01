@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid twitterQuestion type" }, { status: 400 });
   }
 
-  if (questionType === "coin_battle") {
+  if (questionType === "token_battle") {
     if (!Array.isArray(tokenBattleTokens) || tokenBattleTokens.length < 2)
       return NextResponse.json({ error: "Token battle requires at least 2 tokens" }, { status: 400 });
   }

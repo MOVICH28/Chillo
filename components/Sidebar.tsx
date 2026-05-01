@@ -9,12 +9,11 @@ interface SidebarProps {
 }
 
 const CATEGORIES = [
-  { id: "all",         label: "All Markets",  icon: "◈",  available: true  },
-  { id: "pumpfun",     label: "pump.fun",     icon: "🚀", available: true  },
-  { id: "crypto",      label: "Crypto",       icon: "₿",  available: true  },
-  { id: "coin_battle", label: "Coin Battle",  icon: "⚔️", available: true  },
-  { id: "twitter",     label: "Twitter / X",  icon: "𝕏",  available: true  },
-  { id: "events",      label: "Events",       icon: "🎯", available: false },
+  { id: "all", label: "All Markets", icon: "◈", available: true },
+  { id: "pumpfun", label: "pump.fun", icon: "🚀", available: true },
+  { id: "crypto", label: "Crypto", icon: "₿", available: true },
+  { id: "twitter", label: "Twitter / X", icon: "𝕏", available: true },
+  { id: "events", label: "Events", icon: "🎯", available: false },
 ];
 
 export default function Sidebar({ active, onSelect, counts }: SidebarProps) {

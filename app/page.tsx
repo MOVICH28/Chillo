@@ -68,11 +68,10 @@ export default function Home() {
       !!r.targetToken || !!r.tokenAddress || !!r.tokenSymbol);
 
   const filtered =
-    category === "all"         ? allOpenRounds :
-    category === "twitter"     ? allOpenRounds.filter((r) => r.twitterUsername) :
-    category === "pumpfun"     ? allOpenRounds.filter((r) => r.isPumpFun || r.category === "pumpfun") :
-    category === "coin_battle" ? allOpenRounds.filter((r) => (r as any).questionType === "coin_battle") :
-    category === "crypto"      ? allOpenRounds.filter(isCryptoRound) :
+    category === "all"     ? allOpenRounds :
+    category === "twitter" ? allOpenRounds.filter((r) => r.twitterUsername) :
+    category === "pumpfun" ? allOpenRounds.filter((r) => r.isPumpFun || r.category === "pumpfun") :
+    category === "crypto"  ? allOpenRounds.filter(isCryptoRound) :
     allOpenRounds.filter((r) => r.category === category);
 
   const counts = allOpenRounds.reduce<Record<string, number>>((acc, r) => {
@@ -80,7 +79,6 @@ export default function Home() {
     if (r.twitterUsername) acc["twitter"] = (acc["twitter"] ?? 0) + 1;
     if (r.isPumpFun || r.category === "pumpfun") acc["pumpfun"] = (acc["pumpfun"] ?? 0) + 1;
     if (isCryptoRound(r)) acc["crypto"] = (acc["crypto"] ?? 0) + 1;
-    if ((r as any).questionType === "coin_battle") acc["coin_battle"] = (acc["coin_battle"] ?? 0) + 1;
     return acc;
   }, {});
 
@@ -102,7 +100,7 @@ export default function Home() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h1 className="text-white font-bold text-xl">
-                {category === "all" ? "All Markets" : category === "pumpfun" ? "pump.fun Markets" : category === "twitter" ? "Twitter / X Markets" : category === "coin_battle" ? "⚔️ Coin Battle" : "Crypto Markets"}
+                {category === "all" ? "All Markets" : category === "pumpfun" ? "pump.fun Markets" : category === "twitter" ? "Twitter / X Markets" : "Crypto Markets"}
               </h1>
               <p className="text-muted text-xs mt-0.5">
                 {filtered.length} market{filtered.length !== 1 ? "s" : ""}

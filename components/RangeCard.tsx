@@ -226,6 +226,27 @@ function fmtMcapCard(v: number): string {
   return v > 0 ? `$${v.toFixed(0)}` : "—";
 }
 
+function BattleLeaderboard({ tokens }: { tokens: BattleEntry[] | null | undefined }) {
+  const ranked = useBattleLeaderboard(tokens);
+  if (ranked.length === 0) return null;
+  const RANKS = ["🥇", "🥈", "🥉", "4", "5", "6"];
+  return (
+    <div className="mb-2 space-y-1">
+      {ranked.map((t, i) => (
+        <div key={t.address} className="flex items-center gap-2 px-1">
+          <span className="text-[10px] w-4 shrink-0 text-center leading-none">{RANKS[i] ?? `${i+1}`}</span>
+          {t.logoUrl
+            ? <img src={t.logoUrl} alt={t.symbol} className="w-4 h-4 rounded-full shrink-0 object-cover" />
+            : <div className="w-4 h-4 rounded-full bg-purple-500/30 flex items-center justify-center text-[7px] font-bold text-purple-300 shrink-0">{t.symbol[0]}</div>}
+          <span className="text-[10px] font-bold text-white/80 shrink-0">${t.symbol}</span>
+          <span className="flex-1" />
+          <span className="text-[10px] font-mono text-white/40">{fmtMcapCard(t.mcap)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Resolved card ─────────────────────────────────────────────────────────────
 
 function ResolvedRangeCard({ round }: { round: Round }) {
@@ -266,7 +287,7 @@ function ResolvedRangeCard({ round }: { round: Round }) {
                 pump.fun
               </span>
             )}
-            {round.questionType === "coin_battle" && (
+            {round.questionType === "token_battle" && (
               <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold border bg-purple-500/10 text-purple-400 border-purple-500/20">
                 ⚔️ Token Battle
               </span>
@@ -281,7 +302,7 @@ function ResolvedRangeCard({ round }: { round: Round }) {
         </div>
 
         <div className="flex items-center gap-2.5 mb-2">
-          {round.questionType === "coin_battle" && round.tokenBattleTokens && round.tokenBattleTokens.length >= 2 ? (
+          {round.questionType === "token_battle" && round.tokenBattleTokens && round.tokenBattleTokens.length >= 2 ? (
             <div className="flex shrink-0" style={{ width: 36 + (round.tokenBattleTokens.length - 1) * 14 }}>
               {round.tokenBattleTokens.slice(0, 4).map((t, i) => (
                 t.logoUrl
@@ -376,8 +397,8 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
     ? new Date() > new Date(round.bettingClosesAt)
     : isEnded;
 
-  // Live mcaps for coin_battle outcome buttons
-  const battleEntries = (round.questionType === "coin_battle" && round.tokenBattleTokens)
+  // Live mcaps for token_battle outcome buttons
+  const battleEntries = (round.questionType === "token_battle" && round.tokenBattleTokens)
     ? (round.tokenBattleTokens as any[]).map((t: any) => ({ ...t, mcap: t.currentMcap ?? 0 })) as BattleEntry[]
     : null;
   const rankedBattle   = useBattleLeaderboard(battleEntries);
@@ -450,7 +471,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
                 pump.fun
               </span>
             )}
-            {round.questionType === "coin_battle" && (
+            {round.questionType === "token_battle" && (
               <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold border bg-purple-500/10 text-purple-400 border-purple-500/20">
                 ⚔️ Token Battle
               </span>
@@ -476,7 +497,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
 
         {/* Question — single line, truncated */}
         <div className="flex items-center gap-2.5 mb-2.5 min-w-0 overflow-hidden">
-          {round.questionType === "coin_battle" && round.tokenBattleTokens && round.tokenBattleTokens.length >= 2 ? (
+          {round.questionType === "token_battle" && round.tokenBattleTokens && round.tokenBattleTokens.length >= 2 ? (
             <div className="flex shrink-0" style={{ width: 36 + (round.tokenBattleTokens.length - 1) * 14 }}>
               {round.tokenBattleTokens.slice(0, 4).map((t, i) => (
                 t.logoUrl
@@ -528,7 +549,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
           {outcomes.map((o) => {
             const c   = OUTCOME_COLORS[o.id];
             const pct = prices[o.id] != null ? (prices[o.id] * 100).toFixed(1) : null;
-            const battleToken = round.questionType === "coin_battle"
+            const battleToken = round.questionType === "token_battle"
               ? round.tokenBattleTokens?.find(t => t.outcomeId === o.id)
               : undefined;
             const battleMcap = battleToken ? (battleMcapMap[o.id] ?? 0) : 0;
@@ -564,7 +585,7 @@ export default function RangeCard({ round, liveData }: RangeCardProps) {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {battleToken && battleMcap > 0 && (
-                    <span className="text-sm font-bold text-white font-mono">{fmtMcapCard(battleMcap)}</span>
+                    <span className="text-[9px] font-mono text-white/40">{fmtMcapCard(battleMcap)}</span>
                   )}
                   {pct !== null
                     ? <span className={`text-[10px] font-mono font-bold ${c.text}`}>{pct}%</span>

@@ -783,7 +783,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                   pump.fun
                 </span>
               )}
-              {round.questionType === "coin_battle" && (
+              {round.questionType === "token_battle" && (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">
                   ⚔️ Token Battle
                 </span>
@@ -825,7 +825,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                     @{round.twitterUsername}
                   </a>
                 </div>
-              ) : round.questionType === "coin_battle" && round.tokenBattleTokens && round.tokenBattleTokens.length >= 2 ? (
+              ) : round.questionType === "token_battle" && round.tokenBattleTokens && round.tokenBattleTokens.length >= 2 ? (
                 <div className="flex shrink-0">
                   {(round.tokenBattleTokens as BattleTokenInfo[]).slice(0, 4).map((t, i) => (
                     t.logoUrl
@@ -981,7 +981,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
             })()}
 
             {/* Token stats bar */}
-            {hasToken && round.questionType !== "coin_battle" && (
+            {hasToken && round.questionType !== "token_battle" && (
               <TokenStats
                 targetToken={round.targetToken}
                 tokenAddress={round.tokenAddress}
@@ -990,7 +990,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
             )}
 
             {/* Token Battle cards */}
-            {round.questionType === "coin_battle" && round.tokenBattleTokens && round.tokenBattleTokens.length > 0 && (() => {
+            {round.questionType === "token_battle" && round.tokenBattleTokens && round.tokenBattleTokens.length > 0 && (() => {
               const battleTokens = round.tokenBattleTokens as BattleTokenInfo[];
               const tokenLogoMap = Object.fromEntries(
                 battleTokens.map(t => [t.outcomeId, { symbol: t.symbol, logoUrl: t.logoUrl }])
@@ -1096,7 +1096,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
                 />
                 <PoolBar outcomes={outcomes} prices={lmsrPrices} />
               </>
-            ) : round.category !== "twitter" && round.questionType !== "coin_battle" ? (
+            ) : round.category !== "twitter" && round.questionType !== "token_battle" ? (
               <div className="flex items-center justify-center rounded-xl"
                    style={{ height: 350, background: "#0d0f14" }}>
                 <span className="text-white/20 text-sm">No chart available</span>

@@ -49,7 +49,7 @@ const MCAP_OUTCOME_DEFAULTS = [
   { id: "F", label: "Above $10M",       minPrice: 10_000_000, maxPrice: null       },
 ];
 
-type CryptoQType = "price" | "ath_mcap" | "mcap" | "coin_battle";
+type CryptoQType = "price" | "ath_mcap" | "mcap" | "token_battle";
 
 // ── Smart builder helpers ─────────────────────────────────────────────────────
 
@@ -416,7 +416,7 @@ export default function CreatePage() {
       case "price":        setQuestion(`What price will ${sym} reach in ${tf}?`); break;
       case "ath_mcap":     setQuestion(`What ATH market cap will ${sym} reach in ${tf}?`); break;
       case "mcap":         setQuestion(`What will ${sym}'s market cap be after ${tf}?`); break;
-      case "coin_battle": setQuestion("Which token will have the highest market cap?"); break;
+      case "token_battle": setQuestion("Which token will have the highest market cap?"); break;
     }
   }, [cryptoQType, tokenInfo, tokenQuery, betDuration, category]);
 
@@ -472,17 +472,17 @@ export default function CreatePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, advancedMode, cryptoQType, mcapMinNum, mcapMinUnit, mcapMaxNum, mcapMaxUnit, mcapScaleType, mcapNumRanges]);
 
-  // ── Sync outcomes from battleTokens for coin_battle ─────────────────────
+  // ── Sync outcomes from battleTokens for token_battle ─────────────────────
   useEffect(() => {
-    if (cryptoQType !== "coin_battle") return;
+    if (cryptoQType !== "token_battle") return;
     setOutcomes(battleTokens.map(t => ({
       id: t.outcomeId, label: `$${t.symbol} wins`, minPrice: null, maxPrice: null,
     })));
   }, [cryptoQType, battleTokens]);
 
-  // ── Pre-fill first token from Step 1 when switching to coin_battle ───────
+  // ── Pre-fill first token from Step 1 when switching to token_battle ───────
   useEffect(() => {
-    if (cryptoQType !== "coin_battle") return;
+    if (cryptoQType !== "token_battle") return;
     if (battleTokens.length > 0) return;
     if (!tokenInfo?.address || !tokenInfo.symbol) return;
     setBattleTokens([{
@@ -554,7 +554,7 @@ export default function CreatePage() {
         body.twitterUrl   = twitterUrl;
         body.customImage  = uploadedImage || null;
         body.isPumpFun    = isPumpFun;
-        if (cryptoQType === "coin_battle") {
+        if (cryptoQType === "token_battle") {
           body.tokenBattleTokens = battleTokens;
         } else {
           body.tokenAddress = tokenInfo?.address && tokenInfo.address !== tokenInfo.symbol
@@ -590,7 +590,7 @@ export default function CreatePage() {
   // ── Validation ────────────────────────────────────────────────────────────
   const step1Valid = category === "twitter" ? validTwitterUsername(twitterQuery) : true;
   const step2Valid = question.trim().length >= 5;
-  const step3Valid = cryptoQType === "coin_battle"
+  const step3Valid = cryptoQType === "token_battle"
     ? battleTokens.length >= 2
     : outcomes.every(o => o.label.trim().length > 0);
   const step4Valid = step3Valid && question.trim().length > 0;
@@ -797,7 +797,7 @@ export default function CreatePage() {
                   { value: "price"        as CryptoQType, icon: "📈", label: "Price",          desc: `What price will ${tokenInfo?.symbol ? `$${tokenInfo.symbol}` : "the token"} reach?` },
                   { value: "ath_mcap"     as CryptoQType, icon: "🏆", label: "ATH Market Cap", desc: "What's the highest market cap it will hit in the window?" },
                   { value: "mcap"         as CryptoQType, icon: "💰", label: "End Market Cap",  desc: "What will market cap be when betting closes?" },
-                  { value: "coin_battle" as CryptoQType, icon: "⚔️", label: "Token Battle",   desc: "Which token will have the highest market cap?" },
+                  { value: "token_battle" as CryptoQType, icon: "⚔️", label: "Token Battle",   desc: "Which token will have the highest market cap?" },
                 ]).map(opt => (
                   <button key={opt.value} onClick={() => setCryptoQType(opt.value)}
                     className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all
@@ -868,7 +868,7 @@ export default function CreatePage() {
         )}
 
         {/* Crypto Step 3: Token Battle Builder */}
-        {category === "crypto" && step === 3 && cryptoQType === "coin_battle" && (
+        {category === "crypto" && step === 3 && cryptoQType === "token_battle" && (
           <div className="space-y-5">
             <div>
               <h2 className="text-white font-semibold mb-1">Token Battle</h2>
@@ -999,7 +999,7 @@ export default function CreatePage() {
         )}
 
         {/* Crypto Step 3: Outcome Range Builder */}
-        {category === "crypto" && step === 3 && cryptoQType !== "coin_battle" && (
+        {category === "crypto" && step === 3 && cryptoQType !== "token_battle" && (
           <div className="space-y-5">
             {/* Header + advanced toggle */}
             <div className="flex items-start justify-between gap-3">
@@ -1604,6 +1604,12 @@ function MiniSparkline({ data, width = 80, height = 28 }: { data: number[]; widt
 
 // ── Crypto review step ────────────────────────────────────────────────────────
 
+const QTYPE_LABELS: Record<string, string> = {
+  price:        "📈 Price",
+  ath_mcap:     "🏆 ATH Market Cap",
+  mcap:         "💰 End Market Cap",
+  token_battle: "⚔️ Token Battle",
+};
 
 function ReviewStep({
   question, description, outcomes, betDuration, uploadedImage, username, tokenInfo,
@@ -1618,7 +1624,7 @@ function ReviewStep({
   const tfLabel      = formatDuration(betDuration);
   const resultBuffer = betDuration <= 3 ? 2 : 5;
   const isMcap       = cryptoQType === "mcap" || cryptoQType === "ath_mcap";
-  const isBattle     = cryptoQType === "coin_battle";
+  const isBattle     = cryptoQType === "token_battle";
 
   const [priceHistory, setPriceHistory] = useState<number[]>(
     tokenInfo ? [tokenInfo.priceUsd] : []
@@ -1626,7 +1632,7 @@ function ReviewStep({
   const [livePrice, setLivePrice] = useState<number>(tokenInfo?.priceUsd ?? 0);
   const [liveMcap,  setLiveMcap]  = useState<number>(tokenInfo?.mcapUsd  ?? 0);
 
-  // Live mcap map for coin_battle: address → current mcap
+  // Live mcap map for token_battle: address → current mcap
   const [battleMcaps, setBattleMcaps] = useState<Record<string, number>>(() =>
     Object.fromEntries(battleTokens.map(t => [t.address, t.currentMcap]))
   );
@@ -1688,17 +1694,15 @@ function ReviewStep({
       <div className="rounded-xl border border-surface-3 bg-surface overflow-hidden">
         <div className="p-4">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">Crypto</span>
-            {isPumpFun && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-gradient-to-r from-orange-500/10 to-green-500/10 text-orange-400 border-orange-500/20">pump.fun</span>
-            )}
-            {isBattle && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">⚔️ Coin Battle</span>
-            )}
+            <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">Community</span>
+            <span className="text-[10px] px-2 py-0.5 rounded border bg-white/5 text-white/40 border-white/10">{QTYPE_LABELS[cryptoQType]}</span>
             {tokenInfo && !isBattle && (
               <div className="flex items-center gap-1.5">
                 {tokenInfo.logoUrl && <img src={tokenInfo.logoUrl} alt={tokenInfo.symbol} className="w-4 h-4 rounded-full" />}
                 <span className="text-[10px] text-muted font-mono">{tokenInfo.symbol}</span>
+                {isPumpFun && (
+                  <span className="bg-orange-500/20 text-orange-400 border border-orange-500/30 text-[10px] px-2 py-0.5 rounded-full">pump.fun</span>
+                )}
               </div>
             )}
             <span className="ml-auto text-[10px] text-muted">{tfLabel} betting</span>
