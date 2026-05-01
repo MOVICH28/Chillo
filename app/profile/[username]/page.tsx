@@ -22,26 +22,18 @@ const OUTCOME_COLORS: Record<string, { text: string; bg: string; border: string 
 export default async function PublicProfilePage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
 
-  let user;
+  // Fetch user (no bets relation — we use Trade model instead)
+  let user: {
+    id: string; username: string; doraBalance: number; avatarUrl: string | null;
+    createdAt: Date; _count: { followers: number; following: number };
+  } | null = null;
+
   try {
     user = await prisma.user.findUnique({
       where: { username },
       select: {
-        id: true,
-        username: true,
-        doraBalance: true,
-        avatarUrl: true,
-        createdAt: true,
+        id: true, username: true, doraBalance: true, avatarUrl: true, createdAt: true,
         _count: { select: { followers: true, following: true } },
-        bets: {
-          where: { currency: "DORA" },
-          orderBy: { createdAt: "desc" },
-          take: 100,
-          select: {
-            id: true, side: true, amount: true, odds: true,
-            result: true, payout: true, createdAt: true, roundId: true,
-          },
-        },
       },
     });
   } catch (err) {
@@ -58,49 +50,45 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
     console.error("[profile/username] markets count failed:", err);
   }
 
-  const roundIds = Array.from(new Set(user.bets.map(b => b.roundId)));
-  let rounds: { id: string; question: string; status: string; winningOutcome: string | null; outcomes: unknown; roundNumber: number | null }[] = [];
+  // Fetch trades (LMSR system)
+  let trades: Array<{
+    id: string; outcome: string; type: string; totalCost: number;
+    profitLoss: number | null; createdAt: Date; roundId: string;
+    round: {
+      id: string; question: string; roundNumber: number | null;
+      status: string; winningOutcome: string | null; outcomes: unknown; endsAt: Date;
+    } | null;
+  }> = [];
+
   try {
-    rounds = roundIds.length > 0
-      ? await prisma.round.findMany({
-          where: { id: { in: roundIds } },
-          select: { id: true, question: true, status: true, winningOutcome: true, outcomes: true, roundNumber: true },
-        })
-      : [];
+    trades = await prisma.trade.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      include: {
+        round: {
+          select: {
+            id: true, question: true, roundNumber: true,
+            status: true, winningOutcome: true, outcomes: true, endsAt: true,
+          },
+        },
+      },
+    });
   } catch (err) {
-    console.error("[profile/username] rounds query failed:", err);
+    console.error("[profile/username] trades query failed:", err);
   }
-  const roundMap = new Map(rounds.map(r => [r.id, r]));
 
-  type BetRow = typeof user.bets[number] & {
-    round: { id: string; question: string; status: string; winningOutcome: string | null; outcomes: Outcome[] | null; roundNumber: number | null } | null;
-  };
-
-  const bets: BetRow[] = user.bets.map(b => {
-    const r = roundMap.get(b.roundId);
-    return {
-      ...b,
-      round: r
-        ? { id: r.id, question: r.question, status: r.status, winningOutcome: r.winningOutcome,
-            outcomes: (r.outcomes as unknown as Outcome[] | null), roundNumber: r.roundNumber ?? null }
-        : null,
-    };
-  });
-
-  const resolved   = bets.filter(b => b.result !== null && b.result !== "refund");
-  const wins       = resolved.filter(b => b.result === b.side);
-  const wagered    = bets.reduce((s, b) => s + b.amount, 0);
-  const winRate    = resolved.length > 0 ? ((wins.length / resolved.length) * 100).toFixed(0) : "0";
-  const netPnl     = bets.reduce((s, b) => {
-    if (b.result === "refund") return s;
-    if (b.result !== null && b.result === b.side) return s + ((b.payout ?? 0) - b.amount);
-    if (b.result !== null) return s - b.amount;
-    return s;
-  }, 0);
-  const totalWon   = resolved.filter(b => b.result === b.side).reduce((s, b) => s + ((b.payout ?? 0) - b.amount), 0);
-  const totalLost  = resolved.filter(b => b.result !== b.side).reduce((s, b) => s + b.amount, 0);
-  const bestWin    = Math.max(0, ...resolved.filter(b => b.result === b.side).map(b => (b.payout ?? 0) - b.amount));
-  const worstLoss  = Math.max(0, ...resolved.filter(b => b.result !== b.side).map(b => b.amount));
+  // Derived stats from trades
+  const buyTrades  = trades.filter(t => t.type === "buy");
+  const sellTrades = trades.filter(t => t.type === "sell");
+  const totalVolume   = buyTrades.reduce((s, t) => s + t.totalCost, 0);
+  const totalReceived = sellTrades.reduce((s, t) => s + (-t.totalCost), 0); // sell totalCost is negative
+  const netPnl        = sellTrades.reduce((s, t) => s + (t.profitLoss ?? 0), 0);
+  const realizedTrades = sellTrades.filter(t => t.profitLoss !== null);
+  const bestWin   = realizedTrades.length > 0 ? Math.max(0, ...realizedTrades.map(t => t.profitLoss!)) : 0;
+  const worstLoss = realizedTrades.length > 0 ? Math.max(0, ...realizedTrades.map(t => -(t.profitLoss!))) : 0;
+  const totalGained = realizedTrades.filter(t => (t.profitLoss ?? 0) > 0).reduce((s, t) => s + t.profitLoss!, 0);
+  const totalLost   = realizedTrades.filter(t => (t.profitLoss ?? 0) < 0).reduce((s, t) => s + (-t.profitLoss!), 0);
 
   const joinDate = user.createdAt.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 
@@ -148,7 +136,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
                     <span className="text-sm font-normal ml-1">DORA</span>
                   </p>
                   {netPnl !== 0 && (
-                    <p className={`text-xs font-mono mt-0.5 ${netPnl > 0 ? "text-green-400" : "text-red-400"}`}>
+                    <p className={`text-xs font-mono mt-0.5 ${netPnl > 0 ? "text-[#22c55e]" : "text-red-400"}`}>
                       {netPnl > 0 ? "+" : ""}{netPnl.toFixed(2)} P&L
                     </p>
                   )}
@@ -161,15 +149,16 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
             {[
-              { label: "Total Bets",      value: bets.length.toString() },
-              { label: "Total Wagered",   value: `${wagered.toFixed(0)} DORA` },
-              { label: "Wins / Losses",   value: `${wins.length} / ${resolved.length - wins.length}` },
-              { label: "Win Rate",        value: `${winRate}%` },
-              { label: "Created Markets", value: createdMarketsCount.toString() },
-            ].map(({ label, value }) => (
+              { label: "Total Trades",    value: trades.length.toString() },
+              { label: "Volume",          value: `${totalVolume.toFixed(0)} DORA` },
+              { label: "Received",        value: `${totalReceived.toFixed(0)} DORA` },
+              { label: "Net P&L",         value: `${netPnl >= 0 ? "+" : ""}${netPnl.toFixed(2)} DORA`,
+                color: netPnl >= 0 ? "text-[#22c55e]" : "text-red-400" },
+              { label: "Markets Created", value: createdMarketsCount.toString() },
+            ].map(({ label, value, color }) => (
               <div key={label} className="bg-surface border border-surface-3 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-widest text-muted mb-1">{label}</p>
-                <p className="text-white font-semibold font-mono">{value}</p>
+                <p className={`font-semibold font-mono ${color ?? "text-white"}`}>{value}</p>
               </div>
             ))}
           </div>
@@ -180,13 +169,14 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
               <h2 className="text-white font-semibold text-sm">Trading History</h2>
             </div>
 
-            {resolved.length > 0 && (
+            {/* Summary cards — only when there are sells with P&L */}
+            {realizedTrades.length > 0 && (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 border-b border-surface-3/50">
                 {[
-                  { label: "Total Won",  value: `+${totalWon.toFixed(2)}`,  color: "text-[#22c55e]" },
-                  { label: "Total Lost", value: `-${totalLost.toFixed(2)}`, color: "text-red-400"   },
-                  { label: "Best Win",   value: `+${bestWin.toFixed(2)}`,   color: "text-[#22c55e]" },
-                  { label: "Worst Loss", value: `-${worstLoss.toFixed(2)}`, color: "text-red-400"   },
+                  { label: "Total Gained", value: `+${totalGained.toFixed(2)}`, color: "text-[#22c55e]" },
+                  { label: "Total Lost",   value: `-${totalLost.toFixed(2)}`,   color: "text-red-400"   },
+                  { label: "Best Win",     value: `+${bestWin.toFixed(2)}`,     color: "text-[#22c55e]" },
+                  { label: "Worst Loss",   value: `-${worstLoss.toFixed(2)}`,   color: "text-red-400"   },
                 ].map(({ label, value, color }) => (
                   <div key={label} className="bg-white/[0.03] rounded-lg p-3 border border-white/5">
                     <p className="text-[10px] uppercase tracking-widest text-muted mb-1">{label}</p>
@@ -196,7 +186,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
               </div>
             )}
 
-            {bets.length === 0 ? (
+            {trades.length === 0 ? (
               <div className="p-10 text-center text-muted text-sm">No trades yet.</div>
             ) : (
               <div className="overflow-x-auto">
@@ -206,56 +196,64 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
                       <th className="text-left px-3 py-2 whitespace-nowrap">Date</th>
                       <th className="text-left px-3 py-2 w-full">Market</th>
                       <th className="text-left px-3 py-2">Outcome</th>
-                      <th className="text-right px-3 py-2">Stake</th>
-                      <th className="text-center px-3 py-2">Result</th>
+                      <th className="text-center px-3 py-2">Type</th>
+                      <th className="text-right px-3 py-2">Amount</th>
                       <th className="text-right px-3 py-2">P&amp;L</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {bets.map(bet => {
-                      const isRefund  = bet.result === "refund";
-                      const isWin     = !isRefund && bet.result !== null && bet.result === bet.side;
-                      const isLoss    = !isRefund && bet.result !== null && bet.result !== bet.side;
-                      const isPending = bet.result === null;
-                      const profit    = isWin ? (bet.payout ?? 0) - bet.amount : isLoss ? -bet.amount : null;
-                      const resLabel  = isWin ? "Won" : isLoss ? "Lost" : isRefund ? "Refund" : "Pending";
-                      const resColor  = isWin ? "text-[#22c55e]" : isLoss ? "text-red-400" : isPending ? "text-yellow-400" : "text-muted";
-                      const plColor   = profit === null ? "text-muted" : profit >= 0 ? "text-[#22c55e]" : "text-red-400";
-                      const c = OUTCOME_COLORS[bet.side];
-                      const outcomeLabel = bet.round?.outcomes?.find(o => o.id === bet.side)?.label;
+                    {trades.map(trade => {
+                      const isBuy       = trade.type === "buy";
+                      const doraAmt     = isBuy ? trade.totalCost : -trade.totalCost;
+                      const pl          = trade.profitLoss;
+                      const plColor     = pl === null ? "text-muted" : pl >= 0 ? "text-[#22c55e]" : "text-red-400";
+                      const c           = OUTCOME_COLORS[trade.outcome];
+                      const outcomes    = trade.round?.outcomes as Outcome[] | null;
+                      const outcomeLabel = outcomes?.find(o => o.id === trade.outcome)?.label;
+
                       return (
-                        <tr key={bet.id} className="border-b border-surface-3/50 hover:bg-white/[0.02] transition-colors">
+                        <tr key={trade.id} className="border-b border-surface-3/50 hover:bg-white/[0.02] transition-colors">
                           <td className="px-3 py-2.5 text-muted whitespace-nowrap text-[11px]">
-                            {new Date(bet.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                            {new Date(trade.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                           </td>
                           <td className="px-3 py-2.5 max-w-0 w-full">
                             <div className="truncate text-white/60 text-xs">
-                              {bet.round?.roundNumber != null && (
-                                <span className="text-muted font-mono mr-1">#{bet.round.roundNumber} ·</span>
+                              {trade.round?.roundNumber != null && (
+                                <span className="text-muted font-mono mr-1">#{trade.round.roundNumber} ·</span>
                               )}
-                              {bet.round ? (
-                                <Link href={`/rounds/${bet.round.id}`} className="hover:text-[#22c55e] hover:underline transition-colors">
-                                  {bet.round.question}
+                              {trade.round ? (
+                                <Link href={`/rounds/${trade.round.id}`} className="hover:text-[#22c55e] hover:underline transition-colors">
+                                  {trade.round.question}
                                 </Link>
                               ) : (
-                                <span>{bet.roundId}</span>
+                                <span className="text-muted">{trade.roundId}</span>
                               )}
                             </div>
                           </td>
                           <td className="px-3 py-2.5 whitespace-nowrap">
                             {c ? (
                               <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${c.bg} ${c.text} border ${c.border}`}>
-                                <span className="font-bold">{bet.side}</span>
+                                <span className="font-bold">{trade.outcome}</span>
                                 {outcomeLabel && <span className="opacity-70 max-w-[100px] truncate">· {outcomeLabel}</span>}
                               </span>
                             ) : (
-                              <span className="text-white/50 font-mono">{bet.side}</span>
+                              <span className="text-white/50 font-mono">{trade.outcome}</span>
                             )}
                           </td>
-                          <td className="px-3 py-2.5 text-right font-mono text-white/80">{bet.amount.toFixed(2)}</td>
-                          <td className={`px-3 py-2.5 text-center font-semibold ${resColor}`}>{resLabel}</td>
+                          <td className="px-3 py-2.5 text-center">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              isBuy
+                                ? "bg-[#22c55e]/15 text-[#22c55e]"
+                                : "bg-red-500/15 text-red-400"
+                            }`}>
+                              {isBuy ? "BUY" : "SELL"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-mono text-white/80">
+                            {doraAmt.toFixed(2)}
+                          </td>
                           <td className={`px-3 py-2.5 text-right font-mono font-semibold ${plColor}`}>
-                            {profit === null ? "—" : `${profit >= 0 ? "+" : ""}${profit.toFixed(2)}`}
+                            {pl === null ? "—" : `${pl >= 0 ? "+" : ""}${pl.toFixed(2)}`}
                           </td>
                         </tr>
                       );
