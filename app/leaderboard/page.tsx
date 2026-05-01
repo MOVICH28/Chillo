@@ -7,6 +7,7 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Sidebar from "@/components/Sidebar";
 import Avatar from "@/components/Avatar";
+import RightPanel from "@/components/RightPanel";
 import { useAuth } from "@/lib/useAuth";
 
 interface LeaderboardEntry {
@@ -131,7 +132,7 @@ export default function LeaderboardPage() {
         </div>
 
         {/* Main content */}
-        <main className="min-w-0 flex-1 py-6">
+        <main className="min-w-0 flex-1 py-6 min-h-0">
 
           {/* Back arrow */}
           <Link href="/" className="flex items-center text-white/40 hover:text-white/70 transition-colors mb-4 w-fit">
@@ -307,6 +308,12 @@ export default function LeaderboardPage() {
             )}
           </div>
         </main>
+
+        {/* Right Panel */}
+        <div className="hidden xl:block w-56 shrink-0 py-6 sticky top-14 self-start h-[calc(100vh-3.5rem)] overflow-y-auto no-scrollbar">
+          <RightPanel rounds={[]} />
+        </div>
+
       </div>
     </div>
   );

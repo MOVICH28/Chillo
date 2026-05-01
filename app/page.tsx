@@ -12,13 +12,14 @@ import TwitterMarketCard from "@/components/TwitterMarketCard";
 import { Round, Outcome } from "@/lib/types";
 import { useLiveData } from "@/lib/useLiveData";
 
-// Isolated component so useSearchParams has its own Suspense boundary
-function RefCapture() {
+function URLParamsCapture({ setCategory }: { setCategory: (c: string) => void }) {
   const searchParams = useSearchParams();
   useEffect(() => {
     const ref = searchParams.get("ref");
     if (ref) localStorage.setItem("pumpdora_ref", ref);
-  }, [searchParams]);
+    const cat = searchParams.get("category");
+    if (cat) setCategory(cat);
+  }, [searchParams, setCategory]);
   return null;
 }
 
@@ -86,7 +87,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-base flex flex-col">
-      <Suspense fallback={null}><RefCapture /></Suspense>
+      <Suspense fallback={null}><URLParamsCapture setCategory={setCategory} /></Suspense>
       <Navbar rounds={rounds} />
 
       {/* Main layout */}

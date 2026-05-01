@@ -509,6 +509,160 @@ function PoolBar({ outcomes, prices, tokenLogoMap }: { outcomes: Outcome[]; pric
   );
 }
 
+// ── Hover profile card ────────────────────────────────────────────────────────
+
+interface HoverStats {
+  username: string;
+  avatarUrl: string | null;
+  joinedAt: string;
+  followersCount: number;
+  followingCount: number;
+  positionsCount: number;
+  volume: number;
+  tradesCount: number;
+}
+
+function ProfileHoverCard({ username, children }: { username: string; children: React.ReactNode }) {
+  const [stats,   setStats]   = React.useState<HoverStats | null>(null);
+  const [show,    setShow]    = React.useState(false);
+  const [cardPos, setCardPos] = React.useState({ top: 0, left: 0 });
+  const wrapRef  = React.useRef<HTMLSpanElement>(null);
+  const timerRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const fetchRef = React.useRef(false);
+
+  function handleMouseEnter() {
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (rect) setCardPos({ top: rect.bottom + 6, left: Math.min(rect.left, window.innerWidth - 216) });
+    timerRef.current = setTimeout(() => setShow(true), 250);
+    if (!fetchRef.current) {
+      fetchRef.current = true;
+      fetch(`/api/user/stats?username=${encodeURIComponent(username)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) setStats(d); })
+        .catch(() => {});
+    }
+  }
+
+  function handleMouseLeave() {
+    clearTimeout(timerRef.current);
+    setShow(false);
+  }
+
+  return (
+    <>
+      <span ref={wrapRef} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} className="inline-flex">
+        {children}
+      </span>
+      {show && (
+        <div
+          style={{ position: "fixed", top: cardPos.top, left: cardPos.left, zIndex: 1000 }}
+          className="bg-[#0d0f14] border border-white/10 rounded-xl p-3 w-52 shadow-2xl"
+          onMouseEnter={() => clearTimeout(timerRef.current)}
+          onMouseLeave={handleMouseLeave}
+        >
+          {!stats ? (
+            <p className="text-[10px] text-muted text-center py-2">Loading…</p>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 mb-3">
+                <Avatar username={stats.username} avatarUrl={stats.avatarUrl} size={28} className="shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-white text-xs font-semibold truncate">{stats.username}</p>
+                  <p className="text-muted text-[10px]">
+                    Joined {new Date(stats.joinedAt).toLocaleDateString("en-GB", { month: "short", year: "numeric" })}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-1 mb-3">
+                {[
+                  { label: "Followers",  value: stats.followersCount  },
+                  { label: "Following",  value: stats.followingCount  },
+                  { label: "Positions",  value: stats.positionsCount  },
+                  { label: "Trades",     value: stats.tradesCount     },
+                ].map(({ label, value }) => (
+                  <div key={label} className="px-2 py-1.5 bg-white/[0.04] rounded-lg">
+                    <p className="text-[9px] text-muted uppercase tracking-wider">{label}</p>
+                    <p className="text-white text-xs font-mono font-semibold">{value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mb-2 px-2 py-1.5 bg-brand/5 border border-brand/15 rounded-lg">
+                <p className="text-[9px] text-muted uppercase tracking-wider">Volume</p>
+                <p className="text-brand text-xs font-mono font-semibold">
+                  {stats.volume >= 1000 ? `${(stats.volume / 1000).toFixed(1)}K` : stats.volume.toFixed(0)} DORA
+                </p>
+              </div>
+              <Link href={`/profile/${stats.username}`}
+                className="block text-center text-[10px] text-brand hover:text-brand/80 transition-colors">
+                View Profile →
+              </Link>
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Positions tab ─────────────────────────────────────────────────────────────
+
+interface OutcomePositionEntry { username: string; avatarUrl: string | null; shares: number; invested: number; }
+
+function PositionsTab({ roundId, outcomes }: { roundId: string; outcomes: Outcome[] }) {
+  const [data,    setData]    = React.useState<Record<string, OutcomePositionEntry[]>>({});
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    fetch(`/api/rounds/${roundId}/positions`)
+      .then(r => r.ok ? r.json() : {})
+      .then((d: Record<string, OutcomePositionEntry[]>) => setData(d))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [roundId]);
+
+  if (loading) return <p className="text-white/20 text-xs text-center py-8">Loading…</p>;
+
+  const hasAny = outcomes.some(o => (data[o.id] ?? []).length > 0);
+  if (!hasAny) return <p className="text-white/20 text-xs text-center py-8">No open positions yet.</p>;
+
+  return (
+    <div className="space-y-4">
+      {outcomes.map(o => {
+        const entries = data[o.id] ?? [];
+        if (entries.length === 0) return null;
+        const c = OUTCOME_COLORS[o.id];
+        const totalInvested = entries.reduce((s, e) => s + e.invested, 0);
+        return (
+          <div key={o.id}>
+            <div className={`flex items-center gap-2 mb-2 px-2 py-1 rounded-lg ${c.bg} border ${c.border}`}>
+              <span className={`text-xs font-bold shrink-0 ${c.text}`}>{o.id}</span>
+              <span className="text-xs text-white/50 flex-1 truncate">{o.label}</span>
+              <span className="text-[10px] text-muted shrink-0">{entries.length} trader{entries.length !== 1 ? "s" : ""}</span>
+              <span className="text-[10px] font-mono text-muted shrink-0">{totalInvested.toFixed(1)} DORA</span>
+            </div>
+            <div className="space-y-1">
+              {entries.map((e, i) => (
+                <div key={i} className="flex items-center gap-2 px-1 text-xs">
+                  <ProfileHoverCard username={e.username}>
+                    <Link href={`/profile/${e.username}`} className="flex items-center gap-1.5 group shrink-0">
+                      <Avatar username={e.username} avatarUrl={e.avatarUrl} size={20} />
+                      <span className="text-white/60 font-mono text-[11px] group-hover:text-[#22c55e] transition-colors max-w-[80px] truncate">
+                        {e.username}
+                      </span>
+                    </Link>
+                  </ProfileHoverCard>
+                  <div className="flex-1 h-px bg-white/5" />
+                  <span className="font-mono text-white/50 text-[10px] shrink-0">{e.invested.toFixed(1)} DORA</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Activity tab — trades list ────────────────────────────────────────────────
 
 function ActivityTab({ recentTrades }: { recentTrades: RecentTrade[] }) {
@@ -525,12 +679,14 @@ function ActivityTab({ recentTrades }: { recentTrades: RecentTrade[] }) {
         return (
           <div key={trade.id} className="flex items-center gap-2 py-2 text-xs">
             {trade.username ? (
-              <Link href={`/profile/${trade.username}`} className="flex items-center gap-1.5 shrink-0 group min-w-0">
-                <Avatar username={trade.username} avatarUrl={trade.avatarUrl} size={20} />
-                <span className="text-white/50 font-mono truncate max-w-[72px] group-hover:text-[#22c55e] transition-colors">
-                  {trade.username}
-                </span>
-              </Link>
+              <ProfileHoverCard username={trade.username}>
+                <Link href={`/profile/${trade.username}`} className="flex items-center gap-1.5 shrink-0 group min-w-0">
+                  <Avatar username={trade.username} avatarUrl={trade.avatarUrl} size={20} />
+                  <span className="text-white/50 font-mono truncate max-w-[72px] group-hover:text-[#22c55e] transition-colors">
+                    {trade.username}
+                  </span>
+                </Link>
+              </ProfileHoverCard>
             ) : (
               <span className="text-white/20 font-mono shrink-0">anon</span>
             )}
@@ -674,7 +830,7 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
   const [round, setRound]               = useState<RoundData>(initialRound);
   const [recentTrades, setRecentTrades] = useState<RecentTrade[]>([]);
   const [copied, setCopied]             = useState(false);
-  const [activeTab, setActiveTab]       = useState<"discussion" | "activity">("discussion");
+  const [activeTab, setActiveTab]       = useState<"discussion" | "activity" | "positions">("discussion");
   const [timeframe, setTimeframe]       = useState<Timeframe>("1s");
   const [chartType, setChartType]       = useState<"line" | "candles" | "live">("live");
   const [tfOpen, setTfOpen]             = useState(false);
@@ -1131,24 +1287,37 @@ export default function RoundDetail({ initialRound }: { initialRound: RoundData 
           {/* ── Discussion / Activity tabs ── */}
           <div className="mt-6 bg-white/[0.02] rounded-xl border border-white/5 overflow-hidden">
             <div className="flex border-b border-white/5">
-              {(["discussion", "activity"] as const).map(tab => (
+              <button
+                onClick={() => setActiveTab("discussion")}
+                className={`flex-1 px-4 py-3 text-sm font-semibold transition-colors
+                  ${activeTab === "discussion" ? "text-white border-b-2 border-brand -mb-px" : "text-white/30 hover:text-white/60"}`}
+              >
+                Discussion
+              </button>
+              <button
+                onClick={() => setActiveTab("activity")}
+                className={`flex-1 px-4 py-3 text-sm font-semibold transition-colors
+                  ${activeTab === "activity" ? "text-white border-b-2 border-brand -mb-px" : "text-white/30 hover:text-white/60"}`}
+              >
+                {`Activity${recentTrades.length > 0 ? ` (${recentTrades.length})` : ""}`}
+              </button>
+              {outcomes.length > 0 && (
                 <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
+                  onClick={() => setActiveTab("positions")}
                   className={`flex-1 px-4 py-3 text-sm font-semibold transition-colors
-                    ${activeTab === tab
-                      ? "text-white border-b-2 border-brand -mb-px"
-                      : "text-white/30 hover:text-white/60"}`}
+                    ${activeTab === "positions" ? "text-white border-b-2 border-brand -mb-px" : "text-white/30 hover:text-white/60"}`}
                 >
-                  {tab === "discussion" ? "Discussion" : `Activity${recentTrades.length > 0 ? ` (${recentTrades.length})` : ""}`}
+                  Positions
                 </button>
-              ))}
+              )}
             </div>
             <div className="p-4">
               {activeTab === "discussion" ? (
                 <CommentsSection roundId={round.id} />
-              ) : (
+              ) : activeTab === "activity" ? (
                 <ActivityTab recentTrades={recentTrades} />
+              ) : (
+                <PositionsTab roundId={round.id} outcomes={outcomes} />
               )}
             </div>
           </div>

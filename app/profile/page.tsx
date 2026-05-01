@@ -336,6 +336,23 @@ export default function ProfilePage() {
         {/* Main content */}
         <main className="flex-1 min-w-0 py-6">
 
+        {/* Nav tabs */}
+        <div className="flex items-center gap-0 border-b border-surface-3 mb-6 -mx-0 sticky top-14 bg-base z-10">
+          {[
+            { id: "referral",    label: "Referral"        },
+            { id: "performance", label: "Performance"     },
+            { id: "history",     label: "Trading History" },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => document.getElementById(tab.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              className="px-4 py-2.5 text-xs font-semibold text-muted hover:text-white transition-colors border-b-2 border-transparent hover:border-brand/60 whitespace-nowrap"
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {/* Back arrow */}
         <Link href="/" className="flex items-center text-white/40 hover:text-white/70 transition-colors mb-6 w-fit">
           <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -424,7 +441,7 @@ export default function ProfilePage() {
               </div>
 
               {/* ── Referral section ─────────────────────────────────── */}
-              <div id="referral" className="bg-surface border border-surface-3 rounded-xl p-5 mb-6">
+              <div id="referral" className="scroll-mt-28 bg-surface border border-surface-3 rounded-xl p-5 mb-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-white font-semibold text-sm">Referral Program</h2>
@@ -469,9 +486,13 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <PerformanceChart bets={doraBets} unit="DORA" />
+              <div id="performance" className="scroll-mt-28">
+                <PerformanceChart bets={doraBets} unit="DORA" />
+              </div>
 
-              <TradingHistoryChart bets={doraBets} />
+              <div id="history" className="scroll-mt-28">
+                <TradingHistoryChart bets={doraBets} />
+              </div>
             </>
           );
         })()}

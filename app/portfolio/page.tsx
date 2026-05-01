@@ -75,6 +75,33 @@ function fmtVol(v: number) {
   return v.toFixed(0);
 }
 
+// ── Personal stats widget ─────────────────────────────────────────────────────
+
+function MyStats({ data }: { data: { positions: { trades: { type: string; totalCost: number }[]; roundId: string }[] } | null }) {
+  if (!data || data.positions.length === 0) return null;
+  const myVolume = data.positions.reduce((s, p) =>
+    s + p.trades.filter(t => t.type === "buy").reduce((a, t) => a + t.totalCost, 0), 0);
+  const myTrades  = data.positions.reduce((s, p) => s + p.trades.length, 0);
+  const myMarkets = new Set(data.positions.map(p => p.roundId)).size;
+  return (
+    <div className="mt-4 pt-3 border-t border-surface-3 flex flex-col gap-1">
+      <p className="px-2 text-[10px] uppercase tracking-widest text-muted mb-1">My Stats</p>
+      <div className="px-2 flex flex-col gap-1.5">
+        {[
+          { label: "Volume",  value: `${myVolume >= 1000 ? `${(myVolume/1000).toFixed(1)}K` : myVolume.toFixed(0)} DORA`, color: "text-brand" },
+          { label: "Trades",  value: String(myTrades),  color: "text-white" },
+          { label: "Markets", value: String(myMarkets), color: "text-white" },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="flex items-center justify-between">
+            <span className="text-[11px] text-muted">{label}</span>
+            <span className={`text-[11px] font-mono font-semibold ${color}`}>{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Sidebar Stats widget ──────────────────────────────────────────────────────
 
 function SidebarStats() {
@@ -121,9 +148,10 @@ function fmtTimestamp(iso: string): string {
 
 function TradeHistory({ trades, isSoleTrader }: { trades: TradeRecord[]; isSoleTrader: boolean }) {
   if (trades.length === 0) return null;
+  const sorted = [...trades].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   return (
     <div className="px-4 pb-3 space-y-1.5">
-      {trades.map((t, i) => {
+      {sorted.map((t, i) => {
         const isBuy   = t.type === "buy";
         const doraAmt = isBuy ? t.totalCost : -t.totalCost;
         return (
@@ -131,19 +159,16 @@ function TradeHistory({ trades, isSoleTrader }: { trades: TradeRecord[]; isSoleT
             <span className="shrink-0 text-[11px] leading-none mt-px">{isBuy ? "🟢" : "🔴"}</span>
             <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 min-w-0">
               <span className={`font-semibold shrink-0 ${isBuy ? "text-[#22c55e]" : "text-red-400"}`}>
-                {isBuy ? "Bought" : "Sold"}
+                {isBuy ? "Bought" : "Sold →"}
               </span>
+              <span className="text-white/60 shrink-0">{doraAmt.toFixed(2)} DORA</span>
               <span className="text-white/20 shrink-0">·</span>
               <span className="text-white/30 shrink-0">{fmtTimestamp(t.createdAt)}</span>
-              <span className="text-white/20 shrink-0">·</span>
-              <span className="text-white/60 shrink-0">
-                {doraAmt.toFixed(2)} DORA{!isBuy ? " received" : ""}
-              </span>
               {!isBuy && t.profitLoss !== null && (
                 <>
                   <span className="text-white/20 shrink-0">·</span>
                   <span className={`font-semibold shrink-0 ${t.profitLoss >= 0 ? "text-[#22c55e]" : "text-red-400"}`}>
-                    {t.profitLoss >= 0 ? "+" : ""}{t.profitLoss.toFixed(2)} P&L
+                    {t.profitLoss >= 0 ? "+" : ""}{t.profitLoss.toFixed(2)} DORA {t.profitLoss >= 0 ? "gain" : "loss"}
                   </span>
                 </>
               )}
@@ -372,6 +397,7 @@ export default function PortfolioPage() {
         <div className="hidden lg:block w-40 shrink-0 overflow-y-auto py-6 no-scrollbar sticky top-14 self-start h-[calc(100vh-3.5rem)]">
           <Sidebar active="all" onSelect={() => {}} counts={{}} />
           <SidebarStats />
+          <MyStats data={data} />
         </div>
 
         {/* Main content */}
@@ -522,11 +548,15 @@ export default function PortfolioPage() {
                                     )}
                                   </div>
                                 </td>
+                                {/* Invested — always visible, dimmed when sold */}
+                                <td className={`px-3 py-2.5 text-right font-mono text-muted ${pos.isSold ? "opacity-50" : ""}`}>
+                                  {invested.toFixed(2)}
+                                </td>
                                 {pos.isSold ? (
                                   <>
-                                    <td className="px-3 py-2.5 text-right font-mono text-muted text-[11px]" colSpan={2}>
+                                    <td className="px-3 py-2.5 text-right font-mono text-[11px]">
                                       <span className="text-[#22c55e] font-semibold">
-                                        {pos.soldProceeds > 0 ? `${pos.soldProceeds.toFixed(2)} DORA received` : "—"}
+                                        {pos.soldProceeds > 0 ? `→ ${pos.soldProceeds.toFixed(2)}` : "—"}
                                       </span>
                                     </td>
                                     <td className="px-3 py-2.5 text-right font-mono text-[11px]">
@@ -539,9 +569,6 @@ export default function PortfolioPage() {
                                   </>
                                 ) : (
                                   <>
-                                    <td className="px-3 py-2.5 text-right font-mono text-muted">
-                                      {invested.toFixed(2)}
-                                    </td>
                                     <td className="px-3 py-2.5 text-right font-mono text-white/80">
                                       {pos.currentValue.toFixed(2)}
                                     </td>
