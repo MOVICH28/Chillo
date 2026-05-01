@@ -49,7 +49,7 @@ const MCAP_OUTCOME_DEFAULTS = [
   { id: "F", label: "Above $10M",       minPrice: 10_000_000, maxPrice: null       },
 ];
 
-type CryptoQType = "price" | "ath_mcap" | "mcap" | "token_battle";
+type CryptoQType = "price" | "ath_mcap" | "mcap" | "coin_battle";
 
 // ── Smart builder helpers ─────────────────────────────────────────────────────
 
@@ -416,7 +416,7 @@ export default function CreatePage() {
       case "price":        setQuestion(`What price will ${sym} reach in ${tf}?`); break;
       case "ath_mcap":     setQuestion(`What ATH market cap will ${sym} reach in ${tf}?`); break;
       case "mcap":         setQuestion(`What will ${sym}'s market cap be after ${tf}?`); break;
-      case "token_battle": setQuestion("Which token will have the highest market cap?"); break;
+      case "coin_battle": setQuestion("Which token will have the highest market cap?"); break;
     }
   }, [cryptoQType, tokenInfo, tokenQuery, betDuration, category]);
 
@@ -472,17 +472,17 @@ export default function CreatePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, advancedMode, cryptoQType, mcapMinNum, mcapMinUnit, mcapMaxNum, mcapMaxUnit, mcapScaleType, mcapNumRanges]);
 
-  // ── Sync outcomes from battleTokens for token_battle ─────────────────────
+  // ── Sync outcomes from battleTokens for coin_battle ─────────────────────
   useEffect(() => {
-    if (cryptoQType !== "token_battle") return;
+    if (cryptoQType !== "coin_battle") return;
     setOutcomes(battleTokens.map(t => ({
       id: t.outcomeId, label: `$${t.symbol} wins`, minPrice: null, maxPrice: null,
     })));
   }, [cryptoQType, battleTokens]);
 
-  // ── Pre-fill first token from Step 1 when switching to token_battle ───────
+  // ── Pre-fill first token from Step 1 when switching to coin_battle ───────
   useEffect(() => {
-    if (cryptoQType !== "token_battle") return;
+    if (cryptoQType !== "coin_battle") return;
     if (battleTokens.length > 0) return;
     if (!tokenInfo?.address || !tokenInfo.symbol) return;
     setBattleTokens([{
@@ -554,7 +554,7 @@ export default function CreatePage() {
         body.twitterUrl   = twitterUrl;
         body.customImage  = uploadedImage || null;
         body.isPumpFun    = isPumpFun;
-        if (cryptoQType === "token_battle") {
+        if (cryptoQType === "coin_battle") {
           body.tokenBattleTokens = battleTokens;
         } else {
           body.tokenAddress = tokenInfo?.address && tokenInfo.address !== tokenInfo.symbol
@@ -590,7 +590,7 @@ export default function CreatePage() {
   // ── Validation ────────────────────────────────────────────────────────────
   const step1Valid = category === "twitter" ? validTwitterUsername(twitterQuery) : true;
   const step2Valid = question.trim().length >= 5;
-  const step3Valid = cryptoQType === "token_battle"
+  const step3Valid = cryptoQType === "coin_battle"
     ? battleTokens.length >= 2
     : outcomes.every(o => o.label.trim().length > 0);
   const step4Valid = step3Valid && question.trim().length > 0;
@@ -797,7 +797,7 @@ export default function CreatePage() {
                   { value: "price"        as CryptoQType, icon: "📈", label: "Price",          desc: `What price will ${tokenInfo?.symbol ? `$${tokenInfo.symbol}` : "the token"} reach?` },
                   { value: "ath_mcap"     as CryptoQType, icon: "🏆", label: "ATH Market Cap", desc: "What's the highest market cap it will hit in the window?" },
                   { value: "mcap"         as CryptoQType, icon: "💰", label: "End Market Cap",  desc: "What will market cap be when betting closes?" },
-                  { value: "token_battle" as CryptoQType, icon: "⚔️", label: "Token Battle",   desc: "Which token will have the highest market cap?" },
+                  { value: "coin_battle" as CryptoQType, icon: "⚔️", label: "Token Battle",   desc: "Which token will have the highest market cap?" },
                 ]).map(opt => (
                   <button key={opt.value} onClick={() => setCryptoQType(opt.value)}
                     className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all
@@ -868,7 +868,7 @@ export default function CreatePage() {
         )}
 
         {/* Crypto Step 3: Token Battle Builder */}
-        {category === "crypto" && step === 3 && cryptoQType === "token_battle" && (
+        {category === "crypto" && step === 3 && cryptoQType === "coin_battle" && (
           <div className="space-y-5">
             <div>
               <h2 className="text-white font-semibold mb-1">Token Battle</h2>
@@ -999,7 +999,7 @@ export default function CreatePage() {
         )}
 
         {/* Crypto Step 3: Outcome Range Builder */}
-        {category === "crypto" && step === 3 && cryptoQType !== "token_battle" && (
+        {category === "crypto" && step === 3 && cryptoQType !== "coin_battle" && (
           <div className="space-y-5">
             {/* Header + advanced toggle */}
             <div className="flex items-start justify-between gap-3">
@@ -1608,7 +1608,7 @@ const QTYPE_LABELS: Record<string, string> = {
   price:        "📈 Price",
   ath_mcap:     "🏆 ATH Market Cap",
   mcap:         "💰 End Market Cap",
-  token_battle: "⚔️ Token Battle",
+  coin_battle: "⚔️ Token Battle",
 };
 
 function ReviewStep({
@@ -1624,7 +1624,7 @@ function ReviewStep({
   const tfLabel      = formatDuration(betDuration);
   const resultBuffer = betDuration <= 3 ? 2 : 5;
   const isMcap       = cryptoQType === "mcap" || cryptoQType === "ath_mcap";
-  const isBattle     = cryptoQType === "token_battle";
+  const isBattle     = cryptoQType === "coin_battle";
 
   const [priceHistory, setPriceHistory] = useState<number[]>(
     tokenInfo ? [tokenInfo.priceUsd] : []
@@ -1632,7 +1632,7 @@ function ReviewStep({
   const [livePrice, setLivePrice] = useState<number>(tokenInfo?.priceUsd ?? 0);
   const [liveMcap,  setLiveMcap]  = useState<number>(tokenInfo?.mcapUsd  ?? 0);
 
-  // Live mcap map for token_battle: address → current mcap
+  // Live mcap map for coin_battle: address → current mcap
   const [battleMcaps, setBattleMcaps] = useState<Record<string, number>>(() =>
     Object.fromEntries(battleTokens.map(t => [t.address, t.currentMcap]))
   );
